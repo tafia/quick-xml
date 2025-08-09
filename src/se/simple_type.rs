@@ -25,7 +25,7 @@ pub enum QuoteTarget {
 
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
-fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
+fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
     use QuoteLevel::*;
     use QuoteTarget::*;
 
@@ -94,7 +94,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
 }
 
 /// Escapes XSD simple type value
-fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
+fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
     use QuoteLevel::*;
     use QuoteTarget::*;
 

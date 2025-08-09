@@ -636,7 +636,7 @@ impl NamespaceResolver {
         &self,
         name: QName<'n>,
         use_default: bool,
-    ) -> (ResolveResult, LocalName<'n>) {
+    ) -> (ResolveResult<'_>, LocalName<'n>) {
         let (local_name, prefix) = name.decompose();
         (self.resolve_prefix(prefix, use_default), local_name)
     }
@@ -652,11 +652,11 @@ impl NamespaceResolver {
     /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
     /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
     #[inline]
-    pub fn find(&self, element_name: QName) -> ResolveResult {
+    pub fn find(&self, element_name: QName) -> ResolveResult<'_> {
         self.resolve_prefix(element_name.prefix(), true)
     }
 
-    fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult {
+    fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
         self.bindings
             .iter()
             // Find the last defined binding that corresponds to the given prefix
@@ -690,7 +690,7 @@ impl NamespaceResolver {
     }
 
     #[inline]
-    pub const fn iter(&self) -> PrefixIter {
+    pub const fn iter(&self) -> PrefixIter<'_> {
         PrefixIter {
             resolver: self,
             // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:

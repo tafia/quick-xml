@@ -493,7 +493,7 @@ pub(crate) enum Indent<'i> {
 }
 
 impl<'i> Indent<'i> {
-    pub fn borrow(&mut self) -> Indent {
+    pub fn borrow(&mut self) -> Indent<'_> {
         match self {
             Self::None => Indent::None,
             Self::Owned(ref mut i) => Indent::Borrow(i),

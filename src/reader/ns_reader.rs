@@ -130,7 +130,7 @@ impl<R> NsReader<R> {
     /// # quick_xml::Result::Ok(())
     /// ```
     #[inline]
-    pub const fn prefixes(&self) -> PrefixIter {
+    pub const fn prefixes(&self) -> PrefixIter<'_> {
         self.ns_resolver.iter()
     }
 }
@@ -188,7 +188,7 @@ impl<R> NsReader<R> {
     pub(super) fn resolve_event<'i>(
         &mut self,
         event: Result<Event<'i>>,
-    ) -> Result<(ResolveResult, Event<'i>)> {
+    ) -> Result<(ResolveResult<'_>, Event<'i>)> {
         match event {
             Ok(Event::Start(e)) => Ok((self.ns_resolver.find(e.name()), Event::Start(e))),
             Ok(Event::Empty(e)) => Ok((self.ns_resolver.find(e.name()), Event::Empty(e))),
@@ -249,7 +249,11 @@ impl<R> NsReader<R> {
     /// [`resolve_attribute()`]: Self::resolve_attribute()
     /// [`resolve_element()`]: Self::resolve_element()
     #[inline]
-    pub fn resolve<'n>(&self, name: QName<'n>, attribute: bool) -> (ResolveResult, LocalName<'n>) {
+    pub fn resolve<'n>(
+        &self,
+        name: QName<'n>,
+        attribute: bool,
+    ) -> (ResolveResult<'_>, LocalName<'n>) {
         self.ns_resolver.resolve(name, !attribute)
     }
 
@@ -305,7 +309,7 @@ impl<R> NsReader<R> {
     /// [`Unknown`]: ResolveResult::Unknown
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
-    pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+    pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
         self.ns_resolver.resolve(name, true)
     }
 
@@ -375,7 +379,7 @@ impl<R> NsReader<R> {
     /// [`Unbound`]: ResolveResult::Unbound
     /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
-    pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+    pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
         self.ns_resolver.resolve(name, false)
     }
 }
@@ -498,7 +502,7 @@ impl<R: BufRead> NsReader<R> {
     pub fn read_resolved_event_into<'b>(
         &mut self,
         buf: &'b mut Vec<u8>,
-    ) -> Result<(ResolveResult, Event<'b>)> {
+    ) -> Result<(ResolveResult<'_>, Event<'b>)> {
         let event = self.read_event_impl(buf);
         self.resolve_event(event)
     }
@@ -742,7 +746,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`End`]: Event::End
     /// [`read_event()`]: Self::read_event
     #[inline]
-    pub fn read_resolved_event(&mut self) -> Result<(ResolveResult, Event<'i>)> {
+    pub fn read_resolved_event(&mut self) -> Result<(ResolveResult<'_>, Event<'i>)> {
         let event = self.read_event_impl(());
         self.resolve_event(event)
     }
