@@ -620,26 +620,40 @@ impl NamespaceResolver {
     }
 
     /// Resolves a potentially qualified **element name** or **attribute name**
-    /// into (namespace name, local name).
+    /// into _(namespace name, local name)_.
     ///
-    /// *Qualified* names have the form `prefix:local-name` where the `prefix` is
-    /// defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
-    /// The namespace prefix can be defined on the same element as the element or
-    /// attribute in question.
+    /// _Qualified_ names have the form `local-name` or `prefix:local-name` where the `prefix`
+    /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    /// The method returns following results depending on the `name` shape, `attribute` flag
+    /// and the presence of the default namespace on element or any of its parents:
+    ///
+    /// |attribute|`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |---------|-------------|-------------------|-----------------------|------------
+    /// |`true`   |_(any)_      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`false`  |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`false`  |Defined      |`local-name`       |[`Bound`] (to `xmlns`) |`local-name`
+    /// |`false`  |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     ///
     /// # Lifetimes
     ///
-    /// - `'n`: lifetime of an attribute or an element name
+    /// - `'n`: lifetime of a name. Returned local name will be bound to the same
+    ///   lifetime as the name in question.
+    /// - returned namespace name will be bound to the resolver itself
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve<'n>(
         &self,
         name: QName<'n>,
-        use_default: bool,
+        attribute: bool,
     ) -> (ResolveResult<'_>, LocalName<'n>) {
         let (local_name, prefix) = name.decompose();
-        (self.resolve_prefix(prefix, use_default), local_name)
+        (self.resolve_prefix(prefix, !attribute), local_name)
     }
 
     /// Finds a [namespace name] for a given qualified **element name**, borrow
@@ -794,11 +808,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"default");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(resolver.find(name), Bound(ns));
@@ -823,11 +837,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"oldnew");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(new_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(resolver.find(name), Bound(new_ns));
@@ -835,11 +849,11 @@ mod namespaces {
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(resolver.find(name), Bound(old_ns));
@@ -866,11 +880,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(resolver.find(name), Unbound);
@@ -878,11 +892,11 @@ mod namespaces {
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
             assert_eq!(resolver.find(name), Bound(old_ns));
@@ -914,11 +928,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"pdefault");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Bound(ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(resolver.find(name), Bound(ns));
@@ -943,11 +957,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"poldpnew");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(new_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Bound(new_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(resolver.find(name), Bound(new_ns));
@@ -955,11 +969,11 @@ mod namespaces {
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(resolver.find(name), Bound(old_ns));
@@ -986,11 +1000,11 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"poldp");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(resolver.find(name), Unknown(b"p".to_vec()));
@@ -998,11 +1012,11 @@ mod namespaces {
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
             assert_eq!(resolver.find(name), Bound(old_ns));
@@ -1028,12 +1042,12 @@ mod namespaces {
                 let resolver = NamespaceResolver::default();
 
                 assert_eq!(
-                    resolver.resolve(name, true),
+                    resolver.resolve(name, false),
                     (Bound(namespace), LocalName(b"random"))
                 );
 
                 assert_eq!(
-                    resolver.resolve(name, false),
+                    resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
                 assert_eq!(resolver.find(name), Bound(namespace));
@@ -1112,12 +1126,12 @@ mod namespaces {
                 let resolver = NamespaceResolver::default();
 
                 assert_eq!(
-                    resolver.resolve(name, true),
+                    resolver.resolve(name, false),
                     (Bound(namespace), LocalName(b"random"))
                 );
 
                 assert_eq!(
-                    resolver.resolve(name, false),
+                    resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
                 assert_eq!(resolver.find(name), Bound(namespace));
@@ -1197,11 +1211,11 @@ mod namespaces {
             b"xmlhttp://www.w3.org/XML/1998/namespacexmlnshttp://www.w3.org/2000/xmlns/"
         );
         assert_eq!(
-            resolver.resolve(name, true),
+            resolver.resolve(name, false),
             (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
         );
         assert_eq!(
-            resolver.resolve(name, false),
+            resolver.resolve(name, true),
             (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
         );
         assert_eq!(resolver.find(name), Unknown(b"unknown".to_vec()));
