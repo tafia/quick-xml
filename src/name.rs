@@ -4,7 +4,7 @@
 //! [spec]: https://www.w3.org/TR/xml-names11
 
 use crate::events::attributes::Attribute;
-use crate::events::BytesStart;
+use crate::events::{BytesStart, Event};
 use crate::utils::write_byte_string;
 use memchr::memchr;
 use std::fmt::{self, Debug, Formatter};
@@ -657,19 +657,67 @@ impl NamespaceResolver {
         (self.resolve_prefix(prefix, !attribute), local_name)
     }
 
-    /// Finds a [namespace name] for a given qualified **element name**, borrow
-    /// it from the internal buffer.
+    /// Finds a [namespace name] for a given event, if applicable.
     ///
-    /// Returns `None`, if:
-    /// - name is unqualified
-    /// - prefix not found in the current scope
-    /// - prefix was [unbound] using `xmlns:prefix=""`
+    /// Namespace is resolved only for [`Start`], [`Empty`] and [`End`] events.
+    /// For all other events the concept of namespace is not defined, so
+    /// a [`ResolveResult::Unbound`] is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     let event = reader.read_event().unwrap();
+    ///     match reader.resolver().resolve_event(event) {
+    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///         }
+    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///         }
+    ///         (_, Event::Start(_)) => unreachable!(),
+    ///
+    ///         (_, Event::Text(e)) => {
+    ///             txt.push(e.decode().unwrap().into_owned())
+    ///         }
+    ///         (_, Event::Eof) => break,
+    ///         _ => (),
+    ///     }
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
     ///
     /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
-    /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
-    #[inline]
-    pub fn find(&self, element_name: QName) -> ResolveResult<'_> {
-        self.resolve_prefix(element_name.prefix(), true)
+    /// [`Empty`]: Event::Empty
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    pub fn resolve_event<'i>(&self, event: Event<'i>) -> (ResolveResult<'_>, Event<'i>) {
+        use Event::*;
+
+        match event {
+            Empty(e) => (self.resolve_prefix(e.name().prefix(), true), Empty(e)),
+            Start(e) => (self.resolve_prefix(e.name().prefix(), true), Start(e)),
+            End(e) => (self.resolve_prefix(e.name().prefix(), true), End(e)),
+            e => (ResolveResult::Unbound, e),
+        }
     }
 
     fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
@@ -895,7 +943,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(ns));
         }
 
         /// Test adding a second level of namespaces, which replaces the previous binding
@@ -924,7 +971,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(new_ns));
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
@@ -936,7 +982,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
 
         /// Test adding a second level of namespaces, which reset the previous binding
@@ -967,7 +1012,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Unbound);
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
@@ -979,7 +1023,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
     }
 
@@ -1015,7 +1058,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Bound(ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(ns));
         }
 
         /// Test adding a second level of namespaces, which replaces the previous binding
@@ -1044,7 +1086,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Bound(new_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(new_ns));
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
@@ -1056,7 +1097,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
 
         /// Test adding a second level of namespaces, which reset the previous binding
@@ -1087,7 +1127,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Unknown(b"p".to_vec()));
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
@@ -1099,7 +1138,6 @@ mod namespaces {
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
     }
 
@@ -1130,7 +1168,6 @@ mod namespaces {
                     resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
-                assert_eq!(resolver.find(name), Bound(namespace));
             }
 
             /// `xml` prefix can be declared but it must be bound to the value
@@ -1214,7 +1251,6 @@ mod namespaces {
                     resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
-                assert_eq!(resolver.find(name), Bound(namespace));
             }
 
             /// `xmlns` prefix cannot be re-declared event to its own namespace
@@ -1298,7 +1334,6 @@ mod namespaces {
             resolver.resolve(name, true),
             (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
         );
-        assert_eq!(resolver.find(name), Unknown(b"unknown".to_vec()));
     }
 
     /// Checks how the QName is decomposed to a prefix and a local name

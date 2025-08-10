@@ -184,19 +184,6 @@ impl<R> NsReader<R> {
             e => e,
         }
     }
-
-    pub(super) fn resolve_event<'i>(
-        &mut self,
-        event: Result<Event<'i>>,
-    ) -> Result<(ResolveResult<'_>, Event<'i>)> {
-        match event {
-            Ok(Event::Start(e)) => Ok((self.ns_resolver.find(e.name()), Event::Start(e))),
-            Ok(Event::Empty(e)) => Ok((self.ns_resolver.find(e.name()), Event::Empty(e))),
-            Ok(Event::End(e)) => Ok((self.ns_resolver.find(e.name()), Event::End(e))),
-            Ok(e) => Ok((ResolveResult::Unbound, e)),
-            Err(e) => Err(e),
-        }
-    }
 }
 
 /// Getters
@@ -508,8 +495,8 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult<'_>, Event<'b>)> {
-        let event = self.read_event_impl(buf);
-        self.resolve_event(event)
+        let event = self.read_event_impl(buf)?;
+        Ok(self.ns_resolver.resolve_event(event))
     }
 
     /// Reads until end element is found using provided buffer as intermediate
@@ -752,8 +739,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`read_event()`]: Self::read_event
     #[inline]
     pub fn read_resolved_event(&mut self) -> Result<(ResolveResult<'_>, Event<'i>)> {
-        let event = self.read_event_impl(());
-        self.resolve_event(event)
+        let event = self.read_event_impl(())?;
+        Ok(self.ns_resolver.resolve_event(event))
     }
 
     /// Reads until end element is found. This function is supposed to be called
