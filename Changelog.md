@@ -16,6 +16,8 @@
 
 ### New Features
 
+- [#893]: Implement `FusedIterator` for `NamespaceBindingsIter`.
+
 ### Bug Fixes
 
 ### Misc Changes

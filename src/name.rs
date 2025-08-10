@@ -8,6 +8,7 @@ use crate::events::BytesStart;
 use crate::utils::write_byte_string;
 use memchr::memchr;
 use std::fmt::{self, Debug, Formatter};
+use std::iter::FusedIterator;
 
 /// Some namespace was invalid
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -748,6 +749,8 @@ impl<'a> Iterator for NamespaceBindingsIter<'a> {
         (0, Some(self.resolver.bindings.len() - self.bindings_cursor))
     }
 }
+
+impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
 
 /// The previous name for [`NamespaceBindingsIter`].
 #[deprecated = "Use NamespaceBindingsIter instead"]
