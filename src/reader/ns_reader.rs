@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::errors::Result;
 use crate::events::Event;
-use crate::name::{LocalName, NamespaceResolver, PrefixIter, QName, ResolveResult};
+use crate::name::{LocalName, NamespaceBindingsIter, NamespaceResolver, QName, ResolveResult};
 use crate::reader::{Config, Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
@@ -130,8 +130,8 @@ impl<R> NsReader<R> {
     /// # quick_xml::Result::Ok(())
     /// ```
     #[inline]
-    pub const fn prefixes(&self) -> PrefixIter<'_> {
-        self.ns_resolver.iter()
+    pub const fn prefixes(&self) -> NamespaceBindingsIter<'_> {
+        self.ns_resolver.bindings()
     }
 }
 
@@ -184,19 +184,6 @@ impl<R> NsReader<R> {
             e => e,
         }
     }
-
-    pub(super) fn resolve_event<'i>(
-        &mut self,
-        event: Result<Event<'i>>,
-    ) -> Result<(ResolveResult<'_>, Event<'i>)> {
-        match event {
-            Ok(Event::Start(e)) => Ok((self.ns_resolver.find(e.name()), Event::Start(e))),
-            Ok(Event::Empty(e)) => Ok((self.ns_resolver.find(e.name()), Event::Empty(e))),
-            Ok(Event::End(e)) => Ok((self.ns_resolver.find(e.name()), Event::End(e))),
-            Ok(e) => Ok((ResolveResult::Unbound, e)),
-            Err(e) => Err(e),
-        }
-    }
 }
 
 /// Getters
@@ -214,24 +201,29 @@ impl<R> NsReader<R> {
         self.reader.get_mut()
     }
 
+    /// Returns a storage of namespace bindings associated with this reader.
+    #[inline]
+    pub const fn resolver(&self) -> &NamespaceResolver {
+        &self.ns_resolver
+    }
+
     /// Resolves a potentially qualified **element name** or **attribute name**
     /// into _(namespace name, local name)_.
     ///
-    /// _Qualified_ names have the form `prefix:local-name` where the `prefix`
+    /// _Qualified_ names have the form `local-name` or `prefix:local-name` where the `prefix`
     /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
     /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// The method returns following results depending on the `name` shape,
-    /// `attribute` flag and the presence of the default namespace:
+    /// The method returns following results depending on the `name` shape, `attribute` flag
+    /// and the presence of the default namespace on element or any of its parents:
     ///
     /// |attribute|`xmlns="..."`|QName              |ResolveResult          |LocalName
     /// |---------|-------------|-------------------|-----------------------|------------
-    /// |`true`   |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`true`   |Defined      |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`true`   |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`true`   |_(any)_      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     /// |`false`  |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`false`  |Defined      |`local-name`       |[`Bound`] (default)    |`local-name`
-    /// |`false`  |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`false`  |Defined      |`local-name`       |[`Bound`] (to `xmlns`) |`local-name`
+    /// |`false`  |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     ///
     /// If you want to clearly indicate that name that you resolve is an element
     /// or an attribute name, you could use [`resolve_attribute()`] or [`resolve_element()`]
@@ -254,7 +246,7 @@ impl<R> NsReader<R> {
         name: QName<'n>,
         attribute: bool,
     ) -> (ResolveResult<'_>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, !attribute)
+        self.ns_resolver.resolve(name, attribute)
     }
 
     /// Resolves a potentially qualified **element name** into _(namespace name, local name)_.
@@ -310,7 +302,7 @@ impl<R> NsReader<R> {
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, true)
+        self.ns_resolver.resolve(name, false)
     }
 
     /// Resolves a potentially qualified **attribute name** into _(namespace name, local name)_.
@@ -380,7 +372,7 @@ impl<R> NsReader<R> {
     /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, false)
+        self.ns_resolver.resolve(name, true)
     }
 }
 
@@ -503,8 +495,8 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult<'_>, Event<'b>)> {
-        let event = self.read_event_impl(buf);
-        self.resolve_event(event)
+        let event = self.read_event_impl(buf)?;
+        Ok(self.ns_resolver.resolve_event(event))
     }
 
     /// Reads until end element is found using provided buffer as intermediate
@@ -747,8 +739,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`read_event()`]: Self::read_event
     #[inline]
     pub fn read_resolved_event(&mut self) -> Result<(ResolveResult<'_>, Event<'i>)> {
-        let event = self.read_event_impl(());
-        self.resolve_event(event)
+        let event = self.read_event_impl(())?;
+        Ok(self.ns_resolver.resolve_event(event))
     }
 
     /// Reads until end element is found. This function is supposed to be called

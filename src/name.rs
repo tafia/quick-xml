@@ -4,10 +4,11 @@
 //! [spec]: https://www.w3.org/TR/xml-names11
 
 use crate::events::attributes::Attribute;
-use crate::events::BytesStart;
+use crate::events::{BytesStart, Event};
 use crate::utils::write_byte_string;
 use memchr::memchr;
 use std::fmt::{self, Debug, Formatter};
+use std::iter::FusedIterator;
 
 /// Some namespace was invalid
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -352,7 +353,7 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`NsReader::resolve_attribute`],
+/// Result of [prefix] resolution which creates by [`NamespaceResolver::resolve`], [`NsReader::resolve_attribute`],
 /// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
 /// [`NsReader::read_resolved_event_into`] methods.
 ///
@@ -414,7 +415,7 @@ impl<'ns> TryFrom<ResolveResult<'ns>> for Option<Namespace<'ns>> {
 /// [namespace prefix]: https://www.w3.org/TR/xml-names11/#dt-prefix
 /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
 #[derive(Debug, Clone)]
-struct NamespaceEntry {
+struct NamespaceBinding {
     /// Index of the namespace in the buffer
     start: usize,
     /// Length of the prefix
@@ -438,7 +439,7 @@ struct NamespaceEntry {
     level: i32,
 }
 
-impl NamespaceEntry {
+impl NamespaceBinding {
     /// Get the namespace prefix, bound to this namespace declaration, or `None`,
     /// if this declaration is for default namespace (`xmlns="..."`).
     #[inline]
@@ -465,16 +466,17 @@ impl NamespaceEntry {
     }
 }
 
-/// A namespace management buffer.
+/// A storage for currently defined namespace bindings, which is used to resolve
+/// prefixes into namespaces.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Clone)]
-pub(crate) struct NamespaceResolver {
+pub struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
     buffer: Vec<u8>,
     /// A stack of namespace bindings to prefixes that currently in scope
-    bindings: Vec<NamespaceEntry>,
+    bindings: Vec<NamespaceBinding>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: i32,
@@ -512,7 +514,7 @@ impl Default for NamespaceResolver {
         for ent in &[RESERVED_NAMESPACE_XML, RESERVED_NAMESPACE_XMLNS] {
             let prefix = ent.0.into_inner();
             let uri = ent.1.into_inner();
-            bindings.push(NamespaceEntry {
+            bindings.push(NamespaceBinding {
                 start: buffer.len(),
                 prefix_len: prefix.len(),
                 value_len: uri.len(),
@@ -534,7 +536,7 @@ impl NamespaceResolver {
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level += 1;
         let level = self.nesting_level;
@@ -546,7 +548,7 @@ impl NamespaceResolver {
                     Some(PrefixDeclaration::Default) => {
                         let start = self.buffer.len();
                         self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceEntry {
+                        self.bindings.push(NamespaceBinding {
                             start,
                             prefix_len: 0,
                             value_len: v.len(),
@@ -578,7 +580,7 @@ impl NamespaceResolver {
                         let start = self.buffer.len();
                         self.buffer.extend_from_slice(prefix);
                         self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceEntry {
+                        self.bindings.push(NamespaceBinding {
                             start,
                             prefix_len: prefix.len(),
                             value_len: v.len(),
@@ -594,10 +596,10 @@ impl NamespaceResolver {
         Ok(())
     }
 
-    /// Ends a top-most scope by popping all [namespace binding], that was added by
+    /// Ends a top-most scope by popping all [namespace bindings], that was added by
     /// last call to [`Self::push()`].
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn pop(&mut self) {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
@@ -619,41 +621,103 @@ impl NamespaceResolver {
     }
 
     /// Resolves a potentially qualified **element name** or **attribute name**
-    /// into (namespace name, local name).
+    /// into _(namespace name, local name)_.
     ///
-    /// *Qualified* names have the form `prefix:local-name` where the `prefix` is
-    /// defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
-    /// The namespace prefix can be defined on the same element as the element or
-    /// attribute in question.
+    /// _Qualified_ names have the form `local-name` or `prefix:local-name` where the `prefix`
+    /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    /// The method returns following results depending on the `name` shape, `attribute` flag
+    /// and the presence of the default namespace on element or any of its parents:
+    ///
+    /// |attribute|`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |---------|-------------|-------------------|-----------------------|------------
+    /// |`true`   |_(any)_      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`false`  |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`false`  |Defined      |`local-name`       |[`Bound`] (to `xmlns`) |`local-name`
+    /// |`false`  |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     ///
     /// # Lifetimes
     ///
-    /// - `'n`: lifetime of an attribute or an element name
+    /// - `'n`: lifetime of a name. Returned local name will be bound to the same
+    ///   lifetime as the name in question.
+    /// - returned namespace name will be bound to the resolver itself
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve<'n>(
         &self,
         name: QName<'n>,
-        use_default: bool,
+        attribute: bool,
     ) -> (ResolveResult<'_>, LocalName<'n>) {
         let (local_name, prefix) = name.decompose();
-        (self.resolve_prefix(prefix, use_default), local_name)
+        (self.resolve_prefix(prefix, !attribute), local_name)
     }
 
-    /// Finds a [namespace name] for a given qualified **element name**, borrow
-    /// it from the internal buffer.
+    /// Finds a [namespace name] for a given event, if applicable.
     ///
-    /// Returns `None`, if:
-    /// - name is unqualified
-    /// - prefix not found in the current scope
-    /// - prefix was [unbound] using `xmlns:prefix=""`
+    /// Namespace is resolved only for [`Start`], [`Empty`] and [`End`] events.
+    /// For all other events the concept of namespace is not defined, so
+    /// a [`ResolveResult::Unbound`] is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     let event = reader.read_event().unwrap();
+    ///     match reader.resolver().resolve_event(event) {
+    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///         }
+    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///         }
+    ///         (_, Event::Start(_)) => unreachable!(),
+    ///
+    ///         (_, Event::Text(e)) => {
+    ///             txt.push(e.decode().unwrap().into_owned())
+    ///         }
+    ///         (_, Event::Eof) => break,
+    ///         _ => (),
+    ///     }
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
     ///
     /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
-    /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
-    #[inline]
-    pub fn find(&self, element_name: QName) -> ResolveResult<'_> {
-        self.resolve_prefix(element_name.prefix(), true)
+    /// [`Empty`]: Event::Empty
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    pub fn resolve_event<'i>(&self, event: Event<'i>) -> (ResolveResult<'_>, Event<'i>) {
+        use Event::*;
+
+        match event {
+            Empty(e) => (self.resolve_prefix(e.name().prefix(), true), Empty(e)),
+            Start(e) => (self.resolve_prefix(e.name().prefix(), true), Start(e)),
+            End(e) => (self.resolve_prefix(e.name().prefix(), true), End(e)),
+            e => (ResolveResult::Unbound, e),
+        }
     }
 
     fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
@@ -689,9 +753,88 @@ impl NamespaceResolver {
         }
     }
 
+    /// Returns all the bindings currently in effect except the default `xml` and `xmlns` bindings.
+    ///
+    /// # Examples
+    ///
+    /// This example shows what results the returned iterator would return after
+    /// reading each event of a simple XML.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::name::{Namespace, PrefixDeclaration};
+    /// use quick_xml::NsReader;
+    ///
+    /// let src = "<root>
+    ///   <a xmlns=\"a1\" xmlns:a=\"a2\">
+    ///     <b xmlns=\"b1\" xmlns:b=\"b2\">
+    ///       <c/>
+    ///     </b>
+    ///     <d/>
+    ///   </a>
+    /// </root>";
+    /// let mut reader = NsReader::from_str(src);
+    /// reader.config_mut().trim_text(true);
+    /// // No bindings at the beginning
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <root>
+    /// // No bindings declared on root
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <a>
+    /// // Two bindings declared on "a"
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <b>
+    /// // The default prefix got overridden and new "b" prefix
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <c/>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </b>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <d/>
+    /// // </b> got closed so back to the bindings declared on <a>
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </a>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </root>
+    /// // <a> got closed
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    /// # quick_xml::Result::Ok(())
+    /// ```
     #[inline]
-    pub const fn iter(&self) -> PrefixIter<'_> {
-        PrefixIter {
+    pub const fn bindings(&self) -> NamespaceBindingsIter<'_> {
+        NamespaceBindingsIter {
             resolver: self,
             // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:
             bindings_cursor: 2,
@@ -701,16 +844,16 @@ impl NamespaceResolver {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Iterator on the current declared prefixes.
+/// Iterator on the current declared namespace bindings. Returns pairs of the _(prefix, namespace)_.
 ///
-/// See [`NsReader::prefixes`](crate::NsReader::prefixes) for documentation.
+/// See [`NamespaceResolver::bindings`] for documentation.
 #[derive(Debug, Clone)]
-pub struct PrefixIter<'a> {
+pub struct NamespaceBindingsIter<'a> {
     resolver: &'a NamespaceResolver,
     bindings_cursor: usize,
 }
 
-impl<'a> Iterator for PrefixIter<'a> {
+impl<'a> Iterator for NamespaceBindingsIter<'a> {
     type Item = (PrefixDeclaration<'a>, Namespace<'a>);
 
     fn next(&mut self) -> Option<(PrefixDeclaration<'a>, Namespace<'a>)> {
@@ -748,6 +891,12 @@ impl<'a> Iterator for PrefixIter<'a> {
         (0, Some(self.resolver.bindings.len() - self.bindings_cursor))
     }
 }
+
+impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
+
+/// The previous name for [`NamespaceBindingsIter`].
+#[deprecated = "Use NamespaceBindingsIter instead"]
+pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
 
 #[cfg(test)]
 mod namespaces {
@@ -787,14 +936,13 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"default");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(ns));
         }
 
         /// Test adding a second level of namespaces, which replaces the previous binding
@@ -816,26 +964,24 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"oldnew");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(new_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(new_ns));
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
 
         /// Test adding a second level of namespaces, which reset the previous binding
@@ -859,26 +1005,24 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Unbound, LocalName(b"simple"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Unbound);
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Unbound, LocalName(b"simple"))
+            );
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
-                resolver.resolve(name, true),
+                resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"simple"))
             );
             assert_eq!(
-                resolver.resolve(name, false),
+                resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
         }
     }
 
@@ -907,14 +1051,13 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"pdefault");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Bound(ns), LocalName(b"with-declared-prefix"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Bound(ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(ns));
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Bound(ns), LocalName(b"with-declared-prefix"))
+            );
         }
 
         /// Test adding a second level of namespaces, which replaces the previous binding
@@ -936,26 +1079,24 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"poldpnew");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Bound(new_ns), LocalName(b"with-declared-prefix"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Bound(new_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(new_ns));
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Bound(new_ns), LocalName(b"with-declared-prefix"))
+            );
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Bound(old_ns), LocalName(b"with-declared-prefix"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Bound(old_ns), LocalName(b"with-declared-prefix"))
+            );
         }
 
         /// Test adding a second level of namespaces, which reset the previous binding
@@ -979,26 +1120,24 @@ mod namespaces {
 
             assert_eq!(&resolver.buffer[s..], b"poldp");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Unknown(b"p".to_vec()));
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
+            );
 
             resolver.pop();
             assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
-                resolver.resolve(name, true),
-                (Bound(old_ns), LocalName(b"with-declared-prefix"))
-            );
-            assert_eq!(
                 resolver.resolve(name, false),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
             );
-            assert_eq!(resolver.find(name), Bound(old_ns));
+            assert_eq!(
+                resolver.resolve(name, true),
+                (Bound(old_ns), LocalName(b"with-declared-prefix"))
+            );
         }
     }
 
@@ -1021,15 +1160,14 @@ mod namespaces {
                 let resolver = NamespaceResolver::default();
 
                 assert_eq!(
-                    resolver.resolve(name, true),
+                    resolver.resolve(name, false),
                     (Bound(namespace), LocalName(b"random"))
                 );
 
                 assert_eq!(
-                    resolver.resolve(name, false),
+                    resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
-                assert_eq!(resolver.find(name), Bound(namespace));
             }
 
             /// `xml` prefix can be declared but it must be bound to the value
@@ -1105,15 +1243,14 @@ mod namespaces {
                 let resolver = NamespaceResolver::default();
 
                 assert_eq!(
-                    resolver.resolve(name, true),
+                    resolver.resolve(name, false),
                     (Bound(namespace), LocalName(b"random"))
                 );
 
                 assert_eq!(
-                    resolver.resolve(name, false),
+                    resolver.resolve(name, true),
                     (Bound(namespace), LocalName(b"random"))
                 );
-                assert_eq!(resolver.find(name), Bound(namespace));
             }
 
             /// `xmlns` prefix cannot be re-declared event to its own namespace
@@ -1190,14 +1327,13 @@ mod namespaces {
             b"xmlhttp://www.w3.org/XML/1998/namespacexmlnshttp://www.w3.org/2000/xmlns/"
         );
         assert_eq!(
-            resolver.resolve(name, true),
-            (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
-        );
-        assert_eq!(
             resolver.resolve(name, false),
             (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
         );
-        assert_eq!(resolver.find(name), Unknown(b"unknown".to_vec()));
+        assert_eq!(
+            resolver.resolve(name, true),
+            (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
+        );
     }
 
     /// Checks how the QName is decomposed to a prefix and a local name

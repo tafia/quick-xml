@@ -3510,7 +3510,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     }
 
     fn has_nil_attr(&self, start: &BytesStart) -> bool {
-        start.attributes().has_nil(&self.reader)
+        start.attributes().has_nil(self.reader.resolver())
     }
 }
 
@@ -3578,7 +3578,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     }
 
     fn has_nil_attr(&self, start: &BytesStart) -> bool {
-        start.attributes().has_nil(&self.reader)
+        start.attributes().has_nil(self.reader.resolver())
     }
 }
 
