@@ -406,8 +406,8 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
         &'ns mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
-        let event = self.read_event_into_async(buf).await;
-        self.resolve_event(event)
+        let event = self.read_event_into_async(buf).await?;
+        Ok(self.resolver().resolve_event(event))
     }
 }
 
