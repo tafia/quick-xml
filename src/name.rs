@@ -690,8 +690,8 @@ impl NamespaceResolver {
     }
 
     #[inline]
-    pub const fn iter(&self) -> PrefixIter<'_> {
-        PrefixIter {
+    pub const fn bindings(&self) -> NamespaceBindingsIter<'_> {
+        NamespaceBindingsIter {
             resolver: self,
             // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:
             bindings_cursor: 2,
@@ -701,16 +701,16 @@ impl NamespaceResolver {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Iterator on the current declared prefixes.
+/// Iterator on the current declared namespace bindings. Returns pairs of the _(prefix, namespace)_.
 ///
 /// See [`NsReader::prefixes`](crate::NsReader::prefixes) for documentation.
 #[derive(Debug, Clone)]
-pub struct PrefixIter<'a> {
+pub struct NamespaceBindingsIter<'a> {
     resolver: &'a NamespaceResolver,
     bindings_cursor: usize,
 }
 
-impl<'a> Iterator for PrefixIter<'a> {
+impl<'a> Iterator for NamespaceBindingsIter<'a> {
     type Item = (PrefixDeclaration<'a>, Namespace<'a>);
 
     fn next(&mut self) -> Option<(PrefixDeclaration<'a>, Namespace<'a>)> {
@@ -748,6 +748,10 @@ impl<'a> Iterator for PrefixIter<'a> {
         (0, Some(self.resolver.bindings.len() - self.bindings_cursor))
     }
 }
+
+/// The previous name for [`NamespaceBindingsIter`].
+#[deprecated = "Use NamespaceBindingsIter instead"]
+pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
 
 #[cfg(test)]
 mod namespaces {

@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::errors::Result;
 use crate::events::Event;
-use crate::name::{LocalName, NamespaceResolver, PrefixIter, QName, ResolveResult};
+use crate::name::{LocalName, NamespaceBindingsIter, NamespaceResolver, QName, ResolveResult};
 use crate::reader::{Config, Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
@@ -130,8 +130,8 @@ impl<R> NsReader<R> {
     /// # quick_xml::Result::Ok(())
     /// ```
     #[inline]
-    pub const fn prefixes(&self) -> PrefixIter<'_> {
-        self.ns_resolver.iter()
+    pub const fn prefixes(&self) -> NamespaceBindingsIter<'_> {
+        self.ns_resolver.bindings()
     }
 }
 
