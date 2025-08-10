@@ -365,13 +365,11 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`NamespaceResolver::resolve`], [`NsReader::resolve_attribute`],
-/// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
+/// Result of [prefix] resolution which creates by [`NamespaceResolver::resolve`],
+/// [`NsReader::read_resolved_event`] and
 /// [`NsReader::read_resolved_event_into`] methods.
 ///
 /// [prefix]: Prefix
-/// [`NsReader::resolve_attribute`]: crate::reader::NsReader::resolve_attribute
-/// [`NsReader::resolve_element`]: crate::reader::NsReader::resolve_element
 /// [`NsReader::read_resolved_event`]: crate::reader::NsReader::read_resolved_event
 /// [`NsReader::read_resolved_event_into`]: crate::reader::NsReader::read_resolved_event_into
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -1084,6 +1082,7 @@ impl<'a> Iterator for NamespaceBindingsIter<'a> {
 impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
 
 /// The previous name for [`NamespaceBindingsIter`].
+#[deprecated = "Use NamespaceBindingsIter instead. This alias will be removed in 0.40.0"]
 pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
 
 /// Iterator on the declared namespace bindings on specified level. Returns pairs of the _(prefix, namespace)_.
