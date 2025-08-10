@@ -25,8 +25,12 @@
   of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
 - [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
 
+- [#914]: Remove deprecated `.prefixes()`, `.resolve()`, `.resolve_attribute()`, and `.resolve_element()`
+  of `NsReader`. Use `.resolver().<...>` methods instead.
+
 [#908]: https://github.com/tafia/quick-xml/pull/908
 [#913]: https://github.com/tafia/quick-xml/pull/913
+[#914]: https://github.com/tafia/quick-xml/pull/914
 
 
 ## 0.38.4 -- 2025-11-11
