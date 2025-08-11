@@ -315,7 +315,7 @@ impl<R> NsReader<R> {
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, true)
+        self.ns_resolver.resolve_element(name)
     }
 
     /// Resolves a potentially qualified **attribute name** into _(namespace name, local name)_.
@@ -385,7 +385,7 @@ impl<R> NsReader<R> {
     /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, false)
+        self.ns_resolver.resolve_attribute(name)
     }
 }
 

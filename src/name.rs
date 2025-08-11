@@ -675,6 +675,20 @@ impl NamespaceResolver {
         (self.resolve_prefix(prefix, use_default), local_name)
     }
 
+    /// Convenient method to call `resolve(name, true)`. May be used to clearly
+    /// express that we want to resolve an element name, and not an attribute name.
+    #[inline]
+    pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
+        self.resolve(name, true)
+    }
+
+    /// Convenient method to call `resolve(name, false)`. May be used to clearly
+    /// express that we want to resolve an attribute name, and not an element name.
+    #[inline]
+    pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
+        self.resolve(name, false)
+    }
+
     /// Finds a [namespace name] for a given qualified **element name**, borrow
     /// it from the internal buffer.
     ///
