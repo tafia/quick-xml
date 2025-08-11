@@ -545,60 +545,125 @@ impl Default for NamespaceResolver {
 }
 
 impl NamespaceResolver {
+    /// Adds new binding of prefix to namespace, returns the result of operation.
+    ///
+    /// Binding will be added on current nesting level and will be removed, when
+    /// level will be [popped out].
+    ///
+    /// The operation may fail if you try to (re-)declare reserved prefixes `xml` and `xmlns`.
+    ///
+    /// Note, that method does not check if namespace was already added on that level.
+    /// Use `resolver.bindings_of(resolver.level()).any()` if you want to check that.
+    /// New definition will be added and replace the old.
+    ///
+    /// Implementation detail: memory occupied by old binding of that level still will be used.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use quick_xml::name::{Namespace, NamespaceResolver, PrefixDeclaration, QName, ResolveResult};
+    /// #
+    /// let mut resolver = NamespaceResolver::default();
+    /// // names without prefix are unbound by default
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"name")).0,
+    ///     ResolveResult::Unbound,
+    /// );
+    /// // names with undeclared prefix are unknown
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"ns:name")).0,
+    ///     ResolveResult::Unknown(b"ns".to_vec()),
+    /// );
+    ///
+    /// resolver.add(PrefixDeclaration::Default, Namespace(b"example.com"));
+    /// resolver.add(PrefixDeclaration::Named(b"ns"), Namespace(b"my:namespace"));
+    ///
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"name")).0,
+    ///     ResolveResult::Bound(Namespace(b"example.com")),
+    /// );
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"ns:name")).0,
+    ///     ResolveResult::Bound(Namespace(b"my:namespace")),
+    /// );
+    ///
+    /// // adding empty namespace clears the binding
+    /// resolver.add(PrefixDeclaration::Default, Namespace(b""));
+    /// resolver.add(PrefixDeclaration::Named(b"ns"), Namespace(b""));
+    ///
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"name")).0,
+    ///     ResolveResult::Unbound,
+    /// );
+    /// assert_eq!(
+    ///     resolver.resolve_element(QName(b"ns:name")).0,
+    ///     ResolveResult::Unknown(b"ns".to_vec()),
+    /// );
+    /// ```
+    /// [popped out]: Self::pop
+    pub fn add(
+        &mut self,
+        prefix: PrefixDeclaration,
+        namespace: Namespace,
+    ) -> Result<(), NamespaceError> {
+        let level = self.nesting_level;
+        match prefix {
+            PrefixDeclaration::Default => {
+                let start = self.buffer.len();
+                self.buffer.extend_from_slice(&namespace.0);
+                self.bindings.push(NamespaceBinding {
+                    start,
+                    prefix_len: 0,
+                    value_len: namespace.0.len(),
+                    level,
+                });
+            }
+            PrefixDeclaration::Named(b"xml") => {
+                if namespace != RESERVED_NAMESPACE_XML.1 {
+                    // error, `xml` prefix explicitly set to different value
+                    return Err(NamespaceError::InvalidXmlPrefixBind(namespace.0.to_vec()));
+                }
+                // don't add another NamespaceEntry for the `xml` namespace prefix
+            }
+            PrefixDeclaration::Named(b"xmlns") => {
+                // error, `xmlns` prefix explicitly set
+                return Err(NamespaceError::InvalidXmlnsPrefixBind(namespace.0.to_vec()));
+            }
+            PrefixDeclaration::Named(prefix) => {
+                // error, non-`xml` prefix set to xml uri
+                if namespace == RESERVED_NAMESPACE_XML.1 {
+                    return Err(NamespaceError::InvalidPrefixForXml(prefix.to_vec()));
+                } else
+                // error, non-`xmlns` prefix set to xmlns uri
+                if namespace == RESERVED_NAMESPACE_XMLNS.1 {
+                    return Err(NamespaceError::InvalidPrefixForXmlns(prefix.to_vec()));
+                }
+
+                let start = self.buffer.len();
+                self.buffer.extend_from_slice(prefix);
+                self.buffer.extend_from_slice(&namespace.0);
+                self.bindings.push(NamespaceBinding {
+                    start,
+                    prefix_len: prefix.len(),
+                    value_len: namespace.0.len(),
+                    level,
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level += 1;
-        let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
                 match k.as_namespace_binding() {
-                    Some(PrefixDeclaration::Default) => {
-                        let start = self.buffer.len();
-                        self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceBinding {
-                            start,
-                            prefix_len: 0,
-                            value_len: v.len(),
-                            level,
-                        });
-                    }
-                    Some(PrefixDeclaration::Named(b"xml")) => {
-                        if Namespace(&v) != RESERVED_NAMESPACE_XML.1 {
-                            // error, `xml` prefix explicitly set to different value
-                            return Err(NamespaceError::InvalidXmlPrefixBind(v.to_vec()));
-                        }
-                        // don't add another NamespaceEntry for the `xml` namespace prefix
-                    }
-                    Some(PrefixDeclaration::Named(b"xmlns")) => {
-                        // error, `xmlns` prefix explicitly set
-                        return Err(NamespaceError::InvalidXmlnsPrefixBind(v.to_vec()));
-                    }
-                    Some(PrefixDeclaration::Named(prefix)) => {
-                        let ns = Namespace(&v);
-
-                        if ns == RESERVED_NAMESPACE_XML.1 {
-                            // error, non-`xml` prefix set to xml uri
-                            return Err(NamespaceError::InvalidPrefixForXml(prefix.to_vec()));
-                        } else if ns == RESERVED_NAMESPACE_XMLNS.1 {
-                            // error, non-`xmlns` prefix set to xmlns uri
-                            return Err(NamespaceError::InvalidPrefixForXmlns(prefix.to_vec()));
-                        }
-
-                        let start = self.buffer.len();
-                        self.buffer.extend_from_slice(prefix);
-                        self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceBinding {
-                            start,
-                            prefix_len: prefix.len(),
-                            value_len: v.len(),
-                            level,
-                        });
-                    }
+                    Some(prefix) => self.add(prefix, Namespace(&v))?,
                     None => {}
                 }
             } else {
@@ -609,7 +674,7 @@ impl NamespaceResolver {
     }
 
     /// Ends a top-most scope by popping all [namespace bindings], that was added by
-    /// last call to [`Self::push()`].
+    /// last call to [`Self::push()`] and [`Self::add()`].
     ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn pop(&mut self) {
