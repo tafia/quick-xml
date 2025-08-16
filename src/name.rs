@@ -289,13 +289,25 @@ impl<'a> AsRef<[u8]> for Prefix<'a> {
 
 /// A namespace prefix declaration, `xmlns` or `xmlns:<name>`, as defined in
 /// [XML Schema specification](https://www.w3.org/TR/xml-names11/#ns-decl)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrefixDeclaration<'a> {
     /// XML attribute binds a default namespace. Corresponds to `xmlns` in `xmlns="..."`
     Default,
     /// XML attribute binds a specified prefix to a namespace. Corresponds to a
     /// `prefix` in `xmlns:prefix="..."`, which is stored as payload of this variant.
     Named(&'a [u8]),
+}
+impl<'a> Debug for PrefixDeclaration<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Default => f.write_str("PrefixDeclaration::Default"),
+            Self::Named(prefix) => {
+                f.write_str("PrefixDeclaration::Named(")?;
+                write_byte_string(f, prefix)?;
+                f.write_str(")")
+            }
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
