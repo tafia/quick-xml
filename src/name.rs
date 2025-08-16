@@ -448,7 +448,7 @@ struct NamespaceBinding {
     /// Level of nesting at which this namespace was declared. The declaring element is included,
     /// i.e., a declaration on the document root has `level = 1`.
     /// This is used to pop the namespace when the element gets closed.
-    level: i32,
+    level: u16,
 }
 
 impl NamespaceBinding {
@@ -491,7 +491,7 @@ pub struct NamespaceResolver {
     bindings: Vec<NamespaceBinding>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
-    nesting_level: i32,
+    nesting_level: u16,
 }
 
 /// That constant define the one of [reserved namespaces] for the xml standard.
@@ -613,7 +613,7 @@ impl NamespaceResolver {
     ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn pop(&mut self) {
-        self.nesting_level -= 1;
+        self.nesting_level = self.nesting_level.saturating_sub(1);
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
         match self.bindings.iter().rposition(|n| n.level <= current_level) {
@@ -866,6 +866,111 @@ impl NamespaceResolver {
             cursor: 2,
         }
     }
+
+    /// Returns all the bindings on the specified level, including the default
+    /// `xml` and `xmlns` bindings.
+    ///
+    /// # Parameters
+    /// - `level`: the nesting level of an XML tag. The document without tags has
+    ///   level 0, at which default bindings are declared. The root tag has level 1
+    ///   and all other tags has levels > 1. If specify level more than [current], the
+    ///   empty iterator is returned.
+    ///
+    /// # Examples
+    ///
+    /// This example shows what results the returned iterator would return on each
+    /// level after reaning some events of a simple XML.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::name::{Namespace, PrefixDeclaration};
+    /// use quick_xml::NsReader;
+    ///
+    /// let src = "<root>
+    ///   <a xmlns=\"a1\" xmlns:a=\"a2\">
+    ///     <b xmlns=\"b1\" xmlns:b=\"b2\">
+    ///       <c/>
+    ///     </b>
+    ///     <d/>
+    ///   </a>
+    /// </root>";
+    /// let mut reader = NsReader::from_str(src);
+    /// reader.config_mut().trim_text(true);
+    /// reader.read_resolved_event()?; // <root>
+    /// reader.read_resolved_event()?; // <a>
+    /// reader.read_resolved_event()?; // <b>
+    /// reader.read_resolved_event()?; // <c/>
+    ///
+    /// // Default bindings at the beginning
+    /// assert_eq!(reader.resolver().bindings_of(0).collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"xml"), Namespace(b"http://www.w3.org/XML/1998/namespace")),
+    ///     (PrefixDeclaration::Named(b"xmlns"), Namespace(b"http://www.w3.org/2000/xmlns/")),
+    /// ]);
+    ///
+    /// // No bindings declared on root
+    /// assert_eq!(reader.resolver().bindings_of(1).collect::<Vec<_>>(), vec![]);
+    ///
+    /// // Two bindings declared on "a"
+    /// assert_eq!(reader.resolver().bindings_of(2).collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    /// ]);
+    ///
+    /// // Two bindings declared on "b"
+    /// assert_eq!(reader.resolver().bindings_of(3).collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2")),
+    /// ]);
+    ///
+    /// // No bindings declared on "c"
+    /// assert_eq!(reader.resolver().bindings_of(4).collect::<Vec<_>>(), vec![]);
+    ///
+    /// // No bindings on non-existent level
+    /// assert_eq!(reader.resolver().bindings_of(5).collect::<Vec<_>>(), vec![]);
+    /// # quick_xml::Result::Ok(())
+    /// ```
+    ///
+    /// [current]: Self::level
+    pub const fn bindings_of(&self, level: u16) -> NamespaceBindingsOfLevelIter<'_> {
+        NamespaceBindingsOfLevelIter {
+            resolver: self,
+            cursor: 0,
+            level,
+        }
+    }
+
+    /// Returns the number of [`push`] calls that were not followed by [`pop`] calls.
+    ///
+    /// Due to use of `u16` for level number the number of nested tags in XML
+    /// are limited by [`u16::MAX`], but that is enough for any real application.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use quick_xml::events::BytesStart;
+    /// # use quick_xml::name::{Namespace, NamespaceResolver, PrefixDeclaration, QName, ResolveResult};
+    /// #
+    /// let mut resolver = NamespaceResolver::default();
+    ///
+    /// assert_eq!(resolver.level(), 0);
+    ///
+    /// resolver.push(&BytesStart::new("tag"));
+    /// assert_eq!(resolver.level(), 1);
+    ///
+    /// resolver.pop();
+    /// assert_eq!(resolver.level(), 0);
+    ///
+    /// // pop from empty resolver does nothing
+    /// resolver.pop();
+    /// assert_eq!(resolver.level(), 0);
+    /// ```
+    ///
+    /// [`push`]: Self::push
+    /// [`pop`]: Self::pop
+    pub const fn level(&self) -> u16 {
+        self.nesting_level
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -917,6 +1022,50 @@ impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
 /// The previous name for [`NamespaceBindingsIter`].
 #[deprecated = "Use NamespaceBindingsIter instead"]
 pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
+
+/// Iterator on the declared namespace bindings on specified level. Returns pairs of the _(prefix, namespace)_.
+///
+/// See [`NamespaceResolver::bindings_of`] for documentation.
+#[derive(Debug, Clone)]
+pub struct NamespaceBindingsOfLevelIter<'a> {
+    resolver: &'a NamespaceResolver,
+    cursor: usize,
+    level: u16,
+}
+
+impl<'a> Iterator for NamespaceBindingsOfLevelIter<'a> {
+    type Item = (PrefixDeclaration<'a>, Namespace<'a>);
+
+    fn next(&mut self) -> Option<(PrefixDeclaration<'a>, Namespace<'a>)> {
+        while let Some(binding) = self.resolver.bindings.get(self.cursor) {
+            self.cursor += 1; // We increment for next read
+            if binding.level < self.level {
+                continue;
+            }
+            if binding.level > self.level {
+                break;
+            }
+
+            if let ResolveResult::Bound(namespace) = binding.namespace(&self.resolver.buffer) {
+                let prefix = match binding.prefix(&self.resolver.buffer) {
+                    Some(Prefix(prefix)) => PrefixDeclaration::Named(prefix),
+                    None => PrefixDeclaration::Default,
+                };
+                return Some((prefix, namespace));
+            }
+        }
+        None // We have exhausted the array
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // Real count could be less
+        (0, Some(self.resolver.bindings.len() - self.cursor))
+    }
+}
+
+impl<'a> FusedIterator for NamespaceBindingsOfLevelIter<'a> {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod namespaces {
