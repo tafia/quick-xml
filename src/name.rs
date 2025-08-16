@@ -695,7 +695,7 @@ impl NamespaceResolver {
         NamespaceBindingsIter {
             resolver: self,
             // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:
-            bindings_cursor: 2,
+            cursor: 2,
         }
     }
 }
@@ -708,45 +708,39 @@ impl NamespaceResolver {
 #[derive(Debug, Clone)]
 pub struct NamespaceBindingsIter<'a> {
     resolver: &'a NamespaceResolver,
-    bindings_cursor: usize,
+    cursor: usize,
 }
 
 impl<'a> Iterator for NamespaceBindingsIter<'a> {
     type Item = (PrefixDeclaration<'a>, Namespace<'a>);
 
     fn next(&mut self) -> Option<(PrefixDeclaration<'a>, Namespace<'a>)> {
-        while let Some(namespace_entry) = self.resolver.bindings.get(self.bindings_cursor) {
-            self.bindings_cursor += 1; // We increment for next read
+        while let Some(binding) = self.resolver.bindings.get(self.cursor) {
+            self.cursor += 1; // We increment for next read
 
             // We check if the key has not been overridden by having a look
             // at the namespaces declared after in the array
-            let prefix = namespace_entry.prefix(&self.resolver.buffer);
-            if self.resolver.bindings[self.bindings_cursor..]
+            let prefix = binding.prefix(&self.resolver.buffer);
+            if self.resolver.bindings[self.cursor..]
                 .iter()
                 .any(|ne| prefix == ne.prefix(&self.resolver.buffer))
             {
                 continue; // Overridden
             }
-            let namespace = if let ResolveResult::Bound(namespace) =
-                namespace_entry.namespace(&self.resolver.buffer)
-            {
-                namespace
-            } else {
-                continue; // We don't return unbound namespaces
-            };
-            let prefix = if let Some(Prefix(prefix)) = prefix {
-                PrefixDeclaration::Named(prefix)
-            } else {
-                PrefixDeclaration::Default
-            };
-            return Some((prefix, namespace));
+            if let ResolveResult::Bound(namespace) = binding.namespace(&self.resolver.buffer) {
+                let prefix = match prefix {
+                    Some(Prefix(prefix)) => PrefixDeclaration::Named(prefix),
+                    None => PrefixDeclaration::Default,
+                };
+                return Some((prefix, namespace));
+            }
         }
         None // We have exhausted the array
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         // Real count could be less if some namespaces was overridden
-        (0, Some(self.resolver.bindings.len() - self.bindings_cursor))
+        (0, Some(self.resolver.bindings.len() - self.cursor))
     }
 }
 
