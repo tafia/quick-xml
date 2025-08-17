@@ -670,35 +670,22 @@ impl NamespaceResolver {
     }
 
     fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
-        self.bindings
-            .iter()
-            // Find the last defined binding that corresponds to the given prefix
-            .rev()
-            .find_map(|n| match (n.prefix(&self.buffer), prefix) {
-                // This is default namespace definition and name has no explicit prefix
-                (None, None) if use_default => Some(n.namespace(&self.buffer)),
-                (None, None) => Some(ResolveResult::Unbound),
-
-                // One part has prefix but other is not -> skip
-                (None, Some(_)) => None,
-                (Some(_), None) => None,
-
-                // Prefixes does not match -> skip
-                (Some(definition), Some(usage)) if definition != usage => None,
-
-                // Prefixes the same, entry defines binding reset (corresponds to `xmlns:p=""`)
-                _ if n.value_len == 0 => Some(Self::maybe_unknown(prefix)),
-                // Prefixes the same, returns corresponding namespace
-                _ => Some(n.namespace(&self.buffer)),
-            })
-            .unwrap_or_else(|| Self::maybe_unknown(prefix))
-    }
-
-    #[inline]
-    fn maybe_unknown(prefix: Option<Prefix>) -> ResolveResult<'static> {
-        match prefix {
-            Some(p) => ResolveResult::Unknown(p.into_inner().to_vec()),
-            None => ResolveResult::Unbound,
+        // Find the last defined binding that corresponds to the given prefix
+        let mut iter = self.bindings.iter().rev();
+        match (prefix, use_default) {
+            // Attribute name has no explicit prefix -> Unbound
+            (None, false) => ResolveResult::Unbound,
+            // Element name has no explicit prefix -> find nearest xmlns binding
+            (None, true) => match iter.find(|n| n.prefix_len == 0) {
+                Some(n) => n.namespace(&self.buffer),
+                None => ResolveResult::Unbound,
+            },
+            // Attribute or element name with explicit prefix
+            (Some(p), _) => match iter.find(|n| n.prefix(&self.buffer) == prefix) {
+                Some(n) if n.value_len != 0 => n.namespace(&self.buffer),
+                // Not found or binding reset (corresponds to `xmlns:p=""`)
+                _ => ResolveResult::Unknown(p.into_inner().to_vec()),
+            },
         }
     }
 
