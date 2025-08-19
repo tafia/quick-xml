@@ -5,7 +5,7 @@
 > 3. Update `Changelog.md` with date of release, add new empty Unreleased headings
 > 4. Commit changes with message "Release x.y.z"
 > 5. `cargo package` for final check
-> 6. Push `master` to my fork, wait while CI pass. Repeat with force pushs if necessary
+> 6. Push `master` to my fork, wait while CI pass. Repeat with force pushes if necessary
 > 7. `cargo publish`
 > 8. Create and push tag `vx.y.z` and push `master` to upstream
 > 9. Create a Release on GitHub (in GitHub UI)
