@@ -1085,7 +1085,6 @@ impl<'a> Iterator for NamespaceBindingsIter<'a> {
 impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
 
 /// The previous name for [`NamespaceBindingsIter`].
-#[deprecated = "Use NamespaceBindingsIter instead"]
 pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
 
 /// Iterator on the declared namespace bindings on specified level. Returns pairs of the _(prefix, namespace)_.

@@ -24,7 +24,7 @@
 
 ### Misc Changes
 
-- [#893]: Rename `PrefixIter` to `NamespaceBindingsIter`, `PrefixIter` is deprecated.
+- [#893]: Rename `PrefixIter` to `NamespaceBindingsIter`.
 
 [#893]: https://github.com/tafia/quick-xml/pull/893
 
