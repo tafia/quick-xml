@@ -210,7 +210,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// given buffer.
     ///
     /// This method manages namespaces but doesn't resolve them automatically.
-    /// You should call [`resolve_element()`] if you want to get a namespace.
+    /// You should call [`resolver().resolve_element()`] if you want to get a namespace.
     ///
     /// You also can use [`read_resolved_event_into_async()`] instead if you want
     /// to resolve namespace as soon as you get an event.
@@ -239,7 +239,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///     match reader.read_event_into_async(&mut buf).await.unwrap() {
     ///         Event::Start(e) => {
     ///             count += 1;
-    ///             let (ns, local) = reader.resolve_element(e.name());
+    ///             let (ns, local) = reader.resolver().resolve_element(e.name());
     ///             match local.as_ref() {
     ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
     ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
@@ -260,7 +260,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: NsReader::read_event_into
-    /// [`resolve_element()`]: Self::resolve_element
+    /// [`resolver().resolve_element()`]: crate::name::NamespaceResolver::resolve_element
     /// [`read_resolved_event_into_async()`]: Self::read_resolved_event_into_async
     pub async fn read_event_into_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.pop();
@@ -406,8 +406,8 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
         &'ns mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
-        let event = self.read_event_into_async(buf).await;
-        self.resolve_event(event)
+        let event = self.read_event_into_async(buf).await?;
+        Ok(self.resolver().resolve_event(event))
     }
 }
 

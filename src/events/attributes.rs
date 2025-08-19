@@ -399,7 +399,7 @@ impl<'a> Attributes<'a> {
 
         self.any(|attr| {
             if let Ok(attr) = attr {
-                match reader.resolve_attribute(attr.key) {
+                match reader.resolver().resolve_attribute(attr.key) {
                     (
                         Bound(Namespace(b"http://www.w3.org/2001/XMLSchema-instance")),
                         LocalName(b"nil"),

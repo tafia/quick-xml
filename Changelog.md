@@ -16,9 +16,17 @@
 
 ### New Features
 
+- [#893]: Implement `FusedIterator` for `NamespaceBindingsIter`.
+- [#893]: Make `NamespaceResolver` public.
+- [#893]: Add `NsReader::resolver()` for access to namespace resolver.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+- [#893]: Rename `PrefixIter` to `NamespaceBindingsIter`, `PrefixIter` is deprecated.
+
+[#893]: https://github.com/tafia/quick-xml/pull/893
 
 
 ## 0.38.1 -- 2025-08-03

@@ -18,7 +18,7 @@ fn namespace() {
             e
         ),
     }
-    let it1 = r.prefixes();
+    let it1 = r.resolver().bindings();
     let it2 = it1.clone();
     assert_eq!(it1.size_hint(), (0, Some(1)));
     assert_eq!(
@@ -40,7 +40,7 @@ fn namespace() {
             e
         ),
     }
-    let it = r.prefixes();
+    let it = r.resolver().bindings();
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
@@ -52,7 +52,7 @@ fn namespace() {
         Ok((ns, Text(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting text content with no namespace, got {:?}", e),
     }
-    let it = r.prefixes();
+    let it = r.resolver().bindings();
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
@@ -67,7 +67,7 @@ fn namespace() {
             e
         ),
     }
-    let it = r.prefixes();
+    let it = r.resolver().bindings();
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
@@ -79,7 +79,7 @@ fn namespace() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
-    let it = r.prefixes();
+    let it = r.resolver().bindings();
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
@@ -109,7 +109,7 @@ mod default_namespace {
             // we don't care about xmlns attributes for this test
             .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_attribute(name);
+                let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
         assert_eq!(
@@ -118,7 +118,7 @@ mod default_namespace {
         );
         assert_eq!(attrs.next(), None);
 
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -138,7 +138,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(0)));
         assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
@@ -150,7 +150,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -165,7 +165,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -178,7 +178,7 @@ mod default_namespace {
             Ok((ns, End(_))) => assert_eq!(ns, Unbound),
             e => panic!("expecting outer end element with no namespace, got {:?}", e),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(0)));
         assert_eq!(it.collect::<Vec<_>>(), vec![]);
     }
@@ -195,7 +195,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -210,7 +210,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(2)));
         assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
@@ -219,7 +219,7 @@ mod default_namespace {
             Ok((ns, End(_))) => assert_eq!(ns, Unbound),
             e => panic!("expecting inner end element with no namespace, got {:?}", e),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(2)));
         assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
@@ -231,7 +231,7 @@ mod default_namespace {
                 e
             ),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -255,7 +255,7 @@ mod default_namespace {
                 e => panic!("Expected Start event (<outer>), got {:?}", e),
             }
 
-            let it = r.prefixes();
+            let it = r.resolver().bindings();
             assert_eq!(it.size_hint(), (0, Some(1)));
             assert_eq!(
                 it.collect::<Vec<_>>(),
@@ -280,7 +280,7 @@ mod default_namespace {
                 // we don't care about xmlns attributes for this test
                 .filter(|kv| kv.key.as_namespace_binding().is_none())
                 .map(|Attribute { key: name, value }| {
-                    let (opt_ns, local_name) = r.resolve_attribute(name);
+                    let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                     (opt_ns, local_name.into_inner(), value)
                 });
             // the attribute should _not_ have a namespace name. The default namespace does not
@@ -291,7 +291,7 @@ mod default_namespace {
             );
             assert_eq!(attrs.next(), None);
 
-            let it = r.prefixes();
+            let it = r.resolver().bindings();
             assert_eq!(it.size_hint(), (0, Some(2)));
             assert_eq!(
                 it.collect::<Vec<_>>(),
@@ -307,7 +307,7 @@ mod default_namespace {
             }
             e => panic!("Expected End event (<outer>), got {:?}", e),
         }
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
@@ -349,7 +349,7 @@ mod default_namespace {
                 // we don't care about xmlns attributes for this test
                 .filter(|kv| kv.key.as_namespace_binding().is_none())
                 .map(|Attribute { key: name, value }| {
-                    let (opt_ns, local_name) = r.resolve_attribute(name);
+                    let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                     (opt_ns, local_name.into_inner(), value)
                 });
             // the attribute should _not_ have a namespace name. The default namespace does not
@@ -400,7 +400,7 @@ fn attributes_empty_ns() {
         // we don't care about xmlns attributes for this test
         .filter(|kv| kv.key.as_namespace_binding().is_none())
         .map(|Attribute { key: name, value }| {
-            let (opt_ns, local_name) = r.resolve_attribute(name);
+            let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
             (opt_ns, local_name.into_inner(), value)
         });
     assert_eq!(
@@ -417,7 +417,7 @@ fn attributes_empty_ns() {
     );
     assert_eq!(attrs.next(), None);
 
-    let it = r.prefixes();
+    let it = r.resolver().bindings();
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
@@ -446,7 +446,7 @@ fn attributes_empty_ns_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_attribute(name);
+                let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
         assert_eq!(
@@ -463,7 +463,7 @@ fn attributes_empty_ns_expanded() {
         );
         assert_eq!(attrs.next(), None);
 
-        let it = r.prefixes();
+        let it = r.resolver().bindings();
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
