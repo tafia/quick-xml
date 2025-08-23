@@ -388,15 +388,15 @@ fn normalize_xml_eol_step(normalized: &mut String, text: &str, index: usize, ch:
                     normalized.push(ch);
                     return index + 2; // skip \r\n
                 }
-                // Because input is correct UTF-8 and in UTF-8 every character has
-                // an unique prefix, byte C2 means only start of #x85 character
                 if next == 0xC2 {
+                    // UTF-8 encoding of #x85 character is [c2 85]
                     if index + 2 < input.len() && input[index + 2] == 0x85 {
                         normalized.push(ch);
                     } else {
+                        normalized.push(ch);
                         // NOTE: unsafe { text.get_unchecked(index..index + 3) } could be used because
                         // we are sure that index within string
-                        normalized.push_str(&text[index..index + 3]);
+                        normalized.push_str(&text[index + 1..index + 3]);
                     }
                     return index + 3; // skip \r + UTF-8 encoding of character (c2 xx)
                 }
@@ -2173,7 +2173,10 @@ mod normalization {
                     if ch == '\u{0085}' {
                         assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
                     } else {
-                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                        let mut expected = utf8.clone();
+                        expected[0] = b'\n';
+                        let expected = std::str::from_utf8(&expected).expect(&description);
+                        assert_eq!(normalize_xml_eols(input), expected, "{}", description);
                     }
                 }
                 assert_eq!((first..=last).count(), 64);
