@@ -305,7 +305,7 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO: It would be better to reuse buffer after decoding if possible
-pub(crate) fn normalize_xml_eols<'input>(text: &'input str) -> Cow<'input, str> {
+pub(crate) fn normalize_xml11_eols<'input>(text: &'input str) -> Cow<'input, str> {
     let bytes = text.as_bytes();
 
     // The following sequences of UTF-8 encoded input should be translated into
@@ -326,13 +326,13 @@ pub(crate) fn normalize_xml_eols<'input>(text: &'input str) -> Cow<'input, str> 
         // we are sure that index within string
         normalized.push_str(&text[0..i]);
 
-        let mut pos = normalize_xml_eol_step(&mut normalized, text, i, '\n');
+        let mut pos = normalize_xml11_eol_step(&mut normalized, text, i, '\n');
         while let Some(i) = memchr3(b'\r', 0xC2, 0xE2, &bytes[pos..]) {
             let index = pos + i;
             // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
             // we are sure that index within string
             normalized.push_str(&text[pos..index]);
-            pos = normalize_xml_eol_step(&mut normalized, text, index, '\n');
+            pos = normalize_xml11_eol_step(&mut normalized, text, index, '\n');
         }
         if let Some(rest) = text.get(pos..) {
             normalized.push_str(rest);
@@ -378,7 +378,7 @@ pub(crate) fn normalize_xml_eols<'input>(text: &'input str) -> Cow<'input, str> 
 ///
 /// [eof]: https://www.w3.org/TR/xml11/#sec-line-ends
 /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
-fn normalize_xml_eol_step(normalized: &mut String, text: &str, index: usize, ch: char) -> usize {
+fn normalize_xml11_eol_step(normalized: &mut String, text: &str, index: usize, ch: char) -> usize {
     let input = text.as_bytes();
     match input[index] {
         b'\r' => {
@@ -441,7 +441,7 @@ fn normalize_xml_eol_step(normalized: &mut String, text: &str, index: usize, ch:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO: It would be better to reuse buffer after decoding if possible
-pub(crate) fn normalize_html_eols<'input>(text: &'input str) -> Cow<'input, str> {
+pub(crate) fn normalize_xml10_eols<'input>(text: &'input str) -> Cow<'input, str> {
     let bytes = text.as_bytes();
 
     // The following sequences of UTF-8 encoded input should be translated into
@@ -459,13 +459,13 @@ pub(crate) fn normalize_html_eols<'input>(text: &'input str) -> Cow<'input, str>
         // we are sure that index within string
         normalized.push_str(&text[0..i]);
 
-        let mut pos = normalize_html_eol_step(&mut normalized, bytes, i, '\n');
+        let mut pos = normalize_xml10_eol_step(&mut normalized, bytes, i, '\n');
         while let Some(i) = memchr(b'\r', &bytes[pos..]) {
             let index = pos + i;
             // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
             // we are sure that index within string
             normalized.push_str(&text[pos..index]);
-            pos = normalize_html_eol_step(&mut normalized, bytes, index, '\n');
+            pos = normalize_xml10_eol_step(&mut normalized, bytes, index, '\n');
         }
         if let Some(rest) = text.get(pos..) {
             normalized.push_str(rest);
@@ -487,7 +487,12 @@ pub(crate) fn normalize_html_eols<'input>(text: &'input str) -> Cow<'input, str>
 /// - `ch`: a character that should be put to the string instead of newline sequence
 ///
 /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
-fn normalize_html_eol_step(normalized: &mut String, input: &[u8], index: usize, ch: char) -> usize {
+fn normalize_xml10_eol_step(
+    normalized: &mut String,
+    input: &[u8],
+    index: usize,
+    ch: char,
+) -> usize {
     match input[index] {
         b'\r' => {
             normalized.push(ch);
@@ -2062,32 +2067,35 @@ mod normalization {
     mod eol {
         use super::*;
 
-        mod xml {
+        mod xml11 {
             use super::*;
             use pretty_assertions::assert_eq;
 
             #[test]
             fn empty() {
-                assert_eq!(normalize_xml_eols(""), "");
+                assert_eq!(normalize_xml11_eols(""), "");
             }
 
             #[test]
             fn already_normalized() {
                 assert_eq!(
-                    normalize_xml_eols("\nalready \n\n normalized\n"),
+                    normalize_xml11_eols("\nalready \n\n normalized\n"),
                     "\nalready \n\n normalized\n",
                 );
             }
 
             #[test]
             fn cr_lf() {
-                assert_eq!(normalize_xml_eols("\r\nsome\r\n\r\ntext"), "\nsome\n\ntext");
+                assert_eq!(
+                    normalize_xml11_eols("\r\nsome\r\n\r\ntext"),
+                    "\nsome\n\ntext"
+                );
             }
 
             #[test]
             fn cr_u0085() {
                 assert_eq!(
-                    normalize_xml_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
+                    normalize_xml11_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
                     "\nsome\n\ntext",
                 );
             }
@@ -2095,7 +2103,7 @@ mod normalization {
             #[test]
             fn u0085() {
                 assert_eq!(
-                    normalize_xml_eols("\u{0085}some\u{0085}\u{0085}text"),
+                    normalize_xml11_eols("\u{0085}some\u{0085}\u{0085}text"),
                     "\nsome\n\ntext",
                 );
             }
@@ -2103,7 +2111,7 @@ mod normalization {
             #[test]
             fn u2028() {
                 assert_eq!(
-                    normalize_xml_eols("\u{2028}some\u{2028}\u{2028}text"),
+                    normalize_xml11_eols("\u{2028}some\u{2028}\u{2028}text"),
                     "\nsome\n\ntext",
                 );
             }
@@ -2111,7 +2119,7 @@ mod normalization {
             #[test]
             fn mixed() {
                 assert_eq!(
-                    normalize_xml_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
+                    normalize_xml11_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
                     "\n\n\n\n\n\nsome\n\n\ntext",
                 );
             }
@@ -2138,9 +2146,9 @@ mod normalization {
 
                     dbg!((input, &description));
                     if ch == '\u{0085}' {
-                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
                     } else {
-                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), input, "{}", description);
                     }
                 }
                 assert_eq!((first..=last).count(), 64);
@@ -2171,12 +2179,12 @@ mod normalization {
 
                     dbg!((input, &description));
                     if ch == '\u{0085}' {
-                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
                     } else {
                         let mut expected = utf8.clone();
                         expected[0] = b'\n';
                         let expected = std::str::from_utf8(&expected).expect(&description);
-                        assert_eq!(normalize_xml_eols(input), expected, "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), expected, "{}", description);
                     }
                 }
                 assert_eq!((first..=last).count(), 64);
@@ -2207,28 +2215,28 @@ mod normalization {
 
                     dbg!((input, &description));
                     if ch == '\u{2028}' {
-                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
                     } else {
-                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                        assert_eq!(normalize_xml11_eols(input), input, "{}", description);
                     }
                 }
                 assert_eq!((first..=last).count(), 4096);
             }
         }
 
-        mod html {
+        mod xml10 {
             use super::*;
             use pretty_assertions::assert_eq;
 
             #[test]
             fn empty() {
-                assert_eq!(normalize_html_eols(""), "");
+                assert_eq!(normalize_xml10_eols(""), "");
             }
 
             #[test]
             fn already_normalized() {
                 assert_eq!(
-                    normalize_html_eols("\nalready \n\n normalized\n"),
+                    normalize_xml10_eols("\nalready \n\n normalized\n"),
                     "\nalready \n\n normalized\n",
                 );
             }
@@ -2236,7 +2244,7 @@ mod normalization {
             #[test]
             fn cr_lf() {
                 assert_eq!(
-                    normalize_html_eols("\r\nsome\r\n\r\ntext"),
+                    normalize_xml10_eols("\r\nsome\r\n\r\ntext"),
                     "\nsome\n\ntext"
                 );
             }
@@ -2244,7 +2252,7 @@ mod normalization {
             #[test]
             fn cr_u0085() {
                 assert_eq!(
-                    normalize_html_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
+                    normalize_xml10_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
                     "\n\u{0085}some\n\u{0085}\n\u{0085}text",
                 );
             }
@@ -2252,7 +2260,7 @@ mod normalization {
             #[test]
             fn u0085() {
                 assert_eq!(
-                    normalize_html_eols("\u{0085}some\u{0085}\u{0085}text"),
+                    normalize_xml10_eols("\u{0085}some\u{0085}\u{0085}text"),
                     "\u{0085}some\u{0085}\u{0085}text",
                 );
             }
@@ -2260,7 +2268,7 @@ mod normalization {
             #[test]
             fn u2028() {
                 assert_eq!(
-                    normalize_html_eols("\u{2028}some\u{2028}\u{2028}text"),
+                    normalize_xml10_eols("\u{2028}some\u{2028}\u{2028}text"),
                     "\u{2028}some\u{2028}\u{2028}text",
                 );
             }
@@ -2268,7 +2276,7 @@ mod normalization {
             #[test]
             fn mixed() {
                 assert_eq!(
-                    normalize_html_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
+                    normalize_xml10_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
                     "\n\n\n\u{2028}\n\nsome\n\u{0085}\n\u{0085}text",
                 );
             }
