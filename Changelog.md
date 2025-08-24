@@ -18,6 +18,13 @@
 
 ### Bug Fixes
 
+### Misc Changes
+
+
+## 0.38.3 -- 2025-08-24
+
+### Bug Fixes
+
 - [#895]: Fix incorrect normalization of `\rX` EOL sequences where `X` is a char which is
   UTF-8 encoded as [c2 xx], except [c2 85].
 
