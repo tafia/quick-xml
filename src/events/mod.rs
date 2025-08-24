@@ -49,8 +49,8 @@ use std::str::from_utf8;
 use crate::encoding::{Decoder, EncodingError};
 use crate::errors::{Error, IllFormedError};
 use crate::escape::{
-    escape, minimal_escape, normalize_html_eols, normalize_xml_eols, parse_number, partial_escape,
-    EscapeError,
+    escape, minimal_escape, normalize_xml10_eols, normalize_xml11_eols, parse_number,
+    partial_escape, EscapeError,
 };
 use crate::name::{LocalName, QName};
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
@@ -591,7 +591,7 @@ impl<'a> BytesText<'a> {
         self.decoder.decode_cow(&self.content)
     }
 
-    /// Decodes the content of the XML event.
+    /// Decodes the content of the XML 1.0 or HTML event.
     ///
     /// When this event produced by the reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within
@@ -600,18 +600,19 @@ impl<'a> BytesText<'a> {
     /// This will allocate if the value contains any escape sequences or in non-UTF-8
     /// encoding, or EOL normalization is required.
     ///
-    /// Note, that this method should be used only if event represents XML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.0 or HTML content,
+    /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
     ///
-    /// To get HTML content use [`html_content()`](Self::html_content).
+    /// This method also can be used to get HTML content, because rules the same.
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml_eols)
+    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml10_eols)
     }
 
-    /// Decodes the content of the HTML event.
+    /// Decodes the content of the XML 1.1 event.
     ///
     /// When this event produced by the reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within
@@ -620,15 +621,28 @@ impl<'a> BytesText<'a> {
     /// This will allocate if the value contains any escape sequences or in non-UTF-8
     /// encoding, or EOL normalization is required.
     ///
-    /// Note, that this method should be used only if event represents HTML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.1 content,
+    /// because rules for normalizing EOLs for [XML 1.0], [XML 1.1] and [HTML] differs.
     ///
-    /// To get XML content use [`xml_content()`](Self::xml_content).
+    /// To get HTML content use [`xml10_content()`](Self::xml10_content).
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
+    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml11_eols)
+    }
+
+    /// Alias for [`xml11_content()`](Self::xml11_content).
+    #[inline]
+    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.xml11_content()
+    }
+
+    /// Alias for [`xml10_content()`](Self::xml10_content).
+    #[inline]
     pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_html_eols)
+        self.xml10_content()
     }
 
     /// Removes leading XML whitespace bytes from text content.
@@ -884,8 +898,8 @@ impl<'a> BytesCData<'a> {
         self.decoder.decode_cow(&self.content)
     }
 
-    /// Decodes the raw input byte content of the CDATA section of the XML event
-    /// into a string.
+    /// Decodes the raw input byte content of the CDATA section of the XML 1.0 or
+    /// HTML event into a string.
     ///
     /// When this event produced by the reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within
@@ -894,18 +908,19 @@ impl<'a> BytesCData<'a> {
     /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
     /// is required.
     ///
-    /// Note, that this method should be used only if event represents XML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.0 or HTML content,
+    /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
     ///
-    /// To get HTML content use [`html_content()`](Self::html_content).
+    /// This method also can be used to get HTML content, because rules the same.
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml_eols)
+    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml10_eols)
     }
 
-    /// Decodes the raw input byte content of the CDATA section of the HTML event
+    /// Decodes the raw input byte content of the CDATA section of the XML 1.1 event
     /// into a string.
     ///
     /// When this event produced by the reader, it uses the encoding information
@@ -915,15 +930,28 @@ impl<'a> BytesCData<'a> {
     /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
     /// is required.
     ///
-    /// Note, that this method should be used only if event represents HTML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.1 content,
+    /// because rules for normalizing EOLs for [XML 1.0], [XML 1.1] and [HTML] differs.
     ///
-    /// To get XML content use [`xml_content()`](Self::xml_content).
+    /// To get HTML content use [`xml10_content()`](Self::xml10_content).
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
+    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml11_eols)
+    }
+
+    /// Alias for [`xml11_content()`](Self::xml11_content).
+    #[inline]
+    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.xml11_content()
+    }
+
+    /// Alias for [`xml10_content()`](Self::xml10_content).
+    #[inline]
     pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_html_eols)
+        self.xml10_content()
     }
 }
 
@@ -1543,7 +1571,7 @@ impl<'a> BytesRef<'a> {
         self.decoder.decode_cow(&self.content)
     }
 
-    /// Decodes the content of the XML event.
+    /// Decodes the content of the XML 1.0 or HTML event.
     ///
     /// When this event produced by the reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within
@@ -1552,18 +1580,19 @@ impl<'a> BytesRef<'a> {
     /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
     /// is required.
     ///
-    /// Note, that this method should be used only if event represents XML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.0 or HTML content,
+    /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
     ///
-    /// To get HTML content use [`html_content()`](Self::html_content).
+    /// This method also can be used to get HTML content, because rules the same.
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml_eols)
+    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml10_eols)
     }
 
-    /// Decodes the content of the HTML event.
+    /// Decodes the content of the XML 1.1 event.
     ///
     /// When this event produced by the reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within
@@ -1572,15 +1601,28 @@ impl<'a> BytesRef<'a> {
     /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
     /// is required.
     ///
-    /// Note, that this method should be used only if event represents HTML content,
-    /// because rules for normalizing EOLs for [XML] and [HTML] differs.
+    /// Note, that this method should be used only if event represents XML 1.1 content,
+    /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
     ///
-    /// To get XML content use [`xml_content()`](Self::xml_content).
+    /// To get HTML content use [`xml10_content()`](Self::xml10_content).
     ///
-    /// [XML]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
+    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.content(&self.content, normalize_xml11_eols)
+    }
+
+    /// Alias for [`xml11_content()`](Self::xml11_content).
+    #[inline]
+    pub fn xml_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.xml11_content()
+    }
+
+    /// Alias for [`xml10_content()`](Self::xml10_content).
+    #[inline]
     pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_html_eols)
+        self.xml10_content()
     }
 
     /// Returns `true` if the specified reference represents the character reference

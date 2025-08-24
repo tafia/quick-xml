@@ -18,7 +18,15 @@
 
 ### Bug Fixes
 
+- [#895]: Fix incorrect normalization of `\rX` EOL sequences where `X` is a char which is
+  UTF-8 encoded as [c2 xx], except [c2 85].
+
 ### Misc Changes
+
+- [#895]: Add new `xml10_content()` and `xml11_content()` methods which behaves the same as
+  `html_content()` and `xml_content()` methods, but express intention more clearly.
+
+[#895]: https://github.com/tafia/quick-xml/pull/895
 
 
 ## 0.38.2 -- 2025-08-19
