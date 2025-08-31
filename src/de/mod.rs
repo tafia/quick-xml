@@ -4648,7 +4648,6 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
-                    // Passes as expected
                 }
 
                 // start::text::text has no difference from start::text

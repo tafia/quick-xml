@@ -47,7 +47,6 @@ mod text {
 
         let item: Item = from_str(r#"<root>content </root>"#).unwrap();
 
-        // Passes as expected
         assert_eq!(
             item,
             Item {
@@ -66,7 +65,6 @@ mod text {
 
         let item: Item = from_str(r#"<root> </root>"#).unwrap();
 
-        // Fails: called `Result::unwrap()` on an `Err` value: Custom("missing field `$text`")
         assert_eq!(
             item,
             Item {
