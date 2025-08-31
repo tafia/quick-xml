@@ -273,7 +273,14 @@ where
                 QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
         } else {
-            self.skip_whitespaces()?;
+            // If we have dedicated "$text" field, whitespace-only text may be significant.
+            // That also means, that type with `$text` fields behaves as if its element has
+            // `xml:space="preserve"` attribute: you must not have pretty-print indents
+            // inside this element.
+            if !self.has_text_field {
+                self.skip_whitespaces()?;
+            }
+
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 // If we have dedicated "$text" field, it will not be passed to "$value" field
