@@ -2789,16 +2789,8 @@ where
     fn skip_whitespaces(&mut self) -> Result<(), DeError> {
         loop {
             match self.peek()? {
-                // Skip only blank text nodes that contain a newline or carriage return
-                // (typical pretty-printed formatting). Preserve other blank text
-                // (e.g. single space) as they may be significant for some deserialization scenarios.
                 DeEvent::Text(e) if e.is_blank() => {
-                    let contains_newline = e.text.chars().any(|c| c == '\n' || c == '\r');
-                    if contains_newline {
-                        self.next()?;
-                        continue;
-                    }
-                    break;
+                    self.next()?;
                 }
                 _ => break,
             }
@@ -4656,6 +4648,7 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
+                    // Passes as expected
                 }
 
                 // start::text::text has no difference from start::text
