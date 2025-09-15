@@ -15,7 +15,6 @@ use crate::{
 };
 use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{self, DeserializeSeed, Deserializer as _, MapAccess, SeqAccess, Visitor};
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 

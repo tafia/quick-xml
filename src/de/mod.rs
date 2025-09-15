@@ -1975,7 +1975,6 @@
 
 // Macros should be defined before the modules that using them
 // Also, macros should be imported before using them
-use serde::serde_if_integer128;
 
 macro_rules! deserialize_num {
     ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
@@ -2010,10 +2009,8 @@ macro_rules! deserialize_primitives {
         deserialize_num!(deserialize_u32 => visit_u32, $($mut)?);
         deserialize_num!(deserialize_u64 => visit_u64, $($mut)?);
 
-        serde_if_integer128! {
-            deserialize_num!(deserialize_i128 => visit_i128, $($mut)?);
-            deserialize_num!(deserialize_u128 => visit_u128, $($mut)?);
-        }
+        deserialize_num!(deserialize_i128 => visit_i128, $($mut)?);
+        deserialize_num!(deserialize_u128 => visit_u128, $($mut)?);
 
         deserialize_num!(deserialize_f32 => visit_f32, $($mut)?);
         deserialize_num!(deserialize_f64 => visit_f64, $($mut)?);
@@ -2815,35 +2812,32 @@ where
     fn skip(&mut self) -> Result<(), DeError> {
         let event = self.next()?;
         self.skip_event(event)?;
-        match self.write.back() {
-            // Skip all subtree, if we skip a start event
-            Some(DeEvent::Start(e)) => {
-                let end = e.name().as_ref().to_owned();
-                let mut depth = 0;
-                loop {
-                    let event = self.next()?;
-                    match event {
-                        DeEvent::Start(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            depth += 1;
-                        }
-                        DeEvent::End(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            if depth == 0 {
-                                break;
-                            }
-                            depth -= 1;
-                        }
-                        DeEvent::Eof => {
-                            self.skip_event(event)?;
+        if let Some(DeEvent::Start(e)) = self.write.back() {
+            let end = e.name().as_ref().to_owned();
+            let mut depth = 0;
+            loop {
+                let event = self.next()?;
+                match event {
+                    DeEvent::Start(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        depth += 1;
+                    }
+                    DeEvent::End(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        if depth == 0 {
                             break;
                         }
-                        _ => self.skip_event(event)?,
+                        depth -= 1;
                     }
+                    DeEvent::Eof => {
+                        self.skip_event(event)?;
+                        break;
+                    }
+                    _ => self.skip_event(event)?,
                 }
             }
-            _ => (),
         }
+
         Ok(())
     }
 
@@ -3214,7 +3208,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> de::Deserializer<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> de::Deserializer<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3330,7 +3324,7 @@ where
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             // if the `xsi:nil` attribute is set to true we got a none value
-            DeEvent::Start(start) if self.reader.reader.has_nil_attr(&start) => {
+            DeEvent::Start(start) if self.reader.reader.has_nil_attr(start) => {
                 self.skip_next_tree()?;
                 visitor.visit_none()
             }
@@ -3354,7 +3348,7 @@ where
 ///
 /// Technically, multiple top-level elements violates XML rule of only one top-level
 /// element, but we consider this as several concatenated XML documents.
-impl<'de, 'a, R, E> SeqAccess<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> SeqAccess<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3381,7 +3375,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> IntoDeserializer<'de, DeError> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> IntoDeserializer<'de, DeError> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -4508,6 +4502,7 @@ mod tests {
             use super::*;
 
             /// <tag1><tag2>...
+            #[allow(clippy::module_inception)]
             mod start {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -4980,6 +4975,7 @@ mod tests {
                 }
             }
 
+            #[allow(clippy::module_inception)]
             mod cdata {
                 use super::*;
                 use pretty_assertions::assert_eq;

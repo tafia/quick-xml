@@ -25,10 +25,8 @@ macro_rules! write_primitive {
         write_primitive!(serialize_u32(u32));
         write_primitive!(serialize_u64(u64));
 
-        serde_if_integer128! {
-            write_primitive!(serialize_i128(i128));
-            write_primitive!(serialize_u128(u128));
-        }
+        write_primitive!(serialize_i128(i128));
+        write_primitive!(serialize_u128(u128));
 
         write_primitive!(serialize_f32(f32));
         write_primitive!(serialize_f64(f64));
@@ -84,7 +82,6 @@ use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
 use crate::writer::{Indentation, ToFmtWrite};
 use serde::ser::{self, Serialize};
-use serde::serde_if_integer128;
 use std::fmt::Write;
 use std::str::from_utf8;
 
@@ -425,7 +422,7 @@ macro_rules! forward {
 ///
 /// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
 const fn is_xml11_name_start_char(ch: char) -> bool {
-    match ch {
+    matches!(ch,
         ':'
         | 'A'..='Z'
         | '_'
@@ -441,9 +438,7 @@ const fn is_xml11_name_start_char(ch: char) -> bool {
         | '\u{3001}'..='\u{D7FF}'
         | '\u{F900}'..='\u{FDCF}'
         | '\u{FDF0}'..='\u{FFFD}'
-        | '\u{10000}'..='\u{EFFFF}' => true,
-        _ => false,
-    }
+        | '\u{10000}'..='\u{EFFFF}')
 }
 /// <https://www.w3.org/TR/xml11/#NT-NameChar>
 const fn is_xml11_name_char(ch: char) -> bool {
@@ -457,7 +452,7 @@ const fn is_xml11_name_char(ch: char) -> bool {
 
 /// Helper struct to self-defense from errors
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(self) struct XmlName<'n>(&'n str);
+struct XmlName<'n>(&'n str);
 
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
@@ -626,7 +621,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 allow_primitive: true,
                 expand_empty_elements: false,
             },
-            root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
+            root_tag: root_tag.map(XmlName::try_from).transpose()?,
         })
     }
 
@@ -733,10 +728,8 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     forward!(serialize_u32(u32));
     forward!(serialize_u64(u64));
 
-    serde_if_integer128! {
-        forward!(serialize_i128(i128));
-        forward!(serialize_u128(u128));
-    }
+    forward!(serialize_i128(i128));
+    forward!(serialize_u128(u128));
 
     forward!(serialize_f32(f32));
     forward!(serialize_f64(f64));

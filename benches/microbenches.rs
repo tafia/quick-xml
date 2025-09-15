@@ -1,3 +1,4 @@
+#![allow(clippy::incompatible_msrv)]
 use criterion::{self, criterion_group, criterion_main, Criterion};
 use pretty_assertions::assert_eq;
 use quick_xml::escape::{escape, unescape};

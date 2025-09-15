@@ -182,9 +182,8 @@ fn issue590() {
     ));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf).unwrap() {
-            Event::Eof => break,
-            _ => (),
+        if let Event::Eof = reader.read_event_into(&mut buf).unwrap() {
+            break;
         }
     }
 }
