@@ -1086,7 +1086,7 @@ impl<'a> BytesPI<'a> {
     #[inline]
     pub fn into_owned(self) -> BytesPI<'static> {
         BytesPI {
-            content: self.content.into_owned().into(),
+            content: self.content.into_owned(),
         }
     }
 
