@@ -234,13 +234,13 @@ mod tests {
     serialize_as!(i16_:   -4200i16             => "-4200");
     serialize_as!(i32_:   -42000000i32         => "-42000000");
     serialize_as!(i64_:   -42000000000000i64   => "-42000000000000");
-    serialize_as!(isize_: -42000000000000isize => "-42000000000000");
+    serialize_as!(isize_: -42000000isize       => "-42000000");
 
     serialize_as!(u8_:    42u8                => "42");
     serialize_as!(u16_:   4200u16             => "4200");
     serialize_as!(u32_:   42000000u32         => "42000000");
     serialize_as!(u64_:   42000000000000u64   => "42000000000000");
-    serialize_as!(usize_: 42000000000000usize => "42000000000000");
+    serialize_as!(usize_: 42000000usize       => "42000000");
 
     serde_if_integer128! {
         serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
