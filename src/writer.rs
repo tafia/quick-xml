@@ -233,7 +233,8 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value)}
+        self.writer.write_all(value)
+    }
 
     #[inline]
     fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> io::Result<()> {
