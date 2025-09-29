@@ -2812,6 +2812,7 @@ where
     fn skip(&mut self) -> Result<(), DeError> {
         let event = self.next()?;
         self.skip_event(event)?;
+        // Skip all subtree, if we skip a start event
         if let Some(DeEvent::Start(e)) = self.write.back() {
             let end = e.name().as_ref().to_owned();
             let mut depth = 0;
