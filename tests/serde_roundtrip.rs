@@ -6,7 +6,11 @@ use pretty_assertions::assert_eq;
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 enum Node {
     Boolean(bool),
-    Identifier { value: String, index: u32 },
+    Identifier {
+        value: String,
+        index: u32,
+    },
+    #[allow(clippy::upper_case_acronyms)]
     EOF,
 }
 

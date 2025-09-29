@@ -156,7 +156,7 @@ impl ReaderState {
                         // We want report error at place where name is expected - this is just
                         // before `>`
                         self.last_error_offset = self.offset - 1;
-                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
+                        Err(Error::IllFormed(IllFormedError::MissingDoctypeName))
                     }
                 }
             }
@@ -239,7 +239,7 @@ impl ReaderState {
     ///
     /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        debug_assert!(buf.len() > 0);
+        debug_assert!(!buf.is_empty());
         debug_assert_eq!(buf[0], b'?');
 
         let len = buf.len();

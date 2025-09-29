@@ -257,7 +257,7 @@ pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
         // without BOM
         _ if bytes.starts_with(&[0x00, b'<', 0x00, b'?']) => Some((UTF_16BE, 0)), // Some BE encoding, for example, UTF-16 or ISO-10646-UCS-2
         _ if bytes.starts_with(&[b'<', 0x00, b'?', 0x00]) => Some((UTF_16LE, 0)), // Some LE encoding, for example, UTF-16 or ISO-10646-UCS-2
-        _ if bytes.starts_with(&[b'<', b'?', b'x', b'm']) => Some((UTF_8, 0)), // Some ASCII compatible
+        _ if bytes.starts_with(b"<?xm") => Some((UTF_8, 0)), // Some ASCII compatible
 
         _ => None,
     }

@@ -432,7 +432,7 @@ impl<'a> Attributes<'a> {
 impl<'a> Debug for Attributes<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("Attributes")
-            .field("bytes", &Bytes(&self.bytes))
+            .field("bytes", &Bytes(self.bytes))
             .field("state", &self.state)
             .field("decoder", &self.decoder)
             .finish()

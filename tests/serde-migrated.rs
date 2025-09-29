@@ -15,9 +15,9 @@ struct Simple {
 }
 
 #[track_caller]
-fn test_parse_ok<'a, T: std::fmt::Debug>(errors: &[(&'a str, T)])
+fn test_parse_ok<'a, T>(errors: &[(&'a str, T)])
 where
-    T: PartialEq + Debug + ser::Serialize + for<'de> de::Deserialize<'de>,
+    T: std::fmt::Debug + PartialEq + Debug + ser::Serialize + for<'de> de::Deserialize<'de>,
 {
     for (i, &(s, ref value)) in errors.iter().enumerate() {
         match from_str::<T>(s) {

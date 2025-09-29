@@ -2181,7 +2181,7 @@ mod normalization {
                     if ch == '\u{0085}' {
                         assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
                     } else {
-                        let mut expected = utf8.clone();
+                        let mut expected = utf8;
                         expected[0] = b'\n';
                         let expected = std::str::from_utf8(&expected).expect(&description);
                         assert_eq!(normalize_xml11_eols(input), expected, "{}", description);

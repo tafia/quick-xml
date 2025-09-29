@@ -34,7 +34,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    PI(BytesPI::new(&format!("&{i};"))),
+                    PI(BytesPI::new(format!("&{i};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -48,7 +48,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    DocType(BytesText::from_escaped(&format!("&{i};"))),
+                    DocType(BytesText::from_escaped(format!("&{i};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -62,7 +62,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesText::from_escaped(&format!("&{i};"))),
+                    Comment(BytesText::from_escaped(format!("&{i};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -176,7 +176,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    PI(BytesPI::new(&format!("&#{i:x};"))),
+                    PI(BytesPI::new(format!("&#{i:x};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -190,7 +190,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    DocType(BytesText::from_escaped(&format!("&#{i:x};"))),
+                    DocType(BytesText::from_escaped(format!("&#{i:x};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -204,7 +204,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesText::from_escaped(&format!("&#{i:x};"))),
+                    Comment(BytesText::from_escaped(format!("&#{i:x};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }

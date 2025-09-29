@@ -1,3 +1,4 @@
+#![allow(clippy::incompatible_msrv)]
 use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
 use quick_xml::events::Event;
 use quick_xml::reader::{NsReader, Reader};

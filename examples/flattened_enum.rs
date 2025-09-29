@@ -129,7 +129,7 @@ fn main() {
 </model>
 "#;
 
-    let model: Model = from_str(&x).unwrap();
+    let model: Model = from_str(x).unwrap();
     println!("{:?}", model);
     // Model { elem: [Foo(Foo { a: "1", subfoo: SubFoo { a1: "2", a2: "42", a3: "1337" } }), Bar(Bar { b: "22" })] }
 
