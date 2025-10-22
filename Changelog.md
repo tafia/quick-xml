@@ -16,6 +16,9 @@
 
 ### New Features
 
+- [#907]: Allow to serialize and deserialize structs which contains only one `$text` field
+  as an attribute value or a text content value.
+
 ### Bug Fixes
 
 ### Misc Changes
@@ -25,6 +28,7 @@
   of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
 - [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
 
+[#907]: https://github.com/tafia/quick-xml/pull/907
 [#908]: https://github.com/tafia/quick-xml/pull/908
 [#913]: https://github.com/tafia/quick-xml/pull/913
 

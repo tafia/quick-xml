@@ -3,13 +3,13 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::Text;
+use crate::de::{Text, TEXT_KEY};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
 use crate::utils::{trim_xml_spaces, CowRef};
 use memchr::memchr;
-use serde::de::value::UnitDeserializer;
+use serde::de::value::{MapDeserializer, SeqAccessDeserializer, UnitDeserializer};
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
 };
@@ -477,6 +477,17 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
     }
 }
 
+/// serde<=1.0.213 does not implement `IntoDeserializer` for `SeqAccessDeserializer`,
+/// which is required for `MapDeserializer`, so implement it for our type
+impl<'de, 'a> IntoDeserializer<'de, DeError> for ListIter<'de, 'a> {
+    type Deserializer = SeqAccessDeserializer<Self>;
+
+    #[inline]
+    fn into_deserializer(self) -> Self::Deserializer {
+        SeqAccessDeserializer::new(self)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A deserializer for an xml probably escaped and encoded value of XSD [simple types].
@@ -605,6 +616,19 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
             },
         })
     }
+
+    #[inline]
+    fn as_seq_access(&self) -> Result<ListIter<'de, '_>, DeError> {
+        let content = match self.decode()? {
+            CowRef::Input(s) => Content::Input(s),
+            CowRef::Slice(s) => Content::Slice(s),
+            CowRef::Owned(s) => Content::Owned(s, 0),
+        };
+        Ok(ListIter {
+            content: Some(content),
+            escaped: self.escaped,
+        })
+    }
 }
 
 impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
@@ -685,15 +709,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        let content = match self.decode()? {
-            CowRef::Input(s) => Content::Input(s),
-            CowRef::Slice(s) => Content::Slice(s),
-            CowRef::Owned(s) => Content::Owned(s, 0),
-        };
-        visitor.visit_seq(ListIter {
-            content: Some(content),
-            escaped: self.escaped,
-        })
+        visitor.visit_seq(self.as_seq_access()?)
     }
 
     /// Representation of tuples the same as [sequences][Self::deserialize_seq].
@@ -720,7 +736,22 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     unsupported!(deserialize_map);
-    unsupported!(deserialize_struct(&'static str, &'static [&'static str]));
+
+    fn deserialize_struct<V>(
+        self,
+        _name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if fields == [TEXT_KEY] {
+            let seq = self.as_seq_access()?;
+            return visitor.visit_map(MapDeserializer::new(std::iter::once((TEXT_KEY, seq))));
+        }
+        self.deserialize_str(visitor)
+    }
 
     fn deserialize_enum<V>(
         self,
