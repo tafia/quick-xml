@@ -2295,4 +2295,46 @@ mod with_root {
                     </root>");
         }
     }
+
+    mod list {
+        use quick_xml::se::to_string_with_root;
+        use serde_derive::Serialize;
+
+        #[test]
+        fn issue906() {
+            #[derive(Debug, PartialEq, Eq, Serialize)]
+            pub struct FooType {
+                #[serde(rename = "a-list")]
+                pub a_list: ListType,
+            }
+
+            #[derive(Debug, PartialEq, Eq, Serialize)]
+            pub struct BarType {
+                #[serde(default, rename = "@a-list")]
+                pub a_list: ListType,
+            }
+
+            #[derive(Debug, PartialEq, Eq, Serialize)]
+            pub struct ListType {
+                #[serde(default, rename = "$text")]
+                pub content: Vec<String>,
+            }
+
+            let foo = FooType {
+                a_list: ListType {
+                    content: (vec!["A".to_string(), "B".to_string()]),
+                },
+            };
+            let bar = BarType {
+                a_list: ListType {
+                    content: (vec!["A".to_string(), "B".to_string()]),
+                },
+            };
+
+            let buffer = to_string_with_root("test", &foo).unwrap();
+            assert_eq!(buffer, "<test><a-list>A B</a-list></test>".to_string());
+            let buffer = to_string_with_root("test", &bar).unwrap();
+            assert_eq!(buffer, "<test a-list=\"A B\"/>".to_string());
+        }
+    }
 }
