@@ -4,7 +4,6 @@ use crate::de::TEXT_KEY;
 use crate::se::simple_type::{SimpleSeq, SimpleTypeSerializer};
 use crate::se::SeError;
 use serde::ser::{Impossible, Serialize, Serializer};
-use serde::serde_if_integer128;
 use std::fmt::Write;
 
 macro_rules! write_primitive {
@@ -49,10 +48,8 @@ impl<W: Write> Serializer for TextSerializer<W> {
     write_primitive!(serialize_u32(u32));
     write_primitive!(serialize_u64(u64));
 
-    serde_if_integer128! {
-        write_primitive!(serialize_i128(i128));
-        write_primitive!(serialize_u128(u128));
-    }
+    write_primitive!(serialize_i128(i128));
+    write_primitive!(serialize_u128(u128));
 
     write_primitive!(serialize_f32(f32));
     write_primitive!(serialize_f64(f64));

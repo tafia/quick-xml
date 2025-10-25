@@ -22,7 +22,9 @@ include = ["src/*", "LICENSE-MIT.md", "README.md"]
 arbitrary = { version = "1", features = ["derive"], optional = true }
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-serde = { version = ">=1.0.139", optional = true }
+# 1.0.180 is the first version that requires compiler with integer128 support (1.26)
+# Because serde_if_integer128 is deprecated since 1.0.221, we do not use it anymore
+serde = { version = ">=1.0.180", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
 
