@@ -5,7 +5,6 @@ use quick_xml::DeError;
 use pretty_assertions::assert_eq;
 
 use serde::de::IgnoredAny;
-use serde::serde_if_integer128;
 use serde::Deserialize;
 
 mod serde_helpers;
@@ -112,10 +111,8 @@ mod trivial {
             eof!(u64_:   u64   = $value);
             eof!(usize_: usize = $value);
 
-            serde_if_integer128! {
-                eof!(u128_: u128 = $value);
-                eof!(i128_: i128 = $value);
-            }
+            eof!(u128_: u128 = $value);
+            eof!(i128_: i128 = $value);
 
             eof!(f32_: f32 = $value);
             eof!(f64_: f64 = $value);
@@ -613,10 +610,8 @@ mod trivial {
         in_struct!(u64_:   u64   = "42000000000000", 42000000000000u64);
         in_struct!(usize_: usize = "42000000", 42000000usize);
 
-        serde_if_integer128! {
-            in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
-            in_struct!(i128_: i128 = "-420000000000000000000000000000", -420000000000000000000000000000i128);
-        }
+        in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
+        in_struct!(i128_: i128 = "-420000000000000000000000000000", -420000000000000000000000000000i128);
 
         in_struct!(f32_: f32 = "4.2", 4.2f32);
         in_struct!(f64_: f64 = "4.2", 4.2f64);
@@ -675,10 +670,8 @@ mod trivial {
         in_struct!(u64_:   u64   = "<![CDATA[42000000000000]]>", 42000000000000u64);
         in_struct!(usize_: usize = "<![CDATA[42000000]]>", 42000000usize);
 
-        serde_if_integer128! {
-            in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
-            in_struct!(i128_: i128 = "<![CDATA[-420000000000000000000000000000]]>", -420000000000000000000000000000i128);
-        }
+        in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
+        in_struct!(i128_: i128 = "<![CDATA[-420000000000000000000000000000]]>", -420000000000000000000000000000i128);
 
         in_struct!(f32_: f32 = "<![CDATA[4.2]]>", 4.2f32);
         in_struct!(f64_: f64 = "<![CDATA[4.2]]>", 4.2f64);
@@ -1558,10 +1551,8 @@ mod xml_schema_lists {
         list!(u32_: u32 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
         list!(u64_: u64 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
 
-        serde_if_integer128! {
-            list!(i128_: i128 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
-            list!(u128_: u128 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
-        }
+        list!(i128_: i128 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+        list!(u128_: u128 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
 
         list!(f32_: f32 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
         list!(f64_: f64 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
@@ -1606,10 +1597,8 @@ mod xml_schema_lists {
             list!(u32_: u32 = "<root>1 2  3</root>" => vec![1, 2, 3]);
             list!(u64_: u64 = "<root>1 2  3</root>" => vec![1, 2, 3]);
 
-            serde_if_integer128! {
-                list!(i128_: i128 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
-                list!(u128_: u128 = "<root>1 2  3</root>" => vec![1, 2, 3]);
-            }
+            list!(i128_: i128 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+            list!(u128_: u128 = "<root>1 2  3</root>" => vec![1, 2, 3]);
 
             list!(f32_: f32 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
             list!(f64_: f64 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
@@ -1645,10 +1634,8 @@ mod xml_schema_lists {
             list!(u32_: u32 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
             list!(u64_: u64 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
 
-            serde_if_integer128! {
-                list!(i128_: i128 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
-                list!(u128_: u128 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
-            }
+            list!(i128_: i128 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+            list!(u128_: u128 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
 
             list!(f32_: f32 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);
             list!(f64_: f64 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);

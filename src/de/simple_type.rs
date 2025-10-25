@@ -13,7 +13,6 @@ use serde::de::value::UnitDeserializer;
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
 };
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -172,10 +171,8 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     deserialize_num!(deserialize_u32 => visit_u32);
     deserialize_num!(deserialize_u64 => visit_u64);
 
-    serde_if_integer128! {
-        deserialize_num!(deserialize_i128 => visit_i128);
-        deserialize_num!(deserialize_u128 => visit_u128);
-    }
+    deserialize_num!(deserialize_i128 => visit_i128);
+    deserialize_num!(deserialize_u128 => visit_u128);
 
     deserialize_num!(deserialize_f32 => visit_f32);
     deserialize_num!(deserialize_f64 => visit_f64);
@@ -633,10 +630,8 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     deserialize_primitive!(deserialize_u32);
     deserialize_primitive!(deserialize_u64);
 
-    serde_if_integer128! {
-        deserialize_primitive!(deserialize_i128);
-        deserialize_primitive!(deserialize_u128);
-    }
+    deserialize_primitive!(deserialize_i128);
+    deserialize_primitive!(deserialize_u128);
 
     deserialize_primitive!(deserialize_f32);
     deserialize_primitive!(deserialize_f64);
@@ -984,10 +979,8 @@ mod tests {
         deserialized_to!(u32_: u32 = "3" => 3);
         deserialized_to!(u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            deserialized_to!(i128_: i128 = "-2" => -2);
-            deserialized_to!(u128_: u128 = "2" => 2);
-        }
+        deserialized_to!(i128_: i128 = "-2" => -2);
+        deserialized_to!(u128_: u128 = "2" => 2);
 
         deserialized_to!(f32_: f32 = "1.23" => 1.23);
         deserialized_to!(f64_: f64 = "1.23" => 1.23);
@@ -1182,10 +1175,8 @@ mod tests {
         simple!(utf8, u32_: u32 = "3" => 3);
         simple!(utf8, u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            simple!(utf8, i128_: i128 = "-2" => -2);
-            simple!(utf8, u128_: u128 = "2" => 2);
-        }
+        simple!(utf8, i128_: i128 = "-2" => -2);
+        simple!(utf8, u128_: u128 = "2" => 2);
 
         simple!(utf8, f32_: f32 = "1.23" => 1.23);
         simple!(utf8, f64_: f64 = "1.23" => 1.23);
@@ -1272,10 +1263,8 @@ mod tests {
         utf16!(u32_: u32 = "3" => 3);
         utf16!(u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            utf16!(i128_: i128 = "-2" => -2);
-            utf16!(u128_: u128 = "2" => 2);
-        }
+        utf16!(i128_: i128 = "-2" => -2);
+        utf16!(u128_: u128 = "2" => 2);
 
         utf16!(f32_: f32 = "1.23" => 1.23);
         utf16!(f64_: f64 = "1.23" => 1.23);
