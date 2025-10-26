@@ -320,6 +320,16 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Defines the format for text content serialization
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TextFormat {
+    /// Serialize as regular text content with escaping
+    Text,
+    /// Serialize as CDATA section without escaping
+    CData,
+}
+
 /// Defines which characters would be escaped in [`Text`] events and attribute
 /// values.
 ///
@@ -557,6 +567,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                text_format: TextFormat::Text,
                 allow_primitive: true,
                 expand_empty_elements: false,
             },
@@ -623,6 +634,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                text_format: TextFormat::Text,
                 allow_primitive: true,
                 expand_empty_elements: false,
             },
@@ -660,6 +672,40 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// ```
     pub fn expand_empty_elements(&mut self, expand: bool) -> &mut Self {
         self.ser.expand_empty_elements = expand;
+        self
+    }
+
+    /// Set the text format used for serializing text content.
+    ///
+    /// - [`TextFormat::Text`]: Regular XML escaping (default)
+    /// - [`TextFormat::CData`]: CDATA sections for text content
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::{Serializer, TextFormat};
+    ///
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Document {
+    ///     #[serde(rename = "$text")]
+    ///     content: String,
+    /// }
+    ///
+    /// let mut buffer = String::new();
+    /// let mut ser = Serializer::with_root(&mut buffer, Some("doc")).unwrap();
+    /// ser.text_format(TextFormat::CData);
+    ///
+    /// let data = Document {
+    ///     content: "Content with <markup> & entities".to_string(),
+    /// };
+    ///
+    /// data.serialize(ser).unwrap();
+    /// assert_eq!(buffer, "<doc><![CDATA[Content with <markup> & entities]]></doc>");
+    /// ```
+    pub fn text_format(&mut self, format: TextFormat) -> &mut Self {
+        self.ser.text_format = format;
         self
     }
 
