@@ -201,7 +201,7 @@ where
 macro_rules! write_atomic {
     ($method:ident ( $ty:ty )) => {
         fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.write_str(&value.to_string())?;
+            self.write_fmt(format_args!("{}", value))?;
             Ok(true)
         }
     };
@@ -247,6 +247,10 @@ impl<W: Write> AtomicSerializer<W> {
     fn write_str(&mut self, value: &str) -> Result<(), SeError> {
         self.write_delimiter()?;
         Ok(self.writer.write_str(value)?)
+    }
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<(), SeError> {
+        self.write_delimiter()?;
+        Ok(self.writer.write_fmt(args)?)
     }
 }
 
@@ -460,8 +464,13 @@ pub struct SimpleTypeSerializer<W: Write> {
 }
 
 impl<W: Write> SimpleTypeSerializer<W> {
+    #[inline]
     fn write_str(&mut self, value: &str) -> Result<(), SeError> {
         Ok(self.writer.write_str(value)?)
+    }
+    #[inline]
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<(), SeError> {
+        Ok(self.writer.write_fmt(args)?)
     }
 }
 

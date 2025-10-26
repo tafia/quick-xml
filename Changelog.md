@@ -25,9 +25,11 @@
 ### Misc Changes
 
 - [#901]: Fix running tests on 32-bit architecture
+- [#909]: Avoid some allocations in the `Serializer`
 
 [#353]: https://github.com/tafia/quick-xml/issues/353
 [#901]: https://github.com/tafia/quick-xml/pull/901
+[#909]: https://github.com/tafia/quick-xml/pull/909
 [`Serializer::text_format()`]: https://docs.rs/quick-xml/0.38.4/quick_xml/se/struct.Serializer.html#method.text_format
 
 

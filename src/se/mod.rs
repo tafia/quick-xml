@@ -5,7 +5,7 @@
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.write_str(&value.to_string())?;
+            self.write_fmt(format_args!("{}", value))?;
             Ok(self.writer)
         }
     };
