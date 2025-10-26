@@ -1,6 +1,7 @@
 use std::borrow::{Borrow, Cow};
 use std::fmt::{self, Debug, Formatter};
 use std::io;
+use std::iter::FusedIterator;
 use std::ops::Deref;
 
 #[cfg(feature = "async-tokio")]
@@ -373,6 +374,52 @@ pub const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
     }
     bytes
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Splits string into pieces which can be part of a single `CDATA` section.
+///
+/// Because CDATA cannot contain the `]]>` sequence, split the string between
+/// `]]` and `>`.
+#[derive(Debug, Clone)]
+pub(crate) struct CDataIterator<'a> {
+    /// The unprocessed data which should be emitted as `BytesCData` events.
+    /// At each iteration, the processed data is cut from this slice.
+    unprocessed: &'a str,
+    finished: bool,
+}
+
+impl<'a> CDataIterator<'a> {
+    pub fn new(value: &'a str) -> Self {
+        Self {
+            unprocessed: value,
+            finished: false,
+        }
+    }
+}
+
+impl<'a> Iterator for CDataIterator<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<&'a str> {
+        if self.finished {
+            return None;
+        }
+
+        for gt in memchr::memchr_iter(b'>', self.unprocessed.as_bytes()) {
+            let (slice, rest) = self.unprocessed.split_at(gt);
+            if slice.ends_with("]]") {
+                self.unprocessed = rest;
+                return Some(slice);
+            }
+        }
+
+        self.finished = true;
+        Some(self.unprocessed)
+    }
+}
+
+impl FusedIterator for CDataIterator<'_> {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
