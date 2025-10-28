@@ -3,15 +3,14 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::escape::_escape;
+use crate::escape::escape_char;
 use crate::se::{QuoteLevel, SeError};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
-use std::borrow::Cow;
-use std::fmt::Write;
+use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteTarget {
@@ -23,14 +22,37 @@ pub enum QuoteTarget {
     SingleQAttr,
 }
 
+fn escape_into<W, F>(mut writer: W, value: &str, escape_chars: F) -> fmt::Result
+where
+    W: Write,
+    F: Fn(u8) -> bool,
+{
+    let bytes = value.as_bytes();
+    let mut iter = bytes.iter();
+    let mut pos = 0;
+    while let Some(i) = iter.position(|&b| escape_chars(b)) {
+        let new_pos = pos + i;
+        escape_char(&mut writer, value, pos, new_pos)?;
+        pos = new_pos + 1;
+    }
+
+    if let Some(raw) = value.get(pos..) {
+        writer.write_str(raw)?;
+    }
+    Ok(())
+}
+
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
-fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
+fn escape_item<W>(writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+where
+    W: Write,
+{
     use QuoteLevel::*;
     use QuoteTarget::*;
 
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
+        (_, Full) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -38,14 +60,14 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -53,7 +75,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -62,7 +84,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -72,7 +94,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -81,7 +103,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -94,36 +116,39 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
 }
 
 /// Escapes XSD simple type value
-fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
+fn escape_list<W>(writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+where
+    W: Write,
+{
     use QuoteLevel::*;
     use QuoteTarget::*;
 
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
+        (_, Full) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Double quoted attribute should escape quote
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             // Double quoted attribute should escape quote
@@ -131,14 +156,14 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Single quoted attribute should escape quote
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             // Single quoted attribute should escape quote
@@ -189,11 +214,15 @@ pub struct AtomicSerializer<W: Write> {
 }
 
 impl<W: Write> AtomicSerializer<W> {
-    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
+    fn write_delimiter(&mut self) -> fmt::Result {
         if self.write_delimiter {
             // TODO: Customization point -- possible non-XML compatible extension to specify delimiter char
-            self.writer.write_char(' ')?;
+            return self.writer.write_char(' ');
         }
+        Ok(())
+    }
+    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
+        self.write_delimiter()?;
         Ok(self.writer.write_str(value)?)
     }
 }
@@ -239,7 +268,8 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
-            self.write_str(&escape_item(value, self.target, self.level))?;
+            self.write_delimiter()?;
+            escape_item(self.writer, value, self.target, self.level)?;
         }
         Ok(!value.is_empty())
     }
@@ -428,7 +458,7 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
-            self.write_str(&escape_list(value, self.target, self.level))?;
+            escape_list(&mut self.writer, value, self.target, self.level)?;
         }
         Ok(self.writer)
     }
@@ -654,6 +684,12 @@ mod tests {
     mod escape_item {
         use super::*;
 
+        fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> String {
+            let mut result = String::new();
+            super::escape_item(&mut result, value, target, level).unwrap();
+            result
+        }
+
         mod full {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -776,6 +812,12 @@ mod tests {
 
     mod escape_list {
         use super::*;
+
+        fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> String {
+            let mut result = String::new();
+            super::escape_list(&mut result, value, target, level).unwrap();
+            result
+        }
 
         mod full {
             use super::*;
