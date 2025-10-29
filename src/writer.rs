@@ -233,7 +233,7 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value).map_err(Into::into)
+        self.writer.write_all(value)
     }
 
     #[inline]
@@ -497,7 +497,7 @@ impl<'a, W> ElementWriter<'a, W> {
                         self.spaces.resize(indent, b' ');
                     }
                     self.start_tag.push_indent(&self.spaces[..indent]);
-                    self.start_tag.push_attr(attr.into());
+                    self.start_tag.push_attr(attr);
                     AttributeIndent::Spaces(indent)
                 }
                 // .new_line() was not called, but .with_attribute() was.
@@ -511,7 +511,7 @@ impl<'a, W> ElementWriter<'a, W> {
                 // New line was already written
                 AttributeIndent::WriteConfigured(indent) => {
                     self.start_tag.push_indent(i.additional(indent));
-                    self.start_tag.push_attr(attr.into());
+                    self.start_tag.push_attr(attr);
                     AttributeIndent::Configured(indent)
                 }
                 // .new_line() was not called, but .with_attribute() was.

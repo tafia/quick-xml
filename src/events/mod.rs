@@ -358,7 +358,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
             return Err(arbitrary::Error::IncorrectFormat);
         }
         let mut result = Self::new(s);
-        result.extend_attributes(Vec::<(&str, &str)>::arbitrary(u)?.into_iter());
+        result.extend_attributes(Vec::<(&str, &str)>::arbitrary(u)?);
         Ok(result)
     }
 
@@ -1062,7 +1062,7 @@ impl<'a> BytesPI<'a> {
     #[inline]
     pub fn into_owned(self) -> BytesPI<'static> {
         BytesPI {
-            content: self.content.into_owned().into(),
+            content: self.content.into_owned(),
         }
     }
 

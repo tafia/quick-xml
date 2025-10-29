@@ -9,7 +9,7 @@ fn self_closed() {
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
     let tag = BytesStart::new("self-closed")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     writer
         .write_event(Event::Empty(tag))
         .expect("write tag failed");
@@ -25,8 +25,8 @@ fn empty_paired() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
     writer
         .write_event(Event::Start(start.clone()))
@@ -47,8 +47,8 @@ fn paired_with_inner() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
     let inner = BytesStart::new("inner");
 
@@ -75,8 +75,8 @@ fn paired_with_text() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
     let text = BytesText::new("text");
 
@@ -101,8 +101,8 @@ fn mixed_content() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
     let text = BytesText::new("text");
     let inner = BytesStart::new("inner");
@@ -132,8 +132,8 @@ fn nested() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
     let inner = BytesStart::new("inner");
 
@@ -199,8 +199,8 @@ fn serializable() {
         val: "foo".to_owned(),
     };
 
-    let start = BytesStart::new("paired")
-        .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+    let start =
+        BytesStart::new("paired").with_attributes(vec![("attr1", "value1"), ("attr2", "value2")]);
     let end = start.to_end();
 
     writer
