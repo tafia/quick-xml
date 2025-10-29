@@ -16,9 +16,16 @@
 
 ### New Features
 
+- [#353]: Add ability to serialize textual content as CDATA sections in `Serializer`.
+  Everywhere where the text node may be created, a CDATA section(s) could be produced instead.
+  See the new [`Serializer::text_format()`] method.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#353]: https://github.com/tafia/quick-xml/issues/353
+[`Serializer::text_format()`]: https://docs.rs/quick-xml/0.38.4/quick_xml/se/struct.Serializer.html#method.text_format
 
 
 ## 0.38.3 -- 2025-08-24

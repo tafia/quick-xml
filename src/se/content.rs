@@ -3,7 +3,7 @@
 use crate::de::TEXT_KEY;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{Indent, QuoteLevel, SeError, WriteResult, XmlName};
+use crate::se::{Indent, QuoteLevel, SeError, TextFormat, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -71,6 +71,8 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     /// If `true`, then current indent will be written before writing the content,
     /// but only if content is not empty. This flag is reset after writing indent.
     pub write_indent: bool,
+    /// Defines how text content should be serialized (as escaped text or CDATA)
+    pub text_format: TextFormat,
     /// If `true`, then primitive types that serializes to a text content without
     /// surrounding tag will be allowed, otherwise the [`SeError::Unsupported`]
     /// will be returned.
@@ -88,10 +90,12 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     /// Turns this serializer into serializer of a text content
     #[inline]
     pub fn into_simple_type_serializer_impl(self) -> SimpleTypeSerializer<&'w mut W> {
-        //TODO: Customization point: choose between CDATA and Text representation
         SimpleTypeSerializer {
             writer: self.writer,
-            target: QuoteTarget::Text,
+            target: match self.text_format {
+                TextFormat::Text => QuoteTarget::Text,
+                TextFormat::CData => QuoteTarget::CData,
+            },
             level: self.level,
         }
     }
@@ -119,6 +123,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             level: self.level,
             indent: self.indent.borrow(),
             write_indent: self.write_indent,
+            text_format: self.text_format,
             allow_primitive,
             expand_empty_elements: self.expand_empty_elements,
         }
@@ -600,6 +605,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        text_format: TextFormat::Text,
                         allow_primitive: true,
                         expand_empty_elements: false,
                     };
@@ -623,6 +629,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        text_format: TextFormat::Text,
                         allow_primitive: true,
                         expand_empty_elements: false,
                     };
@@ -1070,6 +1077,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        text_format: TextFormat::Text,
                         allow_primitive: true,
                         expand_empty_elements: false,
                     };
@@ -1093,6 +1101,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        text_format: TextFormat::Text,
                         allow_primitive: true,
                         expand_empty_elements: false,
                     };

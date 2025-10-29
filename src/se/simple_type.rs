@@ -3,15 +3,15 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::escape::_escape;
+use crate::escape::escape_char;
 use crate::se::{QuoteLevel, SeError};
+use crate::utils::CDataIterator;
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
-use std::borrow::Cow;
-use std::fmt::Write;
+use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteTarget {
@@ -21,16 +21,53 @@ pub enum QuoteTarget {
     DoubleQAttr,
     /// Escape data for a single-quoted attribute. `'` always escaped
     SingleQAttr,
+    /// Escape data for a CDATA content. No escaping for `&` and `>`, but split
+    /// content on `]]>` and make several CDATA sections
+    CData,
+}
+
+fn escape_into<W, F>(mut writer: W, value: &str, escape_chars: F) -> fmt::Result
+where
+    W: Write,
+    F: Fn(u8) -> bool,
+{
+    let bytes = value.as_bytes();
+    let mut iter = bytes.iter();
+    let mut pos = 0;
+    while let Some(i) = iter.position(|&b| escape_chars(b)) {
+        let new_pos = pos + i;
+        escape_char(&mut writer, value, pos, new_pos)?;
+        pos = new_pos + 1;
+    }
+
+    if let Some(raw) = value.get(pos..) {
+        writer.write_str(raw)?;
+    }
+    Ok(())
 }
 
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
-fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
+fn escape_item<W>(mut writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+where
+    W: Write,
+{
     use QuoteLevel::*;
     use QuoteTarget::*;
 
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
+        (CData, _) => {
+            let mut it = CDataIterator::new(value);
+            if let Some(part) = it.next() {
+                writer.write_str(part)?;
+            }
+            while let Some(part) = it.next() {
+                writer.write_str("]]><![CDATA[")?;
+                writer.write_str(part)?;
+            }
+            Ok(())
+        }
+        (_, Full) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -38,14 +75,14 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -53,7 +90,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -62,7 +99,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -72,7 +109,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -81,7 +118,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -94,36 +131,47 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
 }
 
 /// Escapes XSD simple type value
-fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, str> {
+fn escape_list<W>(mut writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+where
+    W: Write,
+{
     use QuoteLevel::*;
     use QuoteTarget::*;
 
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
+        (CData, _) => {
+            for part in CDataIterator::new(value) {
+                writer.write_str("<![CDATA[")?;
+                writer.write_str(part)?;
+                writer.write_str("]]>")?;
+            }
+            Ok(())
+        }
+        (_, Full) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Double quoted attribute should escape quote
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             // Double quoted attribute should escape quote
@@ -131,14 +179,14 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<'_, s
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Single quoted attribute should escape quote
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
             // Required characters to escape
             b'&' | b'<' => true,
             // Single quoted attribute should escape quote
@@ -189,11 +237,15 @@ pub struct AtomicSerializer<W: Write> {
 }
 
 impl<W: Write> AtomicSerializer<W> {
-    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
+    fn write_delimiter(&mut self) -> fmt::Result {
         if self.write_delimiter {
             // TODO: Customization point -- possible non-XML compatible extension to specify delimiter char
-            self.writer.write_char(' ')?;
+            return self.writer.write_char(' ');
         }
+        Ok(())
+    }
+    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
+        self.write_delimiter()?;
         Ok(self.writer.write_str(value)?)
     }
 }
@@ -239,7 +291,8 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
-            self.write_str(&escape_item(value, self.target, self.level))?;
+            self.write_delimiter()?;
+            escape_item(self.writer, value, self.target, self.level)?;
         }
         Ok(!value.is_empty())
     }
@@ -428,7 +481,7 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
-            self.write_str(&escape_list(value, self.target, self.level))?;
+            escape_list(&mut self.writer, value, self.target, self.level)?;
         }
         Ok(self.writer)
     }
@@ -458,7 +511,10 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
     }
 
     #[inline]
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+    fn serialize_seq(mut self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        if let QuoteTarget::CData = self.target {
+            self.writer.write_str("<![CDATA[")?;
+        }
         Ok(SimpleSeq {
             writer: self.writer,
             target: self.target,
@@ -555,7 +611,10 @@ impl<W: Write> SerializeSeq for SimpleSeq<W> {
     }
 
     #[inline]
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+    fn end(mut self) -> Result<Self::Ok, Self::Error> {
+        if let QuoteTarget::CData = self.target {
+            self.writer.write_str("]]>")?;
+        }
         Ok(self.writer)
     }
 }
@@ -653,6 +712,13 @@ mod tests {
 
     mod escape_item {
         use super::*;
+        use pretty_assertions::assert_eq;
+
+        fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> String {
+            let mut result = String::new();
+            super::escape_item(&mut result, value, target, level).unwrap();
+            result
+        }
 
         mod full {
             use super::*;
@@ -772,10 +838,46 @@ mod tests {
                 );
             }
         }
+
+        /// Escape function does not surround text with `<![CDATA[` and `]]>`, that should be done outside
+        #[test]
+        fn cdata() {
+            assert_eq!(
+                escape_item(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Full
+                ),
+                "text<\"'&>]]]]><![CDATA[> \t\n\rtext"
+            );
+            assert_eq!(
+                escape_item(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Partial
+                ),
+                "text<\"'&>]]]]><![CDATA[> \t\n\rtext"
+            );
+            assert_eq!(
+                escape_item(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Minimal
+                ),
+                "text<\"'&>]]]]><![CDATA[> \t\n\rtext"
+            );
+        }
     }
 
     mod escape_list {
         use super::*;
+        use pretty_assertions::assert_eq;
+
+        fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> String {
+            let mut result = String::new();
+            super::escape_list(&mut result, value, target, level).unwrap();
+            result
+        }
 
         mod full {
             use super::*;
@@ -894,6 +996,34 @@ mod tests {
                     "text&lt;\"&apos;&amp;> \t\n\rtext"
                 );
             }
+        }
+
+        #[test]
+        fn cdata() {
+            assert_eq!(
+                escape_list(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Full
+                ),
+                "<![CDATA[text<\"'&>]]]]><![CDATA[> \t\n\rtext]]>"
+            );
+            assert_eq!(
+                escape_list(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Partial
+                ),
+                "<![CDATA[text<\"'&>]]]]><![CDATA[> \t\n\rtext]]>"
+            );
+            assert_eq!(
+                escape_list(
+                    "text<\"'&>]]> \t\n\rtext",
+                    QuoteTarget::CData,
+                    QuoteLevel::Minimal
+                ),
+                "<![CDATA[text<\"'&>]]]]><![CDATA[> \t\n\rtext]]>"
+            );
         }
     }
 
@@ -1218,5 +1348,45 @@ mod tests {
             SerializeSeq::end(ser).unwrap();
             assert_eq!(buffer, "1 2 3");
         }
+    }
+
+    mod cdata {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        macro_rules! serialize_as_cdata {
+            ($name:ident: $data:expr => $expected:literal) => {
+                #[test]
+                fn $name() {
+                    let ser = SimpleTypeSerializer {
+                        writer: String::new(),
+                        target: QuoteTarget::CData,
+                        level: QuoteLevel::Full,
+                    };
+
+                    let buffer = $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
+                }
+            };
+        }
+
+        serialize_as_cdata!(empty_string: "" => "");
+        serialize_as_cdata!(simple_text: "Hello World" => "<![CDATA[Hello World]]>");
+        serialize_as_cdata!(with_markup: "<tag>content</tag>" => "<![CDATA[<tag>content</tag>]]>");
+        serialize_as_cdata!(with_ampersand: "Tom & Jerry" => "<![CDATA[Tom & Jerry]]>");
+        serialize_as_cdata!(with_quotes: r#"He said "Hello""# => r#"<![CDATA[He said "Hello"]]>"#);
+        serialize_as_cdata!(all_xml_chars: "<>&\"'" => "<![CDATA[<>&\"']]>");
+
+        serialize_as_cdata!(with_cdata_end: "foo]]>bar" => "<![CDATA[foo]]]]><![CDATA[>bar]]>");
+        serialize_as_cdata!(multiple_cdata_ends: "a]]>b]]>c" => "<![CDATA[a]]]]><![CDATA[>b]]]]><![CDATA[>c]]>");
+        serialize_as_cdata!(starts_with_cdata_end: "]]>hello" => "<![CDATA[]]]]><![CDATA[>hello]]>");
+        serialize_as_cdata!(ends_with_cdata_end: "hello]]>" => "<![CDATA[hello]]]]><![CDATA[>]]>");
+        serialize_as_cdata!(only_cdata_end: "]]>" => "<![CDATA[]]]]><![CDATA[>]]>");
+
+        serialize_as_cdata!(seq_basic: vec!["foo", "bar", "baz"] => "<![CDATA[foo bar baz]]>");
+        serialize_as_cdata!(seq_with_space: vec!["hello world", "hello\tworld", "world"] => "<![CDATA[hello world hello\tworld world]]>");
+        serialize_as_cdata!(seq_with_markup_chars: vec!["<tag>", "&entity", "\"quoted\""] => "<![CDATA[<tag> &entity \"quoted\"]]>");
+        serialize_as_cdata!(seq_with_cdata_end_split: vec!["foo]]>bar", "test"] => "<![CDATA[foo]]]]><![CDATA[>bar test]]>");
+        serialize_as_cdata!(tuple_cdata: ("first", 42, "third") => "<![CDATA[first 42 third]]>");
     }
 }

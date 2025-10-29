@@ -443,6 +443,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             indent: self.ser.ser.indent.borrow(),
             // If previous field does not require indent, do not write it
             write_indent: self.write_indent,
+            text_format: self.ser.ser.text_format,
             allow_primitive: true,
             expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
@@ -596,7 +597,7 @@ impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
 mod tests {
     use super::*;
     use crate::se::content::tests::*;
-    use crate::se::{Indent, QuoteLevel};
+    use crate::se::{Indent, QuoteLevel, TextFormat};
     use crate::utils::Bytes;
     use serde::Serialize;
     use std::collections::BTreeMap;
@@ -635,6 +636,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            text_format: TextFormat::Text,
                             allow_primitive: true,
                             expand_empty_elements: false,
                         },
@@ -661,6 +663,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            text_format: TextFormat::Text,
                             allow_primitive: true,
                             expand_empty_elements: false,
                         },
@@ -1356,6 +1359,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            text_format: TextFormat::Text,
                             allow_primitive: true,
                             expand_empty_elements: false,
                         },
@@ -1382,6 +1386,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            text_format: TextFormat::Text,
                             allow_primitive: true,
                             expand_empty_elements: false,
                         },
@@ -2099,6 +2104,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            text_format: TextFormat::Text,
                             allow_primitive: true,
                             expand_empty_elements: true,
                         },
