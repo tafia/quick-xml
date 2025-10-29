@@ -3330,7 +3330,7 @@ where
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             // if the `xsi:nil` attribute is set to true we got a none value
-            DeEvent::Start(start) if self.reader.reader.has_nil_attr(&start) => {
+            DeEvent::Start(start) if self.reader.reader.has_nil_attr(start) => {
                 self.skip_next_tree()?;
                 visitor.visit_none()
             }

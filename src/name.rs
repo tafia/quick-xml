@@ -609,7 +609,7 @@ impl NamespaceResolver {
         match prefix {
             PrefixDeclaration::Default => {
                 let start = self.buffer.len();
-                self.buffer.extend_from_slice(&namespace.0);
+                self.buffer.extend_from_slice(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: 0,
@@ -640,7 +640,7 @@ impl NamespaceResolver {
 
                 let start = self.buffer.len();
                 self.buffer.extend_from_slice(prefix);
-                self.buffer.extend_from_slice(&namespace.0);
+                self.buffer.extend_from_slice(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: prefix.len(),
