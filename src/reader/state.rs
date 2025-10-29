@@ -156,7 +156,7 @@ impl ReaderState {
                         // We want report error at place where name is expected - this is just
                         // before `>`
                         self.last_error_offset = self.offset - 1;
-                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
+                        Err(Error::IllFormed(IllFormedError::MissingDoctypeName))
                     }
                 }
             }
