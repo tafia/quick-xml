@@ -250,13 +250,13 @@ mod without_root {
     err!(i16_:   -4200i16             => Unsupported("cannot serialize `i16` without defined root tag"));
     err!(i32_:   -42000000i32         => Unsupported("cannot serialize `i32` without defined root tag"));
     err!(i64_:   -42000000000000i64   => Unsupported("cannot serialize `i64` without defined root tag"));
-    err!(isize_: -42000000000000isize => Unsupported("cannot serialize `i64` without defined root tag"));
+    err!(isize_: -42000000isize       => Unsupported("cannot serialize `i64` without defined root tag"));
 
     err!(u8_:    42u8                => Unsupported("cannot serialize `u8` without defined root tag"));
     err!(u16_:   4200u16             => Unsupported("cannot serialize `u16` without defined root tag"));
     err!(u32_:   42000000u32         => Unsupported("cannot serialize `u32` without defined root tag"));
     err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
-    err!(usize_: 42000000000000usize => Unsupported("cannot serialize `u64` without defined root tag"));
+    err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
     serde_if_integer128! {
         err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
@@ -1296,13 +1296,13 @@ mod without_root {
         err!(i16_:   -4200i16             => Unsupported("cannot serialize `i16` without defined root tag"));
         err!(i32_:   -42000000i32         => Unsupported("cannot serialize `i32` without defined root tag"));
         err!(i64_:   -42000000000000i64   => Unsupported("cannot serialize `i64` without defined root tag"));
-        err!(isize_: -42000000000000isize => Unsupported("cannot serialize `i64` without defined root tag"));
+        err!(isize_: -42000000isize       => Unsupported("cannot serialize `i64` without defined root tag"));
 
         err!(u8_:    42u8                => Unsupported("cannot serialize `u8` without defined root tag"));
         err!(u16_:   4200u16             => Unsupported("cannot serialize `u16` without defined root tag"));
         err!(u32_:   42000000u32         => Unsupported("cannot serialize `u32` without defined root tag"));
         err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
-        err!(usize_: 42000000000000usize => Unsupported("cannot serialize `u64` without defined root tag"));
+        err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
         serde_if_integer128! {
             err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
@@ -1846,13 +1846,13 @@ mod with_root {
     serialize_as!(i16_:   -4200i16             => "<root>-4200</root>");
     serialize_as!(i32_:   -42000000i32         => "<root>-42000000</root>");
     serialize_as!(i64_:   -42000000000000i64   => "<root>-42000000000000</root>");
-    serialize_as!(isize_: -42000000000000isize => "<root>-42000000000000</root>");
+    serialize_as!(isize_: -42000000isize       => "<root>-42000000</root>");
 
     serialize_as!(u8_:    42u8                => "<root>42</root>");
     serialize_as!(u16_:   4200u16             => "<root>4200</root>");
     serialize_as!(u32_:   42000000u32         => "<root>42000000</root>");
     serialize_as!(u64_:   42000000000000u64   => "<root>42000000000000</root>");
-    serialize_as!(usize_: 42000000000000usize => "<root>42000000000000</root>");
+    serialize_as!(usize_: 42000000usize       => "<root>42000000</root>");
 
     serde_if_integer128! {
         serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
