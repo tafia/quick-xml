@@ -34,7 +34,7 @@ macro_rules! write_primitive {
         write_primitive!(serialize_f64(f64));
 
         fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-            self.serialize_str(&value.to_string())
+            self.serialize_str(value.encode_utf8(&mut [0u8; 4]))
         }
 
         fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {

@@ -286,7 +286,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     write_atomic!(serialize_f64(f64));
 
     fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-        self.serialize_str(&value.to_string())
+        self.serialize_str(value.encode_utf8(&mut [0u8; 4]))
     }
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
