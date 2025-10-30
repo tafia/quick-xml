@@ -779,7 +779,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
 
             let seq_deserializer = SeqAccessDeserializer::new(list_iter);
             let der = MapDeserializer::new(std::iter::once((TEXT_KEY, seq_deserializer)));
-            return visitor.visit_map(der);
+            return der.deserialize_map(visitor);
         }
         self.deserialize_str(visitor)
     }
