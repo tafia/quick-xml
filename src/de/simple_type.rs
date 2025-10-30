@@ -3,13 +3,13 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::Text;
+use crate::de::{Text, TEXT_KEY};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
 use crate::utils::CowRef;
 use memchr::memchr;
-use serde::de::value::UnitDeserializer;
+use serde::de::value::{MapDeserializer, SeqAccessDeserializer, UnitDeserializer};
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
 };
@@ -727,7 +727,6 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     unsupported!(deserialize_map);
-    unsupported!(deserialize_struct(&'static str, &'static [&'static str]));
 
     fn deserialize_enum<V>(
         self,
@@ -756,6 +755,33 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         visitor.visit_unit()
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if fields == [TEXT_KEY] {
+            let content = match self.decode()? {
+                CowRef::Input(s) => Content::Input(s),
+                CowRef::Slice(s) => Content::Slice(s),
+                CowRef::Owned(s) => Content::Owned(s, 0),
+            };
+            let list_iter = ListIter {
+                content: Some(content),
+                escaped: self.escaped,
+            };
+
+            let seq_deserializer = SeqAccessDeserializer::new(list_iter);
+            let der = MapDeserializer::new(std::iter::once((TEXT_KEY, seq_deserializer)));
+            return der.deserialize_map(visitor);
+        }
+        self.deserialize_str(visitor)
     }
 }
 

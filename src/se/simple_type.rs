@@ -3,11 +3,13 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
+use crate::de::TEXT_KEY;
 use crate::escape::escape_char;
+use crate::se::text::TextSerializer;
 use crate::se::{QuoteLevel, SeError};
 use crate::utils::CDataIterator;
 use serde::ser::{
-    Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
+    Impossible, Serialize, SerializeSeq, SerializeStruct, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
@@ -473,6 +475,34 @@ impl<W: Write> SimpleTypeSerializer<W> {
         Ok(self.writer.write_fmt(args)?)
     }
 }
+impl<'w, W: Write> SerializeStruct for SimpleSeq<W> {
+    type Ok = W;
+    type Error = SeError;
+
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        if key == TEXT_KEY {
+            let ser = TextSerializer(SimpleTypeSerializer {
+                writer: &mut self.writer,
+                target: self.target,
+                level: self.level,
+            });
+            value.serialize(ser)?;
+            Ok(())
+        } else {
+            Err(SeError::Unsupported(
+                format!("only `{TEXT_KEY}` field is supported in text content").into(),
+            ))
+        }
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeSeq::end(self)
+    }
+}
 
 impl<W: Write> Serializer for SimpleTypeSerializer<W> {
     type Ok = W;
@@ -483,7 +513,7 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
     type SerializeTupleStruct = SimpleSeq<W>;
     type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
-    type SerializeStruct = Impossible<Self::Ok, Self::Error>;
+    type SerializeStruct = SimpleSeq<W>;
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
     write_primitive!();
@@ -564,14 +594,24 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
         ))
     }
 
+    #[inline]
     fn serialize_struct(
         self,
         name: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
+        if len == 1 {
+            let seq = SimpleSeq {
+                writer: self.writer,
+                target: self.target,
+                level: self.level,
+                is_empty: true,
+            };
+            return Ok(seq);
+        }
         Err(SeError::Unsupported(
             format!(
-                "cannot serialize struct `{}` as an attribute or text content value",
+                "cannot serialize struct `{}` having more than one field as an attribute or text content value",
                 name
             )
             .into(),
@@ -1267,7 +1307,7 @@ mod tests {
         err!(map: BTreeMap::from([(1, 2), (3, 4)])
             => Unsupported("cannot serialize map as an attribute or text content value"));
         err!(struct_: Struct { key: "answer", val: 42 }
-            => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
+            => Unsupported("cannot serialize struct `Struct` having more than one field as an attribute or text content value"));
         err!(enum_struct: Enum::Struct { key: "answer", val: 42 }
             => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
     }
