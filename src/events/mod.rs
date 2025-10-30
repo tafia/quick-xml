@@ -53,7 +53,7 @@ use crate::escape::{
     partial_escape, EscapeError,
 };
 use crate::name::{LocalName, QName};
-use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
+use crate::utils::{self, name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{AttrError, Attribute, Attributes};
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
@@ -783,8 +783,7 @@ impl<'a> BytesCData<'a> {
     #[inline]
     pub fn escaped(content: &'a str) -> CDataIterator<'a> {
         CDataIterator {
-            unprocessed: content.as_bytes(),
-            finished: false,
+            inner: utils::CDataIterator::new(content),
         }
     }
 
@@ -984,41 +983,18 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
 /// Iterator over `CDATA` sections in a string.
 ///
 /// This iterator is created by the [`BytesCData::escaped`] method.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CDataIterator<'a> {
-    /// The unprocessed data which should be emitted as `BytesCData` events.
-    /// At each iteration, the processed data is cut from this slice.
-    unprocessed: &'a [u8],
-    finished: bool,
-}
-
-impl<'a> Debug for CDataIterator<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.debug_struct("CDataIterator")
-            .field("unprocessed", &Bytes(self.unprocessed))
-            .field("finished", &self.finished)
-            .finish()
-    }
+    inner: utils::CDataIterator<'a>,
 }
 
 impl<'a> Iterator for CDataIterator<'a> {
     type Item = BytesCData<'a>;
 
     fn next(&mut self) -> Option<BytesCData<'a>> {
-        if self.finished {
-            return None;
-        }
-
-        for gt in memchr::memchr_iter(b'>', self.unprocessed) {
-            if self.unprocessed[..gt].ends_with(b"]]") {
-                let (slice, rest) = self.unprocessed.split_at(gt);
-                self.unprocessed = rest;
-                return Some(BytesCData::wrap(slice, Decoder::utf8()));
-            }
-        }
-
-        self.finished = true;
-        Some(BytesCData::wrap(self.unprocessed, Decoder::utf8()))
+        self.inner
+            .next()
+            .map(|slice| BytesCData::wrap(slice.as_bytes(), Decoder::utf8()))
     }
 }
 

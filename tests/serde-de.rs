@@ -322,13 +322,13 @@ mod trivial {
         in_struct!(i16_:   i16   = "-4200", -4200i16);
         in_struct!(i32_:   i32   = "-42000000", -42000000i32);
         in_struct!(i64_:   i64   = "-42000000000000", -42000000000000i64);
-        in_struct!(isize_: isize = "-42000000000000", -42000000000000isize);
+        in_struct!(isize_: isize = "-42000000", -42000000isize);
 
         in_struct!(u8_:    u8    = "42", 42u8);
         in_struct!(u16_:   u16   = "4200", 4200u16);
         in_struct!(u32_:   u32   = "42000000", 42000000u32);
         in_struct!(u64_:   u64   = "42000000000000", 42000000000000u64);
-        in_struct!(usize_: usize = "42000000000000", 42000000000000usize);
+        in_struct!(usize_: usize = "42000000", 42000000usize);
 
         serde_if_integer128! {
             in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
@@ -384,13 +384,13 @@ mod trivial {
         in_struct!(i16_:   i16   = "<![CDATA[-4200]]>", -4200i16);
         in_struct!(i32_:   i32   = "<![CDATA[-42000000]]>", -42000000i32);
         in_struct!(i64_:   i64   = "<![CDATA[-42000000000000]]>", -42000000000000i64);
-        in_struct!(isize_: isize = "<![CDATA[-42000000000000]]>", -42000000000000isize);
+        in_struct!(isize_: isize = "<![CDATA[-42000000]]>", -42000000isize);
 
         in_struct!(u8_:    u8    = "<![CDATA[42]]>", 42u8);
         in_struct!(u16_:   u16   = "<![CDATA[4200]]>", 4200u16);
         in_struct!(u32_:   u32   = "<![CDATA[42000000]]>", 42000000u32);
         in_struct!(u64_:   u64   = "<![CDATA[42000000000000]]>", 42000000000000u64);
-        in_struct!(usize_: usize = "<![CDATA[42000000000000]]>", 42000000000000usize);
+        in_struct!(usize_: usize = "<![CDATA[42000000]]>", 42000000usize);
 
         serde_if_integer128! {
             in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
