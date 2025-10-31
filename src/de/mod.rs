@@ -3211,7 +3211,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> de::Deserializer<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> de::Deserializer<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3351,7 +3351,7 @@ where
 ///
 /// Technically, multiple top-level elements violates XML rule of only one top-level
 /// element, but we consider this as several concatenated XML documents.
-impl<'de, 'a, R, E> SeqAccess<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> SeqAccess<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3378,7 +3378,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> IntoDeserializer<'de, DeError> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> IntoDeserializer<'de, DeError> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
