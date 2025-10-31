@@ -1868,8 +1868,7 @@ mod with_root {
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
     serialize_as!(char_apos:        '\'' => "<root>'</root>");
     serialize_as!(char_quot:        '"'  => "<root>\"</root>");
-    // FIXME: Probably we should trim only for specified types when deserialize
-    serialize_as_only!(char_space:       ' '  => "<root> </root>");
+    serialize_as!(char_space:       ' '  => "<root> </root>");
 
     serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
     serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;\"escaped &amp; string'&gt;</root>");

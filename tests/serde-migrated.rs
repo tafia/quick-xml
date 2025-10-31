@@ -128,12 +128,6 @@ fn test_option() {
 }
 
 #[test]
-#[ignore] // FIXME
-fn test_option_not_trim() {
-    test_parse_ok(&[("<a> </a>", Some(" ".to_string()))]);
-}
-
-#[test]
 fn test_parse_unfinished() {
     test_parse_err::<Simple>(&["<Simple>
             <c>abc</c>
