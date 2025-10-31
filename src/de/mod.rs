@@ -4505,6 +4505,8 @@ mod tests {
             use super::*;
 
             /// <tag1><tag2>...
+            // The same name is intentional
+            #[allow(clippy::module_inception)]
             mod start {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -4977,6 +4979,8 @@ mod tests {
                 }
             }
 
+            // The same name is intentional
+            #[allow(clippy::module_inception)]
             mod cdata {
                 use super::*;
                 use pretty_assertions::assert_eq;
