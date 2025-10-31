@@ -467,7 +467,7 @@ const fn is_xml11_name_char(ch: char) -> bool {
 
 /// Helper struct to self-defense from errors
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(self) struct XmlName<'n>(&'n str);
+struct XmlName<'n>(&'n str);
 
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
