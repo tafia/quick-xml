@@ -31,8 +31,7 @@ mod externally_tagged {
     enum Node {
         Unit,
         Newtype(bool),
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             float: f64,
             string: String,
@@ -70,12 +69,6 @@ mod externally_tagged {
         },
     }
 
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    enum Workaround {
-        Tuple(f64, String),
-    }
-
     #[test]
     fn unit() {
         let data: Node = from_str("<Unit/>").unwrap();
@@ -90,8 +83,8 @@ mod externally_tagged {
 
     #[test]
     fn tuple_struct() {
-        let data: Workaround = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
-        assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+        let data: Node = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
+        assert_eq!(data, Node::Tuple(42.0, "answer".into()));
     }
 
     mod struct_ {
@@ -599,8 +592,7 @@ mod adjacently_tagged {
     enum Node {
         Unit,
         Newtype(bool),
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             float: f64,
             string: String,
@@ -623,6 +615,7 @@ mod adjacently_tagged {
     enum NodeAttrSimple {
         Unit,
         Newtype(bool),
+        Tuple(f64, String),
     }
 
     /// Type where all fields of struct variants and a tag represented by attributes
@@ -630,8 +623,7 @@ mod adjacently_tagged {
     #[derive(Debug, Deserialize, PartialEq)]
     #[serde(tag = "@tag", content = "content")]
     enum NodeAttrComplex {
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             #[serde(rename = "@float")]
             float: f64,
@@ -649,20 +641,6 @@ mod adjacently_tagged {
             #[serde(rename = "@string")]
             string: String,
         },
-    }
-
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(tag = "tag", content = "content")]
-    enum Workaround {
-        Tuple(f64, String),
-    }
-
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(tag = "@tag", content = "@content")]
-    enum WorkaroundAttr {
-        Tuple(f64, String),
     }
 
     mod unit {
@@ -713,22 +691,22 @@ mod adjacently_tagged {
 
         #[test]
         fn elements() {
-            let data: Workaround = from_str(
+            let data: Node = from_str(
                 r#"<root><tag>Tuple</tag><content>42</content><content>answer</content></root>"#,
             )
             .unwrap();
-            assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+            assert_eq!(data, Node::Tuple(42.0, "answer".into()));
         }
 
         #[test]
         #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
         fn attributes() {
-            let data: WorkaroundAttr = from_str(
+            let data: NodeAttrSimple = from_str(
                 // We cannot have two attributes with the same name, so both values stored in one attribute
                 r#"<root tag="Tuple" content="42 answer"/>"#,
             )
             .unwrap();
-            assert_eq!(data, WorkaroundAttr::Tuple(42.0, "answer".into()));
+            assert_eq!(data, NodeAttrSimple::Tuple(42.0, "answer".into()));
         }
     }
 
