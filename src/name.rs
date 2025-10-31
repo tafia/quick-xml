@@ -662,9 +662,8 @@ impl NamespaceResolver {
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
-                match k.as_namespace_binding() {
-                    Some(prefix) => self.add(prefix, Namespace(&v))?,
-                    None => {}
+                if let Some(prefix) = k.as_namespace_binding() {
+                    self.add(prefix, Namespace(&v))?;
                 }
             } else {
                 break;

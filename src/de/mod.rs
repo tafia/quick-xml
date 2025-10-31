@@ -2815,34 +2815,31 @@ where
     fn skip(&mut self) -> Result<(), DeError> {
         let event = self.next()?;
         self.skip_event(event)?;
-        match self.write.back() {
-            // Skip all subtree, if we skip a start event
-            Some(DeEvent::Start(e)) => {
-                let end = e.name().as_ref().to_owned();
-                let mut depth = 0;
-                loop {
-                    let event = self.next()?;
-                    match event {
-                        DeEvent::Start(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            depth += 1;
-                        }
-                        DeEvent::End(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            if depth == 0 {
-                                break;
-                            }
-                            depth -= 1;
-                        }
-                        DeEvent::Eof => {
-                            self.skip_event(event)?;
+        // Skip all subtree, if we skip a start event
+        if let Some(DeEvent::Start(e)) = self.write.back() {
+            let end = e.name().as_ref().to_owned();
+            let mut depth = 0;
+            loop {
+                let event = self.next()?;
+                match event {
+                    DeEvent::Start(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        depth += 1;
+                    }
+                    DeEvent::End(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        if depth == 0 {
                             break;
                         }
-                        _ => self.skip_event(event)?,
+                        depth -= 1;
                     }
+                    DeEvent::Eof => {
+                        self.skip_event(event)?;
+                        break;
+                    }
+                    _ => self.skip_event(event)?,
                 }
             }
-            _ => (),
         }
         Ok(())
     }
