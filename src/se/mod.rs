@@ -638,7 +638,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 allow_primitive: true,
                 expand_empty_elements: false,
             },
-            root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
+            root_tag: root_tag.map(XmlName::try_from).transpose()?,
         })
     }
 

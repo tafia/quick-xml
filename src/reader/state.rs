@@ -239,7 +239,7 @@ impl ReaderState {
     ///
     /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        debug_assert!(buf.len() > 0);
+        debug_assert!(!buf.is_empty());
         debug_assert_eq!(buf[0], b'?');
 
         let len = buf.len();
