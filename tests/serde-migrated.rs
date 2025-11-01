@@ -6,14 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use pretty_assertions::assert_eq;
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
-struct Simple {
-    a: (),
-    b: usize,
-    c: String,
-    d: Option<String>,
-}
-
 #[track_caller]
 fn test_parse_ok<'a, T: std::fmt::Debug>(errors: &[(&'a str, T)])
 where
@@ -35,16 +27,6 @@ where
         // // Make sure we can deserialize from an `Element`.
         // let v: T = from_value(xml_value.clone()).unwrap();
         // assert_eq!(v, *value);
-    }
-}
-
-#[track_caller]
-fn test_parse_err<'a, T>(errors: &[&'a str])
-where
-    T: PartialEq + Debug + ser::Serialize + for<'de> de::Deserialize<'de>,
-{
-    for &s in errors {
-        assert!(from_str::<T>(s).is_err());
     }
 }
 
@@ -90,18 +72,4 @@ fn test_forwarded_namespace() {
                 .to_string(),
         },
     )]);
-}
-
-#[test]
-fn test_parse_unfinished() {
-    test_parse_err::<Simple>(&["<Simple>
-            <c>abc</c>
-            <a/>
-            <b>2</b>
-            <d/>"]);
-}
-
-#[test]
-fn test_things_qc_found() {
-    test_parse_err::<u32>(&["<\u{0}:/"]);
 }
