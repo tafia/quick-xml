@@ -242,11 +242,6 @@ required-features = ["serialize"]
 path = "tests/serde-se.rs"
 
 [[test]]
-name = "serde-migrated"
-required-features = ["serialize"]
-path = "tests/serde-migrated.rs"
-
-[[test]]
 name = "serde-issues"
 required-features = ["serialize"]
 path = "tests/serde-issues.rs"
