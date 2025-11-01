@@ -742,6 +742,65 @@ macro_rules! maplike_errors {
                 }
             }
         }
+
+        mod incomplete_tag {
+            use super::*;
+            use quick_xml::errors::{Error, SyntaxError};
+
+            #[test]
+            fn attributes() {
+                let err = from_str::<$attributes>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42" string="answer""#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+
+            #[test]
+            fn elements_root() {
+                let err = from_str::<$mixed>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42"><string>answer</string><root"#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+
+            #[test]
+            fn elements_child() {
+                let err = from_str::<$mixed>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42"><string>answer</string"#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+        }
     };
 }
 
