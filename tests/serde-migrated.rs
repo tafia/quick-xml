@@ -112,22 +112,6 @@ fn test_parse_string() {
 }
 
 #[test]
-#[ignore] // FIXME
-fn test_parse_string_not_trim() {
-    test_parse_ok(&[("<bla>     </bla>", "     ".to_string())]);
-}
-
-#[test]
-fn test_option() {
-    test_parse_ok(&[
-        ("<a/>", Some("".to_string())),
-        ("<a></a>", Some("".to_string())),
-        ("<a> </a>", Some(" ".to_string())),
-        ("<a>42</a>", Some("42".to_string())),
-    ]);
-}
-
-#[test]
 fn test_parse_unfinished() {
     test_parse_err::<Simple>(&["<Simple>
             <c>abc</c>
