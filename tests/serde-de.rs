@@ -1029,6 +1029,48 @@ mod struct_ {
     }
 
     maplike_errors!(Attributes, Mixed, List);
+
+    #[test]
+    fn incomplete_end_tag() {
+        use quick_xml::errors::Error::Syntax;
+        use quick_xml::errors::SyntaxError::UnclosedTag;
+
+        let err = from_str::<Elements>(
+            // Comment for prevent unnecessary formatting - we use the same style in all tests
+            r#"<root><float>42</float><string>answer</string><root"#,
+        )
+        .unwrap_err();
+        match err {
+            // TODO: add error position to errors and check it here
+            // Related: https://github.com/tafia/quick-xml/issues/625
+            DeError::InvalidXml(Syntax(UnclosedTag)) => (),
+            _ => panic!(
+                "Expected `Err(InvalidXml(Syntax(MissingEndTag(_))))`, but got `{:?}`",
+                err
+            ),
+        }
+    }
+
+    #[test]
+    fn incomplete_xml() {
+        use quick_xml::errors::Error::IllFormed;
+        use quick_xml::errors::IllFormedError::MissingEndTag;
+
+        let err = from_str::<Elements>(
+            // Comment for prevent unnecessary formatting - we use the same style in all tests
+            r#"<root><float>42</float><string>answer</string>"#,
+        )
+        .unwrap_err();
+        match err {
+            // TODO: add error position to errors and check it here
+            // Related: https://github.com/tafia/quick-xml/issues/625
+            DeError::InvalidXml(IllFormed(MissingEndTag(tag))) => assert_eq!(tag, "root"),
+            _ => panic!(
+                "Expected `Err(InvalidXml(IllFormed(MissingEndTag(_))))`, but got `{:?}`",
+                err
+            ),
+        }
+    }
 }
 
 mod nested_struct {

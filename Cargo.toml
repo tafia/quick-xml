@@ -217,11 +217,6 @@ required-features = ["escape-html"]
 path = "tests/html.rs"
 
 [[test]]
-name = "serde_roundtrip"
-required-features = ["serialize"]
-path = "tests/serde_roundtrip.rs"
-
-[[test]]
 name = "serde-de"
 required-features = ["serialize"]
 path = "tests/serde-de.rs"
@@ -245,11 +240,6 @@ path = "tests/serde-de-xsi.rs"
 name = "serde-se"
 required-features = ["serialize"]
 path = "tests/serde-se.rs"
-
-[[test]]
-name = "serde-migrated"
-required-features = ["serialize"]
-path = "tests/serde-migrated.rs"
 
 [[test]]
 name = "serde-issues"

@@ -1868,16 +1868,22 @@ mod with_root {
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
     serialize_as!(char_apos:        '\'' => "<root>'</root>");
     serialize_as!(char_quot:        '"'  => "<root>\"</root>");
-    // FIXME: Probably we should trim only for specified types when deserialize
-    serialize_as_only!(char_space:       ' '  => "<root> </root>");
+    serialize_as!(char_space:       ' '  => "<root> </root>");
 
+    serialize_as!(str_empty: ""; &str => "<root/>");
     serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
     serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;\"escaped &amp; string'&gt;</root>");
+    // NOTE: do not use \r, because it normalized to \n during deserialization
+    // but writes as is during serialization
+    serialize_as!(str_spaces_only: " \n\t"; String => "<root> \n\t</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
     serialize_as!(option_none: Option::<&str>::None => "");
     serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");
+    // NOTE: do not use \r, because it normalized to \n during deserialization
+    // but writes as is during serialization
+    serialize_as!(option_spaces_only: Some(" \n\t") => "<root> \n\t</root>");
 
     serialize_as!(unit:
         ()
@@ -1897,7 +1903,7 @@ mod with_root {
             <root>3</root>");
     serialize_as!(tuple:
         // Use to_string() to get owned type that is required for deserialization
-        // NOTE: do not use \r, because it normalized to \n during deserialziation
+        // NOTE: do not use \r, because it normalized to \n during deserialization
         // but writes as is during serialization
         ("<\"&'>".to_string(), "with\t\n spaces", 3usize)
         => "<root>&lt;\"&amp;'&gt;</root>\
