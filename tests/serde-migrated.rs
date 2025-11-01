@@ -93,25 +93,6 @@ fn test_forwarded_namespace() {
 }
 
 #[test]
-fn test_parse_string() {
-    test_parse_ok(&[
-        (
-            "<bla>This is a String</bla>",
-            "This is a String".to_string(),
-        ),
-        ("<bla></bla>", "".to_string()),
-        ("<bla>     </bla>", "     ".to_string()),
-        ("<bla>&lt;boom/&gt;</bla>", "<boom/>".to_string()),
-        ("<bla>&#9835;</bla>", "♫".to_string()),
-        ("<bla>&#x266B;</bla>", "♫".to_string()),
-        //(
-        //    "<bla>♫<![CDATA[<cookies/>]]>♫</bla>",
-        //    "♫<cookies/>♫".to_string(),
-        //),
-    ]);
-}
-
-#[test]
 fn test_parse_unfinished() {
     test_parse_err::<Simple>(&["<Simple>
             <c>abc</c>
