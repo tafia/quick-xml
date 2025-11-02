@@ -50,7 +50,8 @@
 // Enable feature requirements in the docs from 1.57
 // See https://stackoverflow.com/questions/61417452
 // docs.rs defines `docsrs` when building documentation
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+// Since 1.92 `doc_auto_cfg` was merged into `doc_cfg`
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "serialize")]
 pub mod de;
