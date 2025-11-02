@@ -16,6 +16,15 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.38.4 -- 2025-11-??
+
+### New Features
+
 - [#353]: Add ability to serialize textual content as CDATA sections in `Serializer`.
   Everywhere where the text node may be created, a CDATA section(s) could be produced instead.
   See the new [`Serializer::text_format()`] method.
