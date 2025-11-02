@@ -3235,7 +3235,7 @@ where
         // When document is pretty-printed there could be whitespaces before the root element
         self.skip_whitespaces()?;
         match self.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
