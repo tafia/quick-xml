@@ -2879,13 +2879,17 @@ where
     /// [`CData`]: Event::CData
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
+            // Reached by doc tests only: this file, lines 979 and 996
             DeEvent::Text(e) => Ok(e.text),
             // allow one nested level
+            // Reached by trivial::{...}::{field, field_nested, field_tag_after, field_tag_before, nested, tag_after, tag_before, wrapped}
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
+            // TODO: not reached by any tests
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
+            // Reached by trivial::{empty_doc, only_comment}
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2899,17 +2903,23 @@ where
         match self.next()? {
             DeEvent::Text(e) => match self.next()? {
                 // The matching tag name is guaranteed by the reader
+                // Reached by trivial::{...}::{field, wrapped}
                 DeEvent::End(_) => Ok(e.text),
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
+                // Reached by trivial::{...}::{field_tag_after, tag_after}
                 DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+                // Reached by struct_::non_closed::elements_child
                 DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
             // The matching tag name is guaranteed by the reader
+            // Reached by {...}::xs_list::empty
             DeEvent::End(_) => Ok("".into()),
+            // Reached by trivial::{...}::{field_nested, field_tag_before, nested, tag_before}
             DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
+            // Reached by struct_::non_closed::elements_child
             DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
         }
     }

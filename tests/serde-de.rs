@@ -184,11 +184,14 @@ mod trivial {
                 use pretty_assertions::assert_eq;
 
                 #[test]
-                fn naked() {
+                fn wrapped() {
                     let item: $type = from_str(&format!("<root>{}</root>", $value)).unwrap();
                     let expected: $type = $expected;
                     assert_eq!(item, expected);
+                }
 
+                #[test]
+                fn nested() {
                     match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
@@ -197,7 +200,10 @@ mod trivial {
                             x
                         ),
                     }
+                }
 
+                #[test]
+                fn tag_after() {
                     match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
@@ -206,7 +212,10 @@ mod trivial {
                             x
                         ),
                     }
+                }
 
+                #[test]
+                fn tag_before() {
                     match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
@@ -222,7 +231,10 @@ mod trivial {
                     let item: Field<$type> =
                         from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
                     assert_eq!(item, Field { value: $expected });
+                }
 
+                #[test]
+                fn field_nested() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value><nested>{}</nested></value></root>",
                         $value
@@ -234,7 +246,10 @@ mod trivial {
                             x
                         ),
                     }
+                }
 
+                #[test]
+                fn field_tag_after() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value>{}<something-else/></value></root>",
                         $value
@@ -246,7 +261,10 @@ mod trivial {
                             x
                         ),
                     }
+                }
 
+                #[test]
+                fn field_tag_before() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value><something-else/>{}</value></root>",
                         $value
@@ -266,19 +284,28 @@ mod trivial {
                     let item: Trivial<$type> =
                         from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+                }
 
-                    // Unlike `naked` test, here we have a struct that is serialized to XML with
+                #[test]
+                fn text_tag_after() {
+                    // Unlike `wrapped` test, here we have a struct that is serialized to XML with
                     // an implicit field `$text` and some other field "something-else" which not interested
                     // for us in the Trivial structure. If you want the same behavior as for naked primitive,
                     // use `$value` field which would consume all data, unless a dedicated field would present
                     let item: Trivial<$type> =
                         from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+                }
 
+                #[test]
+                fn text_tag_before() {
                     let item: Trivial<$type> =
                         from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+                }
 
+                #[test]
+                fn text_nested() {
                     match from_str::<Trivial<$type>>(&format!(
                         "<root><nested>{}</nested></root>",
                         $value
