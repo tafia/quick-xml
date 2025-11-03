@@ -178,10 +178,94 @@ mod trivial {
     }
 
     macro_rules! in_struct {
+        // string, char and bool have some specifics in some tests
+        (string: $type:ty = $value:expr, $expected:expr) => {
+            in_struct!(
+                string: $type = $value, $expected;
+
+                #[test]
+                fn wrapped_empty() {
+                    let item: $type = from_str("<root/>").unwrap();
+                    let expected: $type = "".into();
+                    assert_eq!(item, expected);
+                }
+
+                #[test]
+                fn field_empty() {
+                    let item: Field<$type> = from_str("<root><value/></root>").unwrap();
+                    assert_eq!(item, Field { value: "".into() });
+                }
+            );
+        };
+        (char_: $type:ty = $value:expr, $expected:expr) => {
+            in_struct!(
+                char_: $type = $value, $expected;
+
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<$type>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<$type>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
+        ($name:ident: bool = $value:expr, $expected:expr) => {
+            in_struct!(
+                $name: bool = $value, $expected;
+
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<bool>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<bool>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
         ($name:ident: $type:ty = $value:expr, $expected:expr) => {
+            in_struct!(
+                $name: $type = $value, $expected;
+
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<$type>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<$type>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
+        ($name:ident: $type:ty = $value:expr, $expected:expr; $($specific_tests:item)*) => {
             mod $name {
                 use super::*;
                 use pretty_assertions::assert_eq;
+
+                $($specific_tests)*
 
                 #[test]
                 fn wrapped() {
@@ -275,6 +359,14 @@ mod trivial {
                             r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
+                    }
+                }
+
+                #[test]
+                fn text_empty() {
+                    match from_str::<Trivial<$type>>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, "missing field `$text`"),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
                 }
 
