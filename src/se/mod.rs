@@ -435,6 +435,8 @@ macro_rules! forward {
 ///
 /// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
 const fn is_xml11_name_start_char(ch: char) -> bool {
+    // Not need to use macro when core primitives is enough
+    #[allow(clippy::match_like_matches_macro)]
     match ch {
         ':'
         | 'A'..='Z'

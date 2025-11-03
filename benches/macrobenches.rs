@@ -1,3 +1,7 @@
+// std::hint::black_box stable since 1.66, but our MSRV = 1.56.
+// criterion::black_box is deprecated in since criterion 0.7.
+// Running benchmarks assumed on current Rust version, so this should be fine
+#![allow(clippy::incompatible_msrv)]
 use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
 use quick_xml::events::Event;
 use quick_xml::reader::{NsReader, Reader};
