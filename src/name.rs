@@ -609,7 +609,7 @@ impl NamespaceResolver {
         match prefix {
             PrefixDeclaration::Default => {
                 let start = self.buffer.len();
-                self.buffer.extend_from_slice(&namespace.0);
+                self.buffer.extend_from_slice(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: 0,
@@ -640,7 +640,7 @@ impl NamespaceResolver {
 
                 let start = self.buffer.len();
                 self.buffer.extend_from_slice(prefix);
-                self.buffer.extend_from_slice(&namespace.0);
+                self.buffer.extend_from_slice(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: prefix.len(),
@@ -662,9 +662,8 @@ impl NamespaceResolver {
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
-                match k.as_namespace_binding() {
-                    Some(prefix) => self.add(prefix, Namespace(&v))?,
-                    None => {}
+                if let Some(prefix) = k.as_namespace_binding() {
+                    self.add(prefix, Namespace(&v))?;
                 }
             } else {
                 break;

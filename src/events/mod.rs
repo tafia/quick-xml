@@ -358,12 +358,12 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
             return Err(arbitrary::Error::IncorrectFormat);
         }
         let mut result = Self::new(s);
-        result.extend_attributes(Vec::<(&str, &str)>::arbitrary(u)?.into_iter());
+        result.extend_attributes(Vec::<(&str, &str)>::arbitrary(u)?);
         Ok(result)
     }
 
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 
@@ -483,7 +483,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 
@@ -692,7 +692,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
     }
 
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 
@@ -976,7 +976,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 
@@ -1062,7 +1062,7 @@ impl<'a> BytesPI<'a> {
     #[inline]
     pub fn into_owned(self) -> BytesPI<'static> {
         BytesPI {
-            content: self.content.into_owned().into(),
+            content: self.content.into_owned(),
         }
     }
 
@@ -1171,7 +1171,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 
@@ -1456,7 +1456,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
     }
 
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
     }
 }
 

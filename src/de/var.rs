@@ -132,7 +132,7 @@ where
         V: Visitor<'de>,
     {
         match self.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }

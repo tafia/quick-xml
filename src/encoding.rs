@@ -248,6 +248,8 @@ pub fn decode_into(
 /// |`3C 3F 78 6D`|UTF-8, ISO 646, ASCII, some part of ISO 8859, Shift-JIS, EUC, or any other 7-bit, 8-bit, or mixed-width encoding which ensures that the characters of ASCII have their normal positions, width, and values; the actual encoding declaration must be read to detect which of these applies, but since all of these encodings use the same bit patterns for the relevant ASCII characters, the encoding declaration itself may be read reliably
 #[cfg(feature = "encoding")]
 pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
+    // Prevent suggesting "<?xm". We want to have the same formatted lines for all arms.
+    #[allow(clippy::byte_char_slices)]
     match bytes {
         // with BOM
         _ if bytes.starts_with(UTF16_BE_BOM) => Some((UTF_16BE, 2)),

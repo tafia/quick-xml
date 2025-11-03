@@ -61,7 +61,7 @@ where
             if let Some(part) = it.next() {
                 writer.write_str(part)?;
             }
-            while let Some(part) = it.next() {
+            for part in it {
                 writer.write_str("]]><![CDATA[")?;
                 writer.write_str(part)?;
             }

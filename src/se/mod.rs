@@ -435,6 +435,8 @@ macro_rules! forward {
 ///
 /// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
 const fn is_xml11_name_start_char(ch: char) -> bool {
+    // Not need to use macro when core primitives is enough
+    #[allow(clippy::match_like_matches_macro)]
     match ch {
         ':'
         | 'A'..='Z'
@@ -467,7 +469,7 @@ const fn is_xml11_name_char(ch: char) -> bool {
 
 /// Helper struct to self-defense from errors
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(self) struct XmlName<'n>(&'n str);
+struct XmlName<'n>(&'n str);
 
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
@@ -638,7 +640,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 allow_primitive: true,
                 expand_empty_elements: false,
             },
-            root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
+            root_tag: root_tag.map(XmlName::try_from).transpose()?,
         })
     }
 

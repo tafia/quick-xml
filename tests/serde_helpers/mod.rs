@@ -17,7 +17,7 @@ where
     let result = T::deserialize(&mut de);
 
     // If type was deserialized, the whole XML document should be consumed
-    if let Ok(_) = result {
+    if result.is_ok() {
         de.check_eof_reached();
     }
 

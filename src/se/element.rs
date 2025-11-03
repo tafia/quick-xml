@@ -551,7 +551,7 @@ impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
-        if let Some(_) = self.key.take() {
+        if self.key.take().is_some() {
             return Err(SeError::Custom(
                 "calling `serialize_key` twice without `serialize_value`".to_string(),
             ));

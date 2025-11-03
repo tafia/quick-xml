@@ -2815,34 +2815,31 @@ where
     fn skip(&mut self) -> Result<(), DeError> {
         let event = self.next()?;
         self.skip_event(event)?;
-        match self.write.back() {
-            // Skip all subtree, if we skip a start event
-            Some(DeEvent::Start(e)) => {
-                let end = e.name().as_ref().to_owned();
-                let mut depth = 0;
-                loop {
-                    let event = self.next()?;
-                    match event {
-                        DeEvent::Start(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            depth += 1;
-                        }
-                        DeEvent::End(ref e) if e.name().as_ref() == end => {
-                            self.skip_event(event)?;
-                            if depth == 0 {
-                                break;
-                            }
-                            depth -= 1;
-                        }
-                        DeEvent::Eof => {
-                            self.skip_event(event)?;
+        // Skip all subtree, if we skip a start event
+        if let Some(DeEvent::Start(e)) = self.write.back() {
+            let end = e.name().as_ref().to_owned();
+            let mut depth = 0;
+            loop {
+                let event = self.next()?;
+                match event {
+                    DeEvent::Start(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        depth += 1;
+                    }
+                    DeEvent::End(ref e) if e.name().as_ref() == end => {
+                        self.skip_event(event)?;
+                        if depth == 0 {
                             break;
                         }
-                        _ => self.skip_event(event)?,
+                        depth -= 1;
                     }
+                    DeEvent::Eof => {
+                        self.skip_event(event)?;
+                        break;
+                    }
+                    _ => self.skip_event(event)?,
                 }
             }
-            _ => (),
         }
         Ok(())
     }
@@ -3214,7 +3211,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> de::Deserializer<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> de::Deserializer<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3235,7 +3232,7 @@ where
         // When document is pretty-printed there could be whitespaces before the root element
         self.skip_whitespaces()?;
         match self.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -3330,7 +3327,7 @@ where
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             // if the `xsi:nil` attribute is set to true we got a none value
-            DeEvent::Start(start) if self.reader.reader.has_nil_attr(&start) => {
+            DeEvent::Start(start) if self.reader.reader.has_nil_attr(start) => {
                 self.skip_next_tree()?;
                 visitor.visit_none()
             }
@@ -3354,7 +3351,7 @@ where
 ///
 /// Technically, multiple top-level elements violates XML rule of only one top-level
 /// element, but we consider this as several concatenated XML documents.
-impl<'de, 'a, R, E> SeqAccess<'de> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> SeqAccess<'de> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -3381,7 +3378,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> IntoDeserializer<'de, DeError> for &'a mut Deserializer<'de, R, E>
+impl<'de, R, E> IntoDeserializer<'de, DeError> for &mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -4508,6 +4505,8 @@ mod tests {
             use super::*;
 
             /// <tag1><tag2>...
+            // The same name is intentional
+            #[allow(clippy::module_inception)]
             mod start {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -4980,6 +4979,8 @@ mod tests {
                 }
             }
 
+            // The same name is intentional
+            #[allow(clippy::module_inception)]
             mod cdata {
                 use super::*;
                 use pretty_assertions::assert_eq;
