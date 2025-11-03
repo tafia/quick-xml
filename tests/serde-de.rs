@@ -287,6 +287,21 @@ mod trivial {
                 }
 
                 #[test]
+                fn text_nested() {
+                    match from_str::<Trivial<$type>>(&format!(
+                        "<root><nested>{}</nested></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
+                        x => panic!(
+                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
                 fn text_tag_after() {
                     // Unlike `wrapped` test, here we have a struct that is serialized to XML with
                     // an implicit field `$text` and some other field "something-else" which not interested
@@ -302,21 +317,6 @@ mod trivial {
                     let item: Trivial<$type> =
                         from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
-                }
-
-                #[test]
-                fn text_nested() {
-                    match from_str::<Trivial<$type>>(&format!(
-                        "<root><nested>{}</nested></root>",
-                        $value
-                    )) {
-                        // Expected unexpected start element `<nested>`
-                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
-                        x => panic!(
-                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
-                            x
-                        ),
-                    }
                 }
             }
         };
