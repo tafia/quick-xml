@@ -1977,21 +1977,14 @@
 // Also, macros should be imported before using them
 use serde::serde_if_integer128;
 
-macro_rules! deserialize_num {
-    ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
+macro_rules! forward_to_simple_type {
+    ($deserialize:ident, $($mut:tt)?) => {
+        #[inline]
         fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because valid integer representations cannot be escaped
-            let text = self.read_string()?;
-            match text.parse() {
-                Ok(number) => visitor.$visit(number),
-                Err(_) => match text {
-                    Cow::Borrowed(t) => visitor.visit_str(t),
-                    Cow::Owned(t) => visitor.visit_string(t),
-                }
-            }
+            SimpleTypeDeserializer::from_text(self.read_string()?).$deserialize(visitor)
         }
     };
 }
@@ -2000,63 +1993,29 @@ macro_rules! deserialize_num {
 /// byte arrays, booleans and identifiers.
 macro_rules! deserialize_primitives {
     ($($mut:tt)?) => {
-        deserialize_num!(deserialize_i8 => visit_i8, $($mut)?);
-        deserialize_num!(deserialize_i16 => visit_i16, $($mut)?);
-        deserialize_num!(deserialize_i32 => visit_i32, $($mut)?);
-        deserialize_num!(deserialize_i64 => visit_i64, $($mut)?);
+        forward_to_simple_type!(deserialize_i8, $($mut)?);
+        forward_to_simple_type!(deserialize_i16, $($mut)?);
+        forward_to_simple_type!(deserialize_i32, $($mut)?);
+        forward_to_simple_type!(deserialize_i64, $($mut)?);
 
-        deserialize_num!(deserialize_u8 => visit_u8, $($mut)?);
-        deserialize_num!(deserialize_u16 => visit_u16, $($mut)?);
-        deserialize_num!(deserialize_u32 => visit_u32, $($mut)?);
-        deserialize_num!(deserialize_u64 => visit_u64, $($mut)?);
+        forward_to_simple_type!(deserialize_u8, $($mut)?);
+        forward_to_simple_type!(deserialize_u16, $($mut)?);
+        forward_to_simple_type!(deserialize_u32, $($mut)?);
+        forward_to_simple_type!(deserialize_u64, $($mut)?);
 
         serde_if_integer128! {
-            deserialize_num!(deserialize_i128 => visit_i128, $($mut)?);
-            deserialize_num!(deserialize_u128 => visit_u128, $($mut)?);
+            forward_to_simple_type!(deserialize_i128, $($mut)?);
+            forward_to_simple_type!(deserialize_u128, $($mut)?);
         }
 
-        deserialize_num!(deserialize_f32 => visit_f32, $($mut)?);
-        deserialize_num!(deserialize_f64 => visit_f64, $($mut)?);
+        forward_to_simple_type!(deserialize_f32, $($mut)?);
+        forward_to_simple_type!(deserialize_f64, $($mut)?);
 
-        fn deserialize_bool<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            let text = match self.read_string()? {
-                Cow::Borrowed(s) => CowRef::Input(s),
-                Cow::Owned(s) => CowRef::Owned(s),
-            };
-            text.deserialize_bool(visitor)
-        }
+        forward_to_simple_type!(deserialize_bool, $($mut)?);
+        forward_to_simple_type!(deserialize_char, $($mut)?);
 
-        /// Character represented as [strings](#method.deserialize_str).
-        #[inline]
-        fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_str(visitor)
-        }
-
-        fn deserialize_str<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            let text = self.read_string()?;
-            match text {
-                Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
-                Cow::Owned(string) => visitor.visit_string(string),
-            }
-        }
-
-        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
-        #[inline]
-        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_str(visitor)
-        }
+        forward_to_simple_type!(deserialize_str, $($mut)?);
+        forward_to_simple_type!(deserialize_string, $($mut)?);
 
         /// Forwards deserialization to the [`deserialize_any`](#method.deserialize_any).
         #[inline]
@@ -2163,7 +2122,6 @@ use crate::{
     events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event},
     name::QName,
     reader::NsReader,
-    utils::CowRef,
 };
 use serde::de::{
     self, Deserialize, DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor,
