@@ -611,43 +611,11 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     deserialize_primitive!(deserialize_f32);
     deserialize_primitive!(deserialize_f64);
 
+    deserialize_primitive!(deserialize_char);
     deserialize_primitive!(deserialize_str);
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_bytes(visitor)
-    }
+    deserialize_primitive!(deserialize_string);
+    deserialize_primitive!(deserialize_bytes);
+    deserialize_primitive!(deserialize_byte_buf);
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
