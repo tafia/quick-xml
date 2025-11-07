@@ -22,6 +22,10 @@
 
 ### Bug Fixes
 
+- [#912]: Fix deserialization of numbers, booleans and characters that is space-wrapped, for example
+  `<int>  42  </int>`. That space characters are usually indent added during serialization and
+  other XML serialization libraries trims them
+
 ### Misc Changes
 
 - [#901]: Fix running tests on 32-bit architecture
@@ -30,6 +34,7 @@
 [#353]: https://github.com/tafia/quick-xml/issues/353
 [#901]: https://github.com/tafia/quick-xml/pull/901
 [#909]: https://github.com/tafia/quick-xml/pull/909
+[#912]: https://github.com/tafia/quick-xml/pull/912
 [`Serializer::text_format()`]: https://docs.rs/quick-xml/0.38.4/quick_xml/se/struct.Serializer.html#method.text_format
 
 
