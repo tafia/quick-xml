@@ -179,14 +179,20 @@ mod trivial {
 
     macro_rules! in_struct {
         // string, char and bool have some specifics in some tests
-        (string: $type:ty = $value:expr, $expected:expr) => {
+        (string: $type:ty = $value:expr, $expected:literal) => {
             in_struct!(
-                string: $type = $value, $expected;
+                string: $type = $value, $expected.into(), concat!(" \n\t", $expected, " \n\t").into();
 
+                /// Try to deserialize type from a root tag without data or with only spaces
                 #[test]
                 fn wrapped_empty() {
                     let item: $type = from_str("<root/>").unwrap();
                     let expected: $type = "".into();
+                    assert_eq!(item, expected);
+
+                    let item: $type = from_str("<root> \r\n\t</root>").unwrap();
+                    // \r\n normalized to \n
+                    let expected: $type = " \n\t".into();
                     assert_eq!(item, expected);
                 }
 
@@ -194,17 +200,28 @@ mod trivial {
                 fn field_empty() {
                     let item: Field<$type> = from_str("<root><value/></root>").unwrap();
                     assert_eq!(item, Field { value: "".into() });
+
+                    let item: Field<$type> = from_str("<root><value> \r\n\t</value></root>").unwrap();
+                    // \r\n normalized to \n
+                    assert_eq!(item, Field { value: " \n\t".into() });
                 }
             );
         };
         (char_: $type:ty = $value:expr, $expected:expr) => {
             in_struct!(
-                char_: $type = $value, $expected;
+                char_: $type = $value, $expected, $expected;
 
+                /// Try to deserialize type from a root tag without data or with only spaces
                 #[test]
                 fn wrapped_empty() {
                     match from_str::<$type>("<root/>") {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<$type>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string " \n\t", expected a character"#),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
                 }
@@ -215,17 +232,30 @@ mod trivial {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
+
+                    match from_str::<Field<$type>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string " \n\t", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
                 }
             );
         };
         ($name:ident: bool = $value:expr, $expected:expr) => {
             in_struct!(
-                $name: bool = $value, $expected;
+                $name: bool = $value, $expected, $expected;
 
+                /// Try to deserialize type from a root tag without data or with only spaces
                 #[test]
                 fn wrapped_empty() {
                     match from_str::<bool>("<root/>") {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<bool>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string " \n\t", expected a boolean"#),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
                 }
@@ -236,17 +266,30 @@ mod trivial {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
+
+                    match from_str::<Field<bool>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string " \n\t", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
                 }
             );
         };
         ($name:ident: $type:ty = $value:expr, $expected:expr) => {
             in_struct!(
-                $name: $type = $value, $expected;
+                $name: $type = $value, $expected, $expected;
 
+                /// Try to deserialize type from a root tag without data or with only spaces
                 #[test]
                 fn wrapped_empty() {
                     match from_str::<$type>("<root/>") {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<$type>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string " \n\t", expected "#, stringify!($type))),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
                 }
@@ -257,23 +300,36 @@ mod trivial {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
+
+                    match from_str::<Field<$type>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string " \n\t", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
                 }
             );
         };
-        ($name:ident: $type:ty = $value:expr, $expected:expr; $($specific_tests:item)*) => {
+        ($name:ident: $type:ty = $value:expr, $expected:expr, $expected_with_indent:expr; $($specific_tests:item)*) => {
             mod $name {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
                 $($specific_tests)*
 
+                /// Try to deserialize type wrapped in a tag, optionally surround with spaces
                 #[test]
                 fn wrapped() {
                     let item: $type = from_str(&format!("<root>{}</root>", $value)).unwrap();
                     let expected: $type = $expected;
                     assert_eq!(item, expected);
+
+                    let item: $type =
+                        from_str(&format!("<root> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    let expected: $type = $expected_with_indent;
+                    assert_eq!(item, expected);
                 }
 
+                /// Try to deserialize type wrapped in two tags
                 #[test]
                 fn nested() {
                     match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
@@ -284,8 +340,21 @@ mod trivial {
                             x
                         ),
                     }
+
+                    match from_str::<$type>(&format!(
+                        "<root> \r\n\t<nested>{}</nested> \r\n\t</root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
                 }
 
+                /// Try to deserialize type wrapped in a tag with another tag after content
                 #[test]
                 fn tag_after() {
                     match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
@@ -296,8 +365,21 @@ mod trivial {
                             x
                         ),
                     }
+
+                    match from_str::<$type>(&format!(
+                        "<root> \r\n\t{} \r\n\t<something-else/></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
                 }
 
+                /// Try to deserialize type wrapped in a tag with another tag before content
                 #[test]
                 fn tag_before() {
                     match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
@@ -308,19 +390,48 @@ mod trivial {
                             x
                         ),
                     }
+
+                    match from_str::<$type>(&format!(
+                        "<root><something-else/> \r\n\t{} \r\n\t</root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
                 }
 
+                /// Try to deserialize type which is a field of a struct
                 #[test]
                 fn field() {
                     let item: Field<$type> =
                         from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
                     assert_eq!(item, Field { value: $expected });
+
+                    let item: Field<$type> =
+                        from_str(&format!("<root><value> \r\n\t{} \r\n\t</value></root>", $value)).unwrap();
+                    assert_eq!(item, Field { value: $expected_with_indent });
                 }
 
                 #[test]
                 fn field_nested() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value><nested>{}</nested></value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value> \r\n\t<nested>{}</nested> \r\n\t</value></root>",
                         $value
                     )) {
                         // Expected unexpected start element `<nested>`
@@ -345,12 +456,36 @@ mod trivial {
                             x
                         ),
                     }
+
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value> \r\n\t{} \r\n\t<something-else/></value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
                 }
 
                 #[test]
                 fn field_tag_before() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value><something-else/>{}</value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><something-else/> \r\n\t{} \r\n\t</value></root>",
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
@@ -368,6 +503,11 @@ mod trivial {
                         Err(DeError::Custom(msg)) => assert_eq!(msg, "missing field `$text`"),
                         x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
                     }
+
+                    match from_str::<Trivial<$type>>("<root> \r\n\t</root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, "missing field `$text`"),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
                 }
 
                 /// Tests deserialization from top-level tag content: `<root>...content...</root>`
@@ -376,12 +516,28 @@ mod trivial {
                     let item: Trivial<$type> =
                         from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
                 }
 
                 #[test]
                 fn text_nested() {
                     match from_str::<Trivial<$type>>(&format!(
                         "<root><nested>{}</nested></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
+                        x => panic!(
+                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Trivial<$type>>(&format!(
+                        "<root> \r\n\t<nested>{}</nested> \r\n\t</root>",
                         $value
                     )) {
                         // Expected unexpected start element `<nested>`
@@ -402,6 +558,10 @@ mod trivial {
                     let item: Trivial<$type> =
                         from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root> \r\n\t{} \r\n\t<something-else/></root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
                 }
 
                 #[test]
@@ -409,6 +569,10 @@ mod trivial {
                     let item: Trivial<$type> =
                         from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root><something-else/> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
                 }
             }
         };
@@ -461,7 +625,7 @@ mod trivial {
         in_struct!(true_: bool = "true", true);
         in_struct!(char_: char = "r", 'r');
 
-        in_struct!(string: String = "escaped&#x20;string", "escaped string".into());
+        in_struct!(string: String = "escaped&#x20;string", "escaped string");
 
         /// XML does not able to store binary data
         #[test]
@@ -524,7 +688,7 @@ mod trivial {
         in_struct!(char_: char = "<![CDATA[r]]>", 'r');
 
         // Escape sequences does not processed inside CDATA section
-        in_struct!(string: String = "<![CDATA[escaped&#x20;string]]>", "escaped&#x20;string".into());
+        in_struct!(string: String = "<![CDATA[escaped&#x20;string]]>", "escaped&#x20;string");
 
         /// XML does not able to store binary data
         #[test]
