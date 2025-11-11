@@ -25,10 +25,8 @@ macro_rules! write_primitive {
         write_primitive!(serialize_u32(u32));
         write_primitive!(serialize_u64(u64));
 
-        serde_if_integer128! {
-            write_primitive!(serialize_i128(i128));
-            write_primitive!(serialize_u128(u128));
-        }
+        write_primitive!(serialize_i128(i128));
+        write_primitive!(serialize_u128(u128));
 
         write_primitive!(serialize_f32(f32));
         write_primitive!(serialize_f64(f64));
@@ -84,7 +82,6 @@ use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
 use crate::writer::{Indentation, ToFmtWrite};
 use serde::ser::{self, Serialize};
-use serde::serde_if_integer128;
 use std::fmt::Write;
 use std::str::from_utf8;
 
@@ -781,10 +778,8 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     forward!(serialize_u32(u32));
     forward!(serialize_u64(u64));
 
-    serde_if_integer128! {
-        forward!(serialize_i128(i128));
-        forward!(serialize_u128(u128));
-    }
+    forward!(serialize_i128(i128));
+    forward!(serialize_u128(u128));
 
     forward!(serialize_f32(f32));
     forward!(serialize_f64(f64));

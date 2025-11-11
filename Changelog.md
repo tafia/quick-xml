@@ -20,6 +20,10 @@
 
 ### Misc Changes
 
+- [#908]: Increase minimal supported `serde` version from 1.0.139 to 1.0.180.
+
+[#908]: https://github.com/tafia/quick-xml/pull/908
+
 
 ## 0.38.4 -- 2025-11-??
 

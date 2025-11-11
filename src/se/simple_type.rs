@@ -10,7 +10,6 @@ use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
 };
-use serde::serde_if_integer128;
 use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,10 +280,8 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     write_atomic!(serialize_u32(u32));
     write_atomic!(serialize_u64(u64));
 
-    serde_if_integer128! {
-        write_atomic!(serialize_i128(i128));
-        write_atomic!(serialize_u128(u128));
-    }
+    write_atomic!(serialize_i128(i128));
+    write_atomic!(serialize_u128(u128));
 
     write_atomic!(serialize_f32(f32));
     write_atomic!(serialize_f64(f64));
@@ -1104,10 +1101,8 @@ mod tests {
         serialize_as!(u64_:   42000000000000u64   => "42000000000000");
         serialize_as!(usize_: 42000000usize       => "42000000");
 
-        serde_if_integer128! {
-            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
-            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
-        }
+        serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+        serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
 
         serialize_as!(f32_: 4.2f32 => "4.2");
         serialize_as!(f64_: 4.2f64 => "4.2");
@@ -1220,10 +1215,8 @@ mod tests {
         serialize_as!(u64_:   42000000000000u64   => "42000000000000");
         serialize_as!(usize_: 42000000usize       => "42000000");
 
-        serde_if_integer128! {
-            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
-            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
-        }
+        serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+        serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
 
         serialize_as!(f32_: 4.2f32 => "4.2");
         serialize_as!(f64_: 4.2f64 => "4.2");

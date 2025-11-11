@@ -2,7 +2,7 @@ use quick_xml::de::from_str;
 use quick_xml::se::{SeError, Serializer};
 use quick_xml::utils::Bytes;
 
-use serde::{serde_if_integer128, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -258,10 +258,8 @@ mod without_root {
     err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
     err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
-    serde_if_integer128! {
-        err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
-        err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
-    }
+    err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
+    err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
 
     err!(f32_: 4.2f32 => Unsupported("cannot serialize `f32` without defined root tag"));
     err!(f64_: 4.2f64 => Unsupported("cannot serialize `f64` without defined root tag"));
@@ -1304,10 +1302,8 @@ mod without_root {
         err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
         err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
-        serde_if_integer128! {
-            err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
-            err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
-        }
+        err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
+        err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
 
         err!(f32_: 4.2f32 => Unsupported("cannot serialize `f32` without defined root tag"));
         err!(f64_: 4.2f64 => Unsupported("cannot serialize `f64` without defined root tag"));
@@ -1854,10 +1850,8 @@ mod with_root {
     serialize_as!(u64_:   42000000000000u64   => "<root>42000000000000</root>");
     serialize_as!(usize_: 42000000usize       => "<root>42000000</root>");
 
-    serde_if_integer128! {
-        serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
-        serialize_as!(u128_:  420000000000000000000000000000u128 => "<root>420000000000000000000000000000</root>");
-    }
+    serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
+    serialize_as!(u128_:  420000000000000000000000000000u128 => "<root>420000000000000000000000000000</root>");
 
     serialize_as!(f32_: 4.2f32 => "<root>4.2</root>");
     serialize_as!(f64_: 4.2f64 => "<root>4.2</root>");

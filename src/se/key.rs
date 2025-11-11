@@ -1,6 +1,5 @@
 use crate::se::SeError;
 use serde::ser::{Impossible, Serialize, Serializer};
-use serde::serde_if_integer128;
 use std::fmt::{self, Write};
 
 /// A serializer, that ensures, that only plain types can be serialized,
@@ -246,10 +245,8 @@ mod tests {
     serialize_as!(u64_:   42000000000000u64   => "42000000000000");
     serialize_as!(usize_: 42000000usize       => "42000000");
 
-    serde_if_integer128! {
-        serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
-        serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
-    }
+    serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+    serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
 
     serialize_as!(f32_: 4.2f32 => "4.2");
     serialize_as!(f64_: 4.2f64 => "4.2");

@@ -1973,10 +1973,6 @@
 //! [quick-xml#586]: https://github.com/tafia/quick-xml/issues/586
 //! [`impl_deserialize_for_internally_tagged_enum!`]: crate::impl_deserialize_for_internally_tagged_enum
 
-// Macros should be defined before the modules that using them
-// Also, macros should be imported before using them
-use serde::serde_if_integer128;
-
 macro_rules! forward_to_simple_type {
     ($deserialize:ident, $($mut:tt)?) => {
         #[inline]
@@ -2003,10 +1999,8 @@ macro_rules! deserialize_primitives {
         forward_to_simple_type!(deserialize_u32, $($mut)?);
         forward_to_simple_type!(deserialize_u64, $($mut)?);
 
-        serde_if_integer128! {
-            forward_to_simple_type!(deserialize_i128, $($mut)?);
-            forward_to_simple_type!(deserialize_u128, $($mut)?);
-        }
+        forward_to_simple_type!(deserialize_i128, $($mut)?);
+        forward_to_simple_type!(deserialize_u128, $($mut)?);
 
         forward_to_simple_type!(deserialize_f32, $($mut)?);
         forward_to_simple_type!(deserialize_f64, $($mut)?);
