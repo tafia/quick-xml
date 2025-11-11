@@ -19,7 +19,7 @@ rapid-xml = "0.2"
 rusty_xml = { version = "0.3", package = "RustyXML" }
 serde-xml-rs = "0.8"
 xml_oxide = "0.3"
-xml-rs = "0.8"
+xml-rs = "1.0"
 xml5ever = "0.36"
 xmlparser = "0.13"
 # Do not use "derive" feature, because it slowdown compilation
