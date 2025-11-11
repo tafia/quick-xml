@@ -375,6 +375,19 @@ pub const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
     bytes
 }
 
+/// Returns a string slice with XML whitespace characters removed from both sides.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+#[inline]
+pub fn trim_xml_spaces(text: &str) -> &str {
+    let bytes = trim_xml_end(trim_xml_start(text.as_bytes()));
+    match core::str::from_utf8(bytes) {
+        Ok(s) => s,
+        // SAFETY: Removing XML space characters (subset of ASCII) from a `&str` does not invalidate UTF-8.
+        _ => unreachable!(),
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Splits string into pieces which can be part of a single `CDATA` section.

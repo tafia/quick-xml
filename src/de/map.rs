@@ -11,7 +11,6 @@ use crate::{
     events::attributes::IterState,
     events::BytesStart,
     name::QName,
-    utils::CowRef,
 };
 use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{self, DeserializeSeed, Deserializer as _, MapAccess, SeqAccess, Visitor};
