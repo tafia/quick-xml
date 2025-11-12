@@ -449,6 +449,14 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         Ok(None)
     }
 }
+impl<'de, 'a> IntoDeserializer<'de, DeError> for ListIter<'de, 'a> {
+    /// serde<=1.0.213 does not implement `IntoDeserializer` for `SeqAccessDeserializer`
+    type Deserializer = SeqAccessDeserializer<Self>;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        SeqAccessDeserializer::new(self)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -759,7 +767,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
 
     fn deserialize_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
@@ -777,9 +785,8 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
                 escaped: self.escaped,
             };
 
-            let seq_deserializer = SeqAccessDeserializer::new(list_iter);
-            let der = MapDeserializer::new(std::iter::once((TEXT_KEY, seq_deserializer)));
-            return der.deserialize_map(visitor);
+            let der = MapDeserializer::new(std::iter::once((TEXT_KEY, list_iter)));
+            return visitor.visit_map(der);
         }
         self.deserialize_str(visitor)
     }
