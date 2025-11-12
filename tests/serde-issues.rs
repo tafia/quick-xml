@@ -709,3 +709,46 @@ fn issue888() {
         }
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/906.
+#[test]
+fn issue906() {
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    struct AsElement {
+        #[serde(rename = "a-list")]
+        a_list: TextContent,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    struct AsAttribute {
+        #[serde(rename = "@a-list")]
+        a_list: TextContent,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    pub struct TextContent {
+        #[serde(default, rename = "$text")]
+        content: Vec<String>,
+    }
+    let foo = AsElement {
+        a_list: TextContent {
+            content: vec!["A".to_string(), "B".to_string()],
+        },
+    };
+    let bar = AsAttribute {
+        a_list: TextContent {
+            content: vec!["A".to_string(), "B".to_string()],
+        },
+    };
+
+    let buffer = to_string_with_root("test", &foo).unwrap();
+    std::assert_eq!(buffer, "<test><a-list>A B</a-list></test>");
+    let foo2: AsElement = from_str(&buffer).unwrap();
+    std::assert_eq!(foo2, foo);
+
+    let buffer = to_string_with_root("test", &bar).unwrap();
+    std::assert_eq!(buffer, "<test a-list=\"A B\"/>");
+
+    let bar2: AsAttribute = from_str(&buffer).unwrap();
+    std::assert_eq!(bar2, bar);
+}
