@@ -5,8 +5,7 @@
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
-use crate::name::{LocalName, Namespace, QName};
-use crate::reader::NsReader;
+use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
 use crate::utils::{is_whitespace, Bytes};
 
 use std::fmt::{self, Debug, Display, Formatter};
@@ -367,7 +366,7 @@ impl<'a> Attributes<'a> {
     ///             e => panic!("Unexpected event {:?}", e),
     ///         };
     ///         assert_eq!(
-    ///             (event.name(), event.attributes().has_nil(&$reader)),
+    ///             (event.name(), event.attributes().has_nil($reader.resolver())),
     ///             (QName($name.as_bytes()), $value),
     ///         );
     ///     };
@@ -377,7 +376,7 @@ impl<'a> Attributes<'a> {
     ///     Event::Start(e) => e,
     ///     e => panic!("Unexpected event {:?}", e),
     /// };
-    /// assert_eq!(root.attributes().has_nil(&reader), false);
+    /// assert_eq!(root.attributes().has_nil(reader.resolver()), false);
     ///
     /// // definitely true
     /// check!(reader, "true",          true);
@@ -394,12 +393,12 @@ impl<'a> Attributes<'a> {
     /// ```
     ///
     /// [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
-    pub fn has_nil<R>(&mut self, reader: &NsReader<R>) -> bool {
+    pub fn has_nil(&mut self, resolver: &NamespaceResolver) -> bool {
         use crate::name::ResolveResult::*;
 
         self.any(|attr| {
             if let Ok(attr) = attr {
-                match reader.resolver().resolve_attribute(attr.key) {
+                match resolver.resolve_attribute(attr.key) {
                     (
                         Bound(Namespace(b"http://www.w3.org/2001/XMLSchema-instance")),
                         LocalName(b"nil"),

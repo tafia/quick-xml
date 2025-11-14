@@ -130,6 +130,7 @@ impl<R> NsReader<R> {
     /// # quick_xml::Result::Ok(())
     /// ```
     #[inline]
+    #[deprecated = "Use `.resolver().bindings()` instead. This method will be removed in 0.40.0"]
     pub const fn prefixes(&self) -> NamespaceBindingsIter<'_> {
         self.ns_resolver.bindings()
     }
@@ -241,6 +242,7 @@ impl<R> NsReader<R> {
     /// [`resolve_attribute()`]: Self::resolve_attribute()
     /// [`resolve_element()`]: Self::resolve_element()
     #[inline]
+    #[deprecated = "Use `.resolver().resolve()` instead. Note, that boolean argument should be inverted! This method will be removed in 0.40.0"]
     pub fn resolve<'n>(
         &self,
         name: QName<'n>,
@@ -301,6 +303,7 @@ impl<R> NsReader<R> {
     /// [`Unknown`]: ResolveResult::Unknown
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
+    #[deprecated = "Use `.resolver().resolve_element()` instead. This method will be removed in 0.40.0"]
     pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
         self.ns_resolver.resolve_element(name)
     }
@@ -371,6 +374,7 @@ impl<R> NsReader<R> {
     /// [`Unbound`]: ResolveResult::Unbound
     /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
+    #[deprecated = "Use `.resolver().resolve_attribute()` instead. This method will be removed in 0.40.0"]
     pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult<'_>, LocalName<'n>) {
         self.ns_resolver.resolve_attribute(name)
     }

@@ -21,8 +21,12 @@
 ### Misc Changes
 
 - [#908]: Increase minimal supported `serde` version from 1.0.139 to 1.0.180.
+- [#913]: Deprecate `.prefixes()`, `.resolve()`, `.resolve_attribute()`, and `.resolve_element()`
+  of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
+- [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
 
 [#908]: https://github.com/tafia/quick-xml/pull/908
+[#913]: https://github.com/tafia/quick-xml/pull/913
 
 
 ## 0.38.4 -- 2025-11-??
