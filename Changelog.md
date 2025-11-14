@@ -29,7 +29,7 @@
 [#913]: https://github.com/tafia/quick-xml/pull/913
 
 
-## 0.38.4 -- 2025-11-??
+## 0.38.4 -- 2025-11-11
 
 ### New Features
 
