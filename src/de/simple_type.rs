@@ -3,13 +3,13 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::Text;
+use crate::de::{Text, TEXT_KEY};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
 use crate::utils::{trim_xml_spaces, CowRef};
 use memchr::memchr;
-use serde::de::value::UnitDeserializer;
+use serde::de::value::{MapDeserializer, SeqAccessDeserializer, UnitDeserializer};
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
 };
@@ -476,6 +476,14 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         Ok(None)
     }
 }
+impl<'de, 'a> IntoDeserializer<'de, DeError> for ListIter<'de, 'a> {
+    /// serde<=1.0.213 does not implement `IntoDeserializer` for `SeqAccessDeserializer`
+    type Deserializer = SeqAccessDeserializer<Self>;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        SeqAccessDeserializer::new(self)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -720,7 +728,6 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     unsupported!(deserialize_map);
-    unsupported!(deserialize_struct(&'static str, &'static [&'static str]));
 
     fn deserialize_enum<V>(
         self,
@@ -749,6 +756,32 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         visitor.visit_unit()
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        _name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if fields == [TEXT_KEY] {
+            let content = match self.decode()? {
+                CowRef::Input(s) => Content::Input(s),
+                CowRef::Slice(s) => Content::Slice(s),
+                CowRef::Owned(s) => Content::Owned(s, 0),
+            };
+            let list_iter = ListIter {
+                content: Some(content),
+                escaped: self.escaped,
+            };
+
+            let der = MapDeserializer::new(std::iter::once((TEXT_KEY, list_iter)));
+            return visitor.visit_map(der);
+        }
+        self.deserialize_str(visitor)
     }
 }
 
