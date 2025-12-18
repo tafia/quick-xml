@@ -1081,10 +1081,6 @@ impl<'a> Iterator for NamespaceBindingsIter<'a> {
 
 impl<'a> FusedIterator for NamespaceBindingsIter<'a> {}
 
-/// The previous name for [`NamespaceBindingsIter`].
-#[deprecated = "Use NamespaceBindingsIter instead. This alias will be removed in 0.40.0"]
-pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
-
 /// Iterator on the declared namespace bindings on specified level. Returns pairs of the _(prefix, namespace)_.
 ///
 /// See [`NamespaceResolver::bindings_of`] for documentation.
