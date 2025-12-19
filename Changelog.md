@@ -22,6 +22,8 @@ struct and can be applied at once. When `serde-types` feature is enabled, config
 - [#846]: Add methods `config()` and `config_mut()` to inspect and change the writer configuration.
 - [#846]: Add ability to write space before `/>` in self-closed tags for maximum compatibility with
   XHTML.
+- [#846]: Add method `empty_element_handling()` as a more powerful alternative to `expand_empty_elements()`
+  in `Serializer`.
 
 ### Bug Fixes
 

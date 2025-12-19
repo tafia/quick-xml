@@ -3,7 +3,9 @@
 use crate::de::TEXT_KEY;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{Indent, QuoteLevel, SeError, TextFormat, WriteResult, XmlName};
+use crate::se::{
+    EmptyElementHandling, Indent, QuoteLevel, SeError, TextFormat, WriteResult, XmlName,
+};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -80,9 +82,8 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     /// as a text that makes it impossible to distinguish between them during
     /// deserialization. Instead of ambiguous serialization the error is returned.
     pub allow_primitive: bool,
-    // If `true`, then empty elements will be serialized as `<element></element>`
-    // instead of `<element/>`.
-    pub expand_empty_elements: bool,
+    /// Specifies how empty elements are written.
+    pub empty_element_handling: EmptyElementHandling,
 }
 
 impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
@@ -124,7 +125,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             write_indent: self.write_indent,
             text_format: self.text_format,
             allow_primitive,
-            expand_empty_elements: self.expand_empty_elements,
+            empty_element_handling: self.empty_element_handling,
         }
     }
 
@@ -132,17 +133,27 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     #[inline]
     pub(super) fn write_empty(mut self, name: XmlName) -> Result<WriteResult, SeError> {
         self.write_indent()?;
-        if self.expand_empty_elements {
-            self.writer.write_char('<')?;
-            self.writer.write_str(name.0)?;
-            self.writer.write_str("></")?;
-            self.writer.write_str(name.0)?;
-            self.writer.write_char('>')?;
-        } else {
-            self.writer.write_str("<")?;
-            self.writer.write_str(name.0)?;
-            self.writer.write_str("/>")?;
+
+        match self.empty_element_handling {
+            EmptyElementHandling::SelfClosed => {
+                self.writer.write_char('<')?;
+                self.writer.write_str(name.0)?;
+                self.writer.write_str("/>")?;
+            }
+            EmptyElementHandling::SelfClosedWithSpace => {
+                self.writer.write_char('<')?;
+                self.writer.write_str(name.0)?;
+                self.writer.write_str(" />")?;
+            }
+            EmptyElementHandling::Expanded => {
+                self.writer.write_char('<')?;
+                self.writer.write_str(name.0)?;
+                self.writer.write_str("></")?;
+                self.writer.write_str(name.0)?;
+                self.writer.write_char('>')?;
+            }
         }
+
         Ok(WriteResult::Element)
     }
 
@@ -604,7 +615,7 @@ pub(super) mod tests {
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,
-                        expand_empty_elements: false,
+                        empty_element_handling: EmptyElementHandling::SelfClosed,
                     };
 
                     let result = $data.serialize(ser).unwrap();
@@ -628,7 +639,7 @@ pub(super) mod tests {
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,
-                        expand_empty_elements: false,
+                        empty_element_handling: EmptyElementHandling::SelfClosed,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
@@ -1070,7 +1081,7 @@ pub(super) mod tests {
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,
-                        expand_empty_elements: false,
+                        empty_element_handling: EmptyElementHandling::SelfClosed,
                     };
 
                     let result = $data.serialize(ser).unwrap();
@@ -1094,7 +1105,7 @@ pub(super) mod tests {
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,
-                        expand_empty_elements: false,
+                        empty_element_handling: EmptyElementHandling::SelfClosed,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
