@@ -14,7 +14,14 @@
 
 ## Unreleased
 
+Added a way to configure `Writer`. Now all configuration is contained in the `writer::Config`
+struct and can be applied at once. When `serde-types` feature is enabled, configuration is serializable.
+
 ### New Features
+
+- [#846]: Add methods `config()` and `config_mut()` to inspect and change the writer configuration.
+- [#846]: Add ability to write space before `/>` in self-closed tags for maximum compatibility with
+  XHTML.
 
 ### Bug Fixes
 
@@ -25,6 +32,7 @@
   of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
 - [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
 
+[#846]: https://github.com/tafia/quick-xml/issues/846
 [#908]: https://github.com/tafia/quick-xml/pull/908
 [#913]: https://github.com/tafia/quick-xml/pull/913
 
