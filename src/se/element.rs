@@ -5,7 +5,7 @@ use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
-use crate::se::{SeError, WriteResult, XmlName};
+use crate::se::{EmptyElementHandling, SeError, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
@@ -442,7 +442,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             write_indent: self.write_indent,
             text_format: self.ser.ser.text_format,
             allow_primitive: true,
-            expand_empty_elements: self.ser.ser.expand_empty_elements,
+            empty_element_handling: self.ser.ser.empty_element_handling,
         };
 
         if key == TEXT_KEY {
@@ -479,12 +479,18 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
         self.ser.ser.indent.decrease();
 
         if self.children.is_empty() {
-            if self.ser.ser.expand_empty_elements {
-                self.ser.ser.writer.write_str("></")?;
-                self.ser.ser.writer.write_str(self.ser.key.0)?;
-                self.ser.ser.writer.write_char('>')?;
-            } else {
-                self.ser.ser.writer.write_str("/>")?;
+            match self.ser.ser.empty_element_handling {
+                EmptyElementHandling::SelfClosed => {
+                    self.ser.ser.writer.write_str("/>")?;
+                }
+                EmptyElementHandling::SelfClosedWithSpace => {
+                    self.ser.ser.writer.write_str(" />")?;
+                }
+                EmptyElementHandling::Expanded => {
+                    self.ser.ser.writer.write_str("></")?;
+                    self.ser.ser.writer.write_str(self.ser.key.0)?;
+                    self.ser.ser.writer.write_char('>')?;
+                }
             }
         } else {
             self.ser.ser.writer.write_char('>')?;
@@ -635,7 +641,7 @@ mod tests {
                             write_indent: false,
                             text_format: TextFormat::Text,
                             allow_primitive: true,
-                            expand_empty_elements: false,
+                            empty_element_handling: EmptyElementHandling::SelfClosed,
                         },
                         key: XmlName("root"),
                     };
@@ -662,7 +668,7 @@ mod tests {
                             write_indent: false,
                             text_format: TextFormat::Text,
                             allow_primitive: true,
-                            expand_empty_elements: false,
+                            empty_element_handling: EmptyElementHandling::SelfClosed,
                         },
                         key: XmlName("root"),
                     };
@@ -1348,7 +1354,7 @@ mod tests {
                             write_indent: false,
                             text_format: TextFormat::Text,
                             allow_primitive: true,
-                            expand_empty_elements: false,
+                            empty_element_handling: EmptyElementHandling::SelfClosed,
                         },
                         key: XmlName("root"),
                     };
@@ -1375,7 +1381,7 @@ mod tests {
                             write_indent: false,
                             text_format: TextFormat::Text,
                             allow_primitive: true,
-                            expand_empty_elements: false,
+                            empty_element_handling: EmptyElementHandling::SelfClosed,
                         },
                         key: XmlName("root"),
                     };
@@ -2083,7 +2089,7 @@ mod tests {
                             write_indent: false,
                             text_format: TextFormat::Text,
                             allow_primitive: true,
-                            expand_empty_elements: true,
+                            empty_element_handling: EmptyElementHandling::Expanded,
                         },
                         key: XmlName("root"),
                     };
