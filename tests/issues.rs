@@ -514,3 +514,56 @@ fn issue801() {
         }
     }
 }
+
+/// Regression tests for https://github.com/tafia/quick-xml/issues/923
+mod issue923 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn case1() {
+        let mut reader = Reader::from_str(
+            r#"<?xml version="1.0"?>
+<!-- sample.xml -->
+<!DOCTYPE root [
+        <!ENTITY ent ">">
+        <!ELEMENT root (#PCDATA)>
+]>
+<root>&ent;</root>"#,
+        );
+        let mut buf = Vec::new();
+        reader.read_event_into(&mut buf).unwrap(); // <?xml version="1.0"?>
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <!-- sample.xml -->
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // DTD
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <root>
+        reader.read_event_into(&mut buf).unwrap(); // &ent;
+        reader.read_event_into(&mut buf).unwrap(); // </root>
+
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn case2() {
+        let mut reader = Reader::from_str(
+            r#"<?xml version="1.0"?>
+<!-- sample.xml -->
+<!DOCTYPE root [
+        <!ENTITY ent "<">
+]>
+<root />"#,
+        );
+        let mut buf = Vec::new();
+        reader.read_event_into(&mut buf).unwrap(); // <?xml version="1.0"?>
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <!-- sample.xml -->
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // DTD
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <root />
+
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+}
