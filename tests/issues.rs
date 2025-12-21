@@ -514,3 +514,105 @@ fn issue801() {
         }
     }
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/923
+mod issue923 {
+    use super::*;
+
+    fn run_test(xml: &str) {
+        let mut reader = Reader::from_str(xml);
+        let mut buf = Vec::new();
+
+        reader
+            .read_event_into(&mut buf)
+            .expect("cannot read DOCTYPE");
+        reader
+            .read_event_into(&mut buf)
+            .expect("cannot read root tag");
+        reader.read_event_into(&mut buf).expect("cannot read EOF");
+    }
+
+    #[test]
+    fn entity_close() {
+        run_test(r#"<!DOCTYPE root [<!ENTITY ent ">">]><root/>"#);
+    }
+
+    #[test]
+    fn entity_open() {
+        run_test(r#"<!DOCTYPE root [<!ENTITY ent "<">]><root/>"#);
+    }
+
+    #[test]
+    fn attlist() {
+        run_test(
+            r#"<!DOCTYPE root [<!ATTLIST root att "3 > 2 is true" att2 #FIXED '>>> in other quote'>]><root/>"#,
+        );
+    }
+
+    #[test]
+    fn notation() {
+        run_test(
+            r#"<!DOCTYPE root [<!NOTATION nota PUBLIC "some_public_id" '">>>some_system_id"'>]><root/>"#,
+        );
+    }
+
+    #[test]
+    fn comment() {
+        run_test("<!DOCTYPE root [<!-- < --><!-- >> --><!-- <<< -->]><root/>");
+    }
+
+    #[test]
+    fn pi() {
+        run_test("<!DOCTYPE root [<?pi <<>><<>><><>?>]><root/>");
+    }
+
+    #[test]
+    fn all_together() {
+        run_test(
+            "<!DOCTYPE e [
+                <!ELEMENT e ANY>
+                <!ATTLIST a>
+                <!ENTITY ent '>'>
+                <!NOTATION n SYSTEM '>'>
+                <?pi >?>
+                <!-->-->
+            ]
+            >
+            <e/>",
+        );
+    }
+
+    mod unknown_dtd_markup {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn borrowed() {
+            let mut reader = Reader::from_str("<!DOCTYPE e [ <!unknown e ANY> ] > <e/>");
+
+            match reader.read_event() {
+                Err(Error::Syntax(cause)) => assert_eq!(
+                    (cause, reader.error_position(), reader.buffer_position()),
+                    // FIXME: error position should point to `<!unknown e ANY>` (14)
+                    (SyntaxError::UnknownDtdMarkup, 0, 1),
+                ),
+                e => panic!("Expected `Err(Syntax(_))`, but got {:?}", e),
+            }
+        }
+
+        #[test]
+        fn buffered() {
+            let mut reader = Reader::from_str("<!DOCTYPE e [ <!unknown e ANY> ] > <e/>");
+            let mut buf = Vec::new();
+
+            match reader.read_event_into(&mut buf) {
+                Err(Error::Syntax(cause)) => assert_eq!(
+                    (cause, reader.error_position(), reader.buffer_position()),
+                    // FIXME: error position should point to `<!unknown e ANY>` (14)
+                    (SyntaxError::UnknownDtdMarkup, 0, 1),
+                ),
+                e => panic!("Expected `Err(Syntax(_))`, but got {:?}", e),
+            }
+        }
+    }
+}

@@ -8,7 +8,7 @@ use std::ops::Range;
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, SyntaxError};
 use crate::events::{BytesRef, Event};
-use crate::parser::{ElementParser, Parser, PiParser};
+use crate::parser::{DtdParser, ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
 
 /// A struct that holds a parser configuration.
@@ -1157,7 +1157,7 @@ enum BangType {
     /// <!--...-->
     Comment,
     /// <!DOCTYPE...>. Contains balance of '<' (+1) and '>' (-1)
-    DocType(i32),
+    DocType(DtdParser),
 }
 impl BangType {
     #[inline(always)]
@@ -1165,7 +1165,7 @@ impl BangType {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
-            Some(b'D') | Some(b'd') => Self::DocType(0),
+            Some(b'D') | Some(b'd') => Self::DocType(DtdParser::BeforeInternalSubset(0)),
             _ => return Err(SyntaxError::InvalidBangMarkup),
         })
     }
@@ -1177,7 +1177,11 @@ impl BangType {
     /// - `buf`: buffer with data consumed on previous iterations
     /// - `chunk`: data read on current iteration and not yet consumed from reader
     #[inline(always)]
-    fn parse<'b>(&mut self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
+    fn parse<'b>(
+        &mut self,
+        buf: &[u8],
+        chunk: &'b [u8],
+    ) -> Result<Option<(&'b [u8], usize)>, SyntaxError> {
         match self {
             Self::Comment => {
                 for i in memchr::memchr_iter(b'>', chunk) {
@@ -1190,17 +1194,17 @@ impl BangType {
                             // check_comments enabled option. XML standard requires that comment
                             // will not end with `--->` sequence because this is a special case of
                             // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
-                            return Some((&chunk[..i], i + 1)); // +1 for `>`
+                            return Ok(Some((&chunk[..i], i + 1))); // +1 for `>`
                         }
                         // End sequence `-|->` was splitted at |
                         //        buf --/   \-- chunk
                         if i == 1 && buf.ends_with(b"-") && chunk[0] == b'-' {
-                            return Some((&chunk[..i], i + 1)); // +1 for `>`
+                            return Ok(Some((&chunk[..i], i + 1))); // +1 for `>`
                         }
                         // End sequence `--|>` was splitted at |
                         //         buf --/   \-- chunk
                         if i == 0 && buf.ends_with(b"--") {
-                            return Some((&[], i + 1)); // +1 for `>`
+                            return Ok(Some((&[], i + 1))); // +1 for `>`
                         }
                     }
                 }
@@ -1208,34 +1212,23 @@ impl BangType {
             Self::CData => {
                 for i in memchr::memchr_iter(b'>', chunk) {
                     if chunk[..i].ends_with(b"]]") {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                        return Ok(Some((&chunk[..i], i + 1))); // +1 for `>`
                     }
                     // End sequence `]|]>` was splitted at |
                     //        buf --/   \-- chunk
                     if i == 1 && buf.ends_with(b"]") && chunk[0] == b']' {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                        return Ok(Some((&chunk[..i], i + 1))); // +1 for `>`
                     }
                     // End sequence `]]|>` was splitted at |
                     //         buf --/   \-- chunk
                     if i == 0 && buf.ends_with(b"]]") {
-                        return Some((&[], i + 1)); // +1 for `>`
+                        return Ok(Some((&[], i + 1))); // +1 for `>`
                     }
                 }
             }
-            Self::DocType(ref mut balance) => {
-                for i in memchr::memchr2_iter(b'<', b'>', chunk) {
-                    if chunk[i] == b'<' {
-                        *balance += 1;
-                    } else {
-                        if *balance == 0 {
-                            return Some((&chunk[..i], i + 1)); // +1 for `>`
-                        }
-                        *balance -= 1;
-                    }
-                }
-            }
+            Self::DocType(ref mut parser) => return parser.feed(buf, chunk),
         }
-        None
+        Ok(None)
     }
     #[inline]
     const fn to_err(&self) -> SyntaxError {
@@ -1266,7 +1259,7 @@ mod test {
             mod read_bang_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
-                use crate::reader::BangType;
+                use crate::reader::{BangType, DtdParser};
                 use crate::utils::Bytes;
 
                 /// Checks that reading CDATA content works correctly
@@ -1552,7 +1545,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType(0), Bytes(b"!DOCTYPE"))
+                                (BangType::DocType(DtdParser::Finished), Bytes(b"!DOCTYPE"))
                             );
                             assert_eq!(position, 10);
                         }
@@ -1626,7 +1619,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType(0), Bytes(b"!doctype"))
+                                (BangType::DocType(DtdParser::Finished), Bytes(b"!doctype"))
                             );
                             assert_eq!(position, 10);
                         }
