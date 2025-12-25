@@ -17,9 +17,12 @@ pub enum SyntaxError {
     /// The parser started to parse `<!`, but the input ended before it can recognize
     /// anything.
     InvalidBangMarkup,
-    /// The parser started to parse processing instruction or XML declaration (`<?`),
+    /// The parser started to parse processing instruction (`<?`),
     /// but the input ended before the `?>` sequence was found.
-    UnclosedPIOrXmlDecl,
+    UnclosedPI,
+    /// The parser started to parse XML declaration (`<?xml` followed by `\t`, `\r`, `\n`, ` ` or `?`),
+    /// but the input ended before the `?>` sequence was found.
+    UnclosedXmlDecl,
     /// The parser started to parse comment (`<!--`) content, but the input ended
     /// before the `-->` sequence was found.
     UnclosedComment,
@@ -38,8 +41,11 @@ impl fmt::Display for SyntaxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::InvalidBangMarkup => f.write_str("unknown or missed symbol in markup"),
-            Self::UnclosedPIOrXmlDecl => {
-                f.write_str("processing instruction or xml declaration not closed: `?>` not found before end of input")
+            Self::UnclosedPI => {
+                f.write_str("processing instruction not closed: `?>` not found before end of input")
+            }
+            Self::UnclosedXmlDecl => {
+                f.write_str("XML declaration not closed: `?>` not found before end of input")
             }
             Self::UnclosedComment => {
                 f.write_str("comment not closed: `-->` not found before end of input")
