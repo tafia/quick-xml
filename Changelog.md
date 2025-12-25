@@ -33,10 +33,14 @@ struct and can be applied at once. When `serde-types` feature is enabled, config
 - [#913]: Deprecate `.prefixes()`, `.resolve()`, `.resolve_attribute()`, and `.resolve_element()`
   of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
 - [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
+- [#924]: (breaking change) Split `SyntaxError::UnclosedPIOrXmlDecl` into `UnclosedPI` and
+  `UnclosedXmlDecl` for more precise error reporting.
+- [#924]: (breaking change) `Parser::eof_error` now takes `&self` and content `&[u8]` parameters.
 
 [#846]: https://github.com/tafia/quick-xml/issues/846
 [#908]: https://github.com/tafia/quick-xml/pull/908
 [#913]: https://github.com/tafia/quick-xml/pull/913
+[#924]: https://github.com/tafia/quick-xml/pull/924
 
 
 ## 0.38.4 -- 2025-11-11

@@ -430,16 +430,16 @@ mod syntax {
     mod pi {
         use super::*;
 
-        err!(unclosed01(".<?")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed02(".<??")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed03(".<?>")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed04(".<?<")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed05(".<?&")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed06(".<?p")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed07(".<? ")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed08(".<?\t") => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed09(".<?\r") => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed10(".<?\n") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed01(".<?")   => SyntaxError::UnclosedPI);
+        err!(unclosed02(".<??")  => SyntaxError::UnclosedPI);
+        err!(unclosed03(".<?>")  => SyntaxError::UnclosedPI);
+        err!(unclosed04(".<?<")  => SyntaxError::UnclosedPI);
+        err!(unclosed05(".<?&")  => SyntaxError::UnclosedPI);
+        err!(unclosed06(".<?p")  => SyntaxError::UnclosedPI);
+        err!(unclosed07(".<? ")  => SyntaxError::UnclosedPI);
+        err!(unclosed08(".<?\t") => SyntaxError::UnclosedPI);
+        err!(unclosed09(".<?\r") => SyntaxError::UnclosedPI);
+        err!(unclosed10(".<?\n") => SyntaxError::UnclosedPI);
 
         // According to the grammar, processing instruction MUST contain a non-empty
         // target name, but we do not consider this as a _syntax_ error.
@@ -453,10 +453,16 @@ mod syntax {
     mod decl {
         use super::*;
 
-        err!(unclosed1(".<?x")    => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed2(".<?xm")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed3(".<?xml")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed4(".<?xml?") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed1(".<?x")     => SyntaxError::UnclosedPI);
+        err!(unclosed2(".<?xm")    => SyntaxError::UnclosedPI);
+        err!(unclosed3(".<?xml")   => SyntaxError::UnclosedXmlDecl);
+        err!(unclosed4(".<?xml?")  => SyntaxError::UnclosedXmlDecl);
+        err!(unclosed5(".<?xml ")  => SyntaxError::UnclosedXmlDecl);
+        err!(unclosed6(".<?xml\t") => SyntaxError::UnclosedXmlDecl);
+        err!(unclosed7(".<?xml\r") => SyntaxError::UnclosedXmlDecl);
+        err!(unclosed8(".<?xml\n") => SyntaxError::UnclosedXmlDecl);
+        // "xmls" is a PI target, not an XML declaration
+        err!(unclosed9(".<?xmls")  => SyntaxError::UnclosedPI);
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and `version` attribute, but we do not consider this as a _syntax_ error.
@@ -466,6 +472,61 @@ mod syntax {
         ok!(normal4("<?xml\r?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\r", 3))));
         ok!(normal5("<?xml\n?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
         ok!(normal6("<?xml\n?>rest") => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
+    }
+
+    /// Tests for UTF-16 encoded XML declarations.
+    /// FIXME: Add support for UTF-8/ASCII incompatible encodings (UTF-16)
+    mod decl_utf16 {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// UTF-16 LE encoded `<?xml ` (with BOM)
+        /// BOM (FF FE) + '<' (3C 00) + '?' (3F 00) + 'x' (78 00) + 'm' (6D 00) + 'l' (6C 00) + ' ' (20 00)
+        const UTF16_LE_XML_DECL: &[u8] = &[
+            0xFF, 0xFE, // BOM
+            0x3C, 0x00, // <
+            0x3F, 0x00, // ?
+            0x78, 0x00, // x
+            0x6D, 0x00, // m
+            0x6C, 0x00, // l
+            0x20, 0x00, // space
+        ];
+
+        /// UTF-16 BE encoded `<?xml ` (with BOM)
+        /// BOM (FE FF) + '<' (00 3C) + '?' (00 3F) + 'x' (00 78) + 'm' (00 6D) + 'l' (00 6C) + ' ' (00 20)
+        const UTF16_BE_XML_DECL: &[u8] = &[
+            0xFE, 0xFF, // BOM
+            0x00, 0x3C, // <
+            0x00, 0x3F, // ?
+            0x00, 0x78, // x
+            0x00, 0x6D, // m
+            0x00, 0x6C, // l
+            0x00, 0x20, // space
+        ];
+
+        #[test]
+        #[ignore = "UTF-16 support not yet implemented for XML declaration detection"]
+        fn utf16_le_unclosed_xml_decl() {
+            let mut reader = Reader::from_reader(UTF16_LE_XML_DECL);
+            match reader.read_event() {
+                Err(Error::Syntax(cause)) => {
+                    assert_eq!(cause, SyntaxError::UnclosedXmlDecl);
+                }
+                x => panic!("Expected `Err(Syntax(UnclosedXmlDecl))`, but got {:?}", x),
+            }
+        }
+
+        #[test]
+        #[ignore = "UTF-16 support not yet implemented for XML declaration detection"]
+        fn utf16_be_unclosed_xml_decl() {
+            let mut reader = Reader::from_reader(UTF16_BE_XML_DECL);
+            match reader.read_event() {
+                Err(Error::Syntax(cause)) => {
+                    assert_eq!(cause, SyntaxError::UnclosedXmlDecl);
+                }
+                x => panic!("Expected `Err(Syntax(UnclosedXmlDecl))`, but got {:?}", x),
+            }
+        }
     }
 }
 

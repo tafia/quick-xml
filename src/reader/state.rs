@@ -2,8 +2,9 @@
 use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::errors::{Error, IllFormedError, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use crate::parser::{Parser, PiParser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 use crate::reader::{BangType, Config, ParseState};
@@ -270,11 +271,11 @@ impl ReaderState {
                 )))
             }
         } else {
-            // <?....EOF
-            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+            // <?....>
+            //  ^^^^^ - `buf` does not contain `<`, but we want to report error at `<`,
             //          so we move offset to it (-2 for `<` and `>`)
             self.last_error_offset = self.offset - len as u64 - 2;
-            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+            Err(Error::Syntax(PiParser(false).eof_error(buf)))
         }
     }
 

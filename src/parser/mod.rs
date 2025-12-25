@@ -25,5 +25,9 @@ pub trait Parser {
 
     /// Returns parse error produced by this parser in case of reaching end of
     /// input without finding the end of a parsed thing.
-    fn eof_error() -> SyntaxError;
+    ///
+    /// # Parameters
+    /// - `content`: the content that was read before EOF. Some parsers may use
+    ///   this to provide more specific error messages.
+    fn eof_error(self, content: &[u8]) -> SyntaxError;
 }

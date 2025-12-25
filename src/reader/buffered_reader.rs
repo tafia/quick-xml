@@ -234,7 +234,7 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            Err(Error::Syntax(P::eof_error()))
+            Err(Error::Syntax(parser.eof_error(&buf[start..])))
         }
 
         #[inline]

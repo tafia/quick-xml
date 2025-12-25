@@ -350,7 +350,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
 
         *position += self.len() as u64;
-        Err(Error::Syntax(P::eof_error()))
+        Err(Error::Syntax(parser.eof_error(self)))
     }
 
     #[inline]

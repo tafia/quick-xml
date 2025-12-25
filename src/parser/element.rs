@@ -73,7 +73,7 @@ impl Parser for ElementParser {
     }
 
     #[inline]
-    fn eof_error() -> SyntaxError {
+    fn eof_error(self, _content: &[u8]) -> SyntaxError {
         SyntaxError::UnclosedTag
     }
 }
