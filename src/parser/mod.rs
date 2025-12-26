@@ -2,9 +2,11 @@
 
 use crate::errors::SyntaxError;
 
+mod comment;
 mod element;
 mod pi;
 
+pub use comment::CommentParser;
 pub use element::ElementParser;
 pub use pi::PiParser;
 
