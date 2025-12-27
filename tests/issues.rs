@@ -175,11 +175,13 @@ mod issue514 {
 #[test]
 fn issue590() {
     let mut reader = Reader::from_reader(BufReader::with_capacity(
-        16,
-        &b"<!DOCTYPE t [<!1><!2>]>"[..],
-        // 0      7       ^15    ^23
-        //[                ] = capacity
+        24,
+        &b"<!DOCTYPE t [<!ENTITY x 'a'><!ENTITY y 'b'>]>"[..],
+        // 0      7               ^23                  ^44
+        //[                        ] = capacity
     ));
+    // Ensure, that capacity was not increased unexpectedly
+    assert_eq!(reader.get_ref().capacity(), 24);
     let mut buf = Vec::new();
     loop {
         if reader.read_event_into(&mut buf).unwrap() == Event::Eof {
