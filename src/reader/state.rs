@@ -7,7 +7,7 @@ use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesT
 use crate::parser::{Parser, PiParser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{BangType, Config, ParseState};
+use crate::reader::{BangType, Config, DtdParser, ParseState};
 use crate::utils::{is_whitespace, name_len};
 
 /// A struct that holds a current reader state and a parser configuration.
@@ -145,7 +145,7 @@ impl ReaderState {
             // https://www.w3.org/TR/xml11/#sec-prolog-dtd
             // HTML5 allows mixed case for doctype declarations:
             // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
-            BangType::DocType(0) if uncased_starts_with(buf, b"!DOCTYPE") => {
+            BangType::DocType(DtdParser::Finished) if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         // Cut of `!DOCTYPE` and any number of spaces from start

@@ -29,6 +29,16 @@ pub enum SyntaxError {
     /// The parser started to parse DTD (`<!DOCTYPE`) content, but the input ended
     /// before the closing `>` character was found.
     UnclosedDoctype,
+    /// The parser is parsing DTD (`<!DOCTYPE`) content and found not known markup inside.
+    ///
+    /// The known markup elements are:
+    /// - `<!ATTLIST ...>`
+    /// - `<!ELEMENT ...>`
+    /// - `<!ENTITY ...>`
+    /// - `<!NOTATION ...>`
+    /// - `<?...?>` (processing instruction)
+    /// - `<!--...-->` (comment)
+    UnknownDtdMarkup,
     /// The parser started to parse `<![CDATA[` content, but the input ended
     /// before the `]]>` sequence was found.
     UnclosedCData,
@@ -52,6 +62,9 @@ impl fmt::Display for SyntaxError {
             }
             Self::UnclosedDoctype => {
                 f.write_str("DOCTYPE not closed: `>` not found before end of input")
+            }
+            Self::UnknownDtdMarkup => {
+                f.write_str("unknown markup in DOCTYPE: expected <!ATTLIST>, <!ELEMENT>, <!ENTITY>, <!NOTATION>, processing instruction or comment")
             }
             Self::UnclosedCData => {
                 f.write_str("CDATA not closed: `]]>` not found before end of input")

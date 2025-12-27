@@ -361,7 +361,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
         let mut bang_type = BangType::new(self[1..].first().copied())?;
 
-        if let Some((bytes, i)) = bang_type.parse(&[], self) {
+        if let Some((bytes, i)) = bang_type.parse(&[], self)? {
             *position += i as u64;
             *self = &self[i..];
             return Ok((bang_type, bytes));
