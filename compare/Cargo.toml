@@ -8,7 +8,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 markup5ever = "0.36"
 # maybe_xml 0.11 regressed performance by x2, and because this was the fastest
 # XML parser, we keep benchmarking version 0.10 as well
