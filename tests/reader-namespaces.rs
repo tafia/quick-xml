@@ -437,7 +437,7 @@ fn attributes_empty_ns_expanded() {
     {
         let e = match r.read_resolved_event() {
             Ok((Unbound, Start(e))) => e,
-            e => panic!("Expecting Empty event, got {:?}", e),
+            e => panic!("Expecting Start event, got {:?}", e),
         };
 
         let mut attrs = e
