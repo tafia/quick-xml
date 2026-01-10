@@ -35,6 +35,18 @@ pub enum SyntaxError {
     /// The parser started to parse tag content, but the input ended
     /// before the closing `>` character was found.
     UnclosedTag,
+    /// The parser started to parse tag content and currently inside of a quoted string
+    /// (i.e. in an attribute value), but the input ended before the closing quote was found.
+    ///
+    /// Note, that currently error location will point to a start of a tag (the `<` character)
+    /// instead of a start of an attribute value.
+    UnclosedSingleQuotedAttributeValue,
+    /// The parser started to parse tag content and currently inside of a quoted string
+    /// (i.e. in an attribute value), but the input ended before the closing quote was found.
+    ///
+    /// Note, that currently error location will point to a start of a tag (the `<` character)
+    /// instead of a start of an attribute value.
+    UnclosedDoubleQuotedAttributeValue,
 }
 
 impl fmt::Display for SyntaxError {
@@ -57,6 +69,12 @@ impl fmt::Display for SyntaxError {
                 f.write_str("CDATA not closed: `]]>` not found before end of input")
             }
             Self::UnclosedTag => f.write_str("tag not closed: `>` not found before end of input"),
+            Self::UnclosedSingleQuotedAttributeValue => {
+                f.write_str("attribute value not closed: `'` not found before end of input")
+            }
+            Self::UnclosedDoubleQuotedAttributeValue => {
+                f.write_str("attribute value not closed: `\"` not found before end of input")
+            }
         }
     }
 }
