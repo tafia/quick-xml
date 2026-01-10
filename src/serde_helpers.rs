@@ -185,6 +185,7 @@ macro_rules! deserialize_match {
 /// }
 ///
 /// #[derive(Debug, PartialEq)]
+/// // #[serde(tag = "@tag")]
 /// enum InternallyTaggedEnum {
 ///     NewType(Newtype),
 ///     Other,
@@ -222,13 +223,92 @@ macro_rules! deserialize_match {
 /// );
 /// ```
 ///
+/// If some struct or newtype variants have the specially named `$text` or `$value` fields,
+/// you need to say that to the generated `Deserialize` implementation. XML deserializer
+/// uses presence of that fields to determine if it need to emit such keys. You may specify,
+/// which keys should be available in square brackets just after the tag name and colon:
+///
+/// ```
+/// # use pretty_assertions::assert_eq;
+/// use quick_xml::de::from_str;
+/// use quick_xml::impl_deserialize_for_internally_tagged_enum;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// struct Root {
+///     one: InternallyTaggedEnum,
+///     two: InternallyTaggedEnum,
+/// }
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// enum ExternallyTaggedEnum {
+///     First,
+///     Second,
+/// }
+/// #[derive(Debug, PartialEq)]
+/// // #[serde(tag = "@tag")]
+/// enum InternallyTaggedEnum {
+///     NewType(Newtype),
+///     Struct {
+///         // #[serde(rename = "$value")]
+///         any: ExternallyTaggedEnum,
+///     },
+/// }
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// struct Newtype {
+///     #[serde(rename = "$value")]
+///     any: ExternallyTaggedEnum,
+/// }
+///
+/// // The macro needs the type of the enum, the tag name, the list of fields,
+/// // and information about all the variants
+/// impl_deserialize_for_internally_tagged_enum!{
+///     // Without "$value" you get
+///     // called `Result::unwrap()` on an `Err` value: Custom("missing field `$value`")
+///     // That list will be passed to `deserialize_struct`
+///     InternallyTaggedEnum, "@tag": ["$value"],
+///
+///     ("NewType" => NewType(Newtype)),
+///     ("Struct" => Struct {
+///         #[serde(rename = "$value")]
+///         any: ExternallyTaggedEnum,
+///     }),
+/// }
+///
+/// assert_eq!(
+///     from_str::<Root>(r#"
+///         <root>
+///             <one tag="NewType">
+///                 <First />
+///             </one>
+///             <two tag="Struct">
+///                 <Second />
+///             </two>
+///         </root>
+///     "#).unwrap(),
+///     Root {
+///         one: InternallyTaggedEnum::NewType(Newtype { any: ExternallyTaggedEnum::First }),
+///         two: InternallyTaggedEnum::Struct { any: ExternallyTaggedEnum::Second },
+///     },
+/// );
+/// ```
+/// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+///
+/// NOTE: In addition to `$value` you must specify _all_ field names that may appear
+/// in every variant! Otherwise you'll get ```Custom("missing field `unlisted field name`")```
+/// error. That is because XML tags for all unlisted field names would be mapped to field `$value`.
+/// If your types do not have a `$value` special field, you may omit the field list.
+///
+/// </div>
+///
 /// [internally tagged]: https://serde.rs/enum-representations.html#internally-tagged
 /// [serde#1183]: https://github.com/serde-rs/serde/issues/1183
 #[macro_export(local_inner_macros)]
 macro_rules! impl_deserialize_for_internally_tagged_enum {
     (
         $enum:ty,
-        $tag:literal,
+        $tag:literal $(:[ $($field:literal),* ])?,
         $($cases:tt)*
     ) => {
         impl<'de> serde::de::Deserialize<'de> for $enum {
@@ -285,7 +365,7 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
                 }
                 // Tell the deserializer to deserialize the data as a map,
                 // using the TheVisitor as the decoder
-                deserializer.deserialize_map(TheVisitor)
+                deserializer.deserialize_struct(std::stringify!($enum), &[ $($($field),*)? ], TheVisitor)
             }
         }
     }

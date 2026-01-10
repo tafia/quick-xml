@@ -709,3 +709,142 @@ fn issue888() {
         }
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/928.
+#[cfg(feature = "serde-types")]
+#[test]
+fn issue928() {
+    use quick_xml::impl_deserialize_for_internally_tagged_enum;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Root {
+        #[serde(rename = "action")]
+        actions: Vec<Action>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    #[serde(rename_all = "kebab-case")]
+    enum Element {
+        Node {
+            #[serde(rename = "@id")]
+            id: u64,
+            #[serde(rename = "tag")]
+            tags: Option<Vec<Tag>>,
+        },
+        Way,
+        #[serde(other)]
+        Other,
+    }
+
+    #[derive(Debug, Deserialize, Clone, PartialEq)]
+    struct Tag {
+        #[serde(rename = "@k")]
+        k: String,
+        #[serde(rename = "@v")]
+        v: String,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct ElementHolder {
+        #[serde(rename = "$value")]
+        e: Element,
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum Action {
+        Create(ElementHolder),
+        Modify {
+            old: ElementHolder,
+            new: ElementHolder,
+        },
+        Delete {
+            old: ElementHolder,
+            new: ElementHolder,
+        },
+    }
+
+    impl_deserialize_for_internally_tagged_enum! {
+        Action, "@type": ["$value", "old", "new"],
+        ("create" => Create(ElementHolder)),
+        ("modify" => Modify {
+            old: ElementHolder,
+            new: ElementHolder
+        }),
+        ("delete" => Delete {
+            old: ElementHolder,
+            new: ElementHolder
+        })
+    }
+
+    assert_eq!(
+        from_str::<Root>(
+            r#"
+<root>
+  <action type="create">
+    <node id="123">
+      <tag k="key" v="value"/>
+    </node>
+  </action>
+  <action type="modify">
+    <old>
+      <node id="456">
+        <tag k="key" v="old_value"/>
+      </node>
+    </old>
+    <new>
+      <node id="456">
+        <tag k="key" v="new_value"/>
+      </node>
+    </new>
+  </action>
+  <action type="modify">
+    <old>
+      <way />
+    </old>
+    <new>
+      <way />
+    </new>
+  </action>
+</root>
+     "#
+        )
+        .unwrap(),
+        Root {
+            actions: vec![
+                Action::Create(ElementHolder {
+                    e: Element::Node {
+                        id: 123,
+                        tags: Some(vec![Tag {
+                            k: "key".to_string(),
+                            v: "value".to_string(),
+                        }]),
+                    },
+                }),
+                Action::Modify {
+                    old: ElementHolder {
+                        e: Element::Node {
+                            id: 456,
+                            tags: Some(vec![Tag {
+                                k: "key".to_string(),
+                                v: "old_value".to_string(),
+                            }]),
+                        },
+                    },
+                    new: ElementHolder {
+                        e: Element::Node {
+                            id: 456,
+                            tags: Some(vec![Tag {
+                                k: "key".to_string(),
+                                v: "new_value".to_string(),
+                            }]),
+                        },
+                    },
+                },
+                Action::Modify {
+                    old: ElementHolder { e: Element::Way },
+                    new: ElementHolder { e: Element::Way },
+                },
+            ],
+        },
+    );
+}

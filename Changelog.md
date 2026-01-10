@@ -24,6 +24,8 @@ struct and can be applied at once. When `serde-types` feature is enabled, config
   XHTML.
 - [#846]: Add method `empty_element_handling()` as a more powerful alternative to `expand_empty_elements()`
   in `Serializer`.
+- [#929]: Allow to pass list of field names to `impl_deserialize_for_internally_tagged_enum!` macro
+  which is required if you enum variants contains `$value` fields.
 
 ### Bug Fixes
 
@@ -42,8 +44,9 @@ struct and can be applied at once. When `serde-types` feature is enabled, config
 [#846]: https://github.com/tafia/quick-xml/issues/846
 [#908]: https://github.com/tafia/quick-xml/pull/908
 [#913]: https://github.com/tafia/quick-xml/pull/913
-[#924]: https://github.com/tafia/quick-xml/pull/924
 [#923]: https://github.com/tafia/quick-xml/issues/923
+[#924]: https://github.com/tafia/quick-xml/pull/924
+[#929]: https://github.com/tafia/quick-xml/pull/929
 
 
 ## 0.38.4 -- 2025-11-11
