@@ -32,7 +32,7 @@ static TEST_FILES: [(&str, &str, usize); 12] = [
     // medium length, mostly empty tags, a few short attributes per element, no escaping
     ("document.xml", DOCUMENT, 342),
     // medium length, lots of namespaces, no escaping
-    ("test_writer_ident.xml", TEST_WRITER_INDENT, 34),
+    ("test_writer_indent.xml", TEST_WRITER_INDENT, 34),
     // short, mix of attributes and text, lots of escapes
     ("sample_1.xml", SAMPLE_1, 15),
     // medium length, lots of attributes, short attributes, few escapes
