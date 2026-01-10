@@ -8,7 +8,7 @@ use std::ops::Range;
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, SyntaxError};
 use crate::events::{BytesRef, Event};
-use crate::parser::{ElementParser, Parser, PiParser};
+use crate::parser::{DtdParser, ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
 
 /// A struct that holds a parser configuration.
@@ -1157,7 +1157,7 @@ enum BangType {
     /// <!--...-->
     Comment,
     /// <!DOCTYPE...>. Contains balance of '<' (+1) and '>' (-1)
-    DocType(i32),
+    DocType(DtdParser),
 }
 impl BangType {
     #[inline(always)]
@@ -1165,7 +1165,7 @@ impl BangType {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
-            Some(b'D') | Some(b'd') => Self::DocType(0),
+            Some(b'D') | Some(b'd') => Self::DocType(DtdParser::BeforeInternalSubset(0)),
             _ => return Err(SyntaxError::InvalidBangMarkup),
         })
     }
@@ -1222,18 +1222,7 @@ impl BangType {
                     }
                 }
             }
-            Self::DocType(ref mut balance) => {
-                for i in memchr::memchr2_iter(b'<', b'>', chunk) {
-                    if chunk[i] == b'<' {
-                        *balance += 1;
-                    } else {
-                        if *balance == 0 {
-                            return Some((&chunk[..i], i + 1)); // +1 for `>`
-                        }
-                        *balance -= 1;
-                    }
-                }
-            }
+            Self::DocType(ref mut parser) => return parser.feed(buf, chunk),
         }
         None
     }
@@ -1266,7 +1255,7 @@ mod test {
             mod read_bang_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
-                use crate::reader::BangType;
+                use crate::reader::{BangType, DtdParser};
                 use crate::utils::Bytes;
 
                 /// Checks that reading CDATA content works correctly
@@ -1552,7 +1541,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType(0), Bytes(b"!DOCTYPE"))
+                                (BangType::DocType(DtdParser::Finished), Bytes(b"!DOCTYPE"))
                             );
                             assert_eq!(position, 10);
                         }
@@ -1626,7 +1615,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType(0), Bytes(b"!doctype"))
+                                (BangType::DocType(DtdParser::Finished), Bytes(b"!doctype"))
                             );
                             assert_eq!(position, 10);
                         }

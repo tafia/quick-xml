@@ -175,11 +175,13 @@ mod issue514 {
 #[test]
 fn issue590() {
     let mut reader = Reader::from_reader(BufReader::with_capacity(
-        16,
-        &b"<!DOCTYPE t [<!1><!2>]>"[..],
-        // 0      7       ^15    ^23
-        //[                ] = capacity
+        24,
+        &b"<!DOCTYPE t [<!ENTITY x 'a'><!ENTITY y 'b'>]>"[..],
+        // 0      7               ^23                  ^44
+        //[                        ] = capacity
     ));
+    // Ensure, that capacity was not increased unexpectedly
+    assert_eq!(reader.get_ref().capacity(), 24);
     let mut buf = Vec::new();
     loop {
         if reader.read_event_into(&mut buf).unwrap() == Event::Eof {
@@ -510,5 +512,58 @@ fn issue801() {
             Ok(Event::Eof) => break,
             Ok(_) => {}
         }
+    }
+}
+
+/// Regression tests for https://github.com/tafia/quick-xml/issues/923
+mod issue923 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn case1() {
+        let mut reader = Reader::from_str(
+            r#"<?xml version="1.0"?>
+<!-- sample.xml -->
+<!DOCTYPE root [
+        <!ENTITY ent ">">
+        <!ELEMENT root (#PCDATA)>
+]>
+<root>&ent;</root>"#,
+        );
+        let mut buf = Vec::new();
+        reader.read_event_into(&mut buf).unwrap(); // <?xml version="1.0"?>
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <!-- sample.xml -->
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // DTD
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <root>
+        reader.read_event_into(&mut buf).unwrap(); // &ent;
+        reader.read_event_into(&mut buf).unwrap(); // </root>
+
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn case2() {
+        let mut reader = Reader::from_str(
+            r#"<?xml version="1.0"?>
+<!-- sample.xml -->
+<!DOCTYPE root [
+        <!ENTITY ent "<">
+]>
+<root />"#,
+        );
+        let mut buf = Vec::new();
+        reader.read_event_into(&mut buf).unwrap(); // <?xml version="1.0"?>
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <!-- sample.xml -->
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // DTD
+        reader.read_event_into(&mut buf).unwrap();
+        reader.read_event_into(&mut buf).unwrap(); // <root />
+
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
 }
