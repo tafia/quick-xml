@@ -50,7 +50,7 @@ macro_rules! write_primitive {
 ///     [`SimpleTypeSerializer`] (`$text` fields). In particular, the empty struct
 ///     is serialized as `<variant/>`;
 ///
-/// Usage of empty tags depends on the [`Self::expand_empty_elements`] setting.
+/// Usage of empty tags depends on the [`Self::empty_element_handling`] setting.
 ///
 /// The difference between this serializer and [`SimpleTypeSerializer`] is in how
 /// sequences and maps are serialized. Unlike `SimpleTypeSerializer` it supports

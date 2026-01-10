@@ -55,7 +55,7 @@ macro_rules! write_primitive {
 ///   - unit variants are serialized as `<key>variant</key>`;
 ///   - other variants are not supported ([`SeError::Unsupported`] is returned);
 ///
-/// Usage of empty tags depends on the [`ContentSerializer::expand_empty_elements`] setting.
+/// Usage of empty tags depends on the [`ContentSerializer::empty_element_handling`] setting.
 pub struct ElementSerializer<'w, 'k, W: Write> {
     /// The inner serializer that contains the settings and mostly do the actual work
     pub ser: ContentSerializer<'w, 'k, W>,
