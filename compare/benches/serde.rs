@@ -50,7 +50,6 @@ fn serde_comparison(c: &mut Criterion) {
         BenchmarkId::new("quick_xml", "sample_rss.xml"),
         SAMPLE_RSS,
         |b, input| {
-
             b.iter(|| {
                 let rss: Rss<Enclosure> = black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
