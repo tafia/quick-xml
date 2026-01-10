@@ -180,6 +180,42 @@ fn low_level_comparison(c: &mut Criterion) {
             },
         );
 
+        group.bench_with_input(BenchmarkId::new("rxml:borrowed", filename), *data, |b, input| {
+            use rxml::{Event, Parser, Parse};
+
+            b.iter(|| {
+                let mut doc = input.as_bytes();
+                let mut p = Parser::new();
+                let mut count = black_box(0);
+                while doc.len() > 0 {
+                    // true = doc contains the entire document
+                    match p.parse(&mut doc, true).unwrap() {
+                        Some(Event::StartElement(..)) => count += 1,
+                        None => break,
+                        _ => (),
+                    }
+                }
+                assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+            })
+        });
+
+        group.bench_with_input(BenchmarkId::new("rxml:buffered", filename), *data, |b, input| {
+            use rxml::{as_eof_flag, Event, Reader};
+            use std::io::BufReader;
+
+            b.iter(|| {
+                let reader = BufReader::new(input.as_bytes());
+                let mut reader = Reader::new(reader);
+                let mut count = black_box(0);
+                let result = as_eof_flag(reader.read_all(|event| match event {
+                    Event::StartElement(..) => count += 1,
+                    _ => (),
+                }));
+                assert_eq!(result.unwrap(), true);  // true indicates eof
+                assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+            })
+        });
+
         group.bench_with_input(BenchmarkId::new("RustyXml", filename), *data, |b, input| {
             use rusty_xml::{Event, Parser};
 
