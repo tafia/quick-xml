@@ -14,6 +14,15 @@
 
 ## Unreleased
 
+### New Features
+
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.39.0 -- 2026-01-11
+
 Added a way to configure `Writer`. Now all configuration is contained in the `writer::Config`
 struct and can be applied at once. When `serde-types` feature is enabled, configuration is serializable.
 

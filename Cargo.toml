@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.38.4"
+version = "0.39.0"
 description = "High performance xml reader and writer"
 edition = "2021"
 
