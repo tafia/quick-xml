@@ -67,6 +67,14 @@ mod syntax {
                 );
             }
         }
+
+        // TODO: errors reported at start of a tag, but is should be reported at start of attribute value
+        mod attribute {
+            use super::*;
+
+            syntax_err!(single_quoted(".<tag a='")  => SyntaxError::UnclosedSingleQuotedAttributeValue);
+            syntax_err!(double_quoted(".<tag a=\"") => SyntaxError::UnclosedDoubleQuotedAttributeValue);
+        }
     }
 
     // Incorrect after-bang symbol is detected early, so buffer_position() stay at `!`
