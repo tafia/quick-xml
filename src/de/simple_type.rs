@@ -388,14 +388,19 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         T: DeserializeSeed<'de>,
     {
         if let Some(mut content) = self.content.take() {
-            const DELIMITER: u8 = b' ';
+            // NOTE: when normalization will be implemented, it may be enough
+            // to check only b' ', because all whitespaces will be normalized
+            const DELIMETERS: &str = " \t\r\n";
 
             loop {
                 let string = content.as_str();
                 if string.is_empty() {
                     return Ok(None);
                 }
-                return match memchr(DELIMITER, string.as_bytes()) {
+
+                let first_delimiter = string.find(|c| DELIMETERS.contains(c));
+
+                return match first_delimiter {
                     // No delimiters in the `content`, deserialize it as a whole atomic
                     None => match content {
                         Content::Input(s) => seed.deserialize(AtomicDeserializer {
@@ -418,7 +423,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                     // `content` started with a space, skip them all
                     Some(0) => {
                         // Skip all spaces
-                        let start = string.as_bytes().iter().position(|ch| *ch != DELIMITER);
+                        let start = string.find(|c| !DELIMETERS.contains(c));
                         content = match (start, content) {
                             // We cannot find any non-space character, so string contains only spaces
                             (None, _) => return Ok(None),
@@ -1158,6 +1163,23 @@ mod tests {
             assert_eq!(seq.next_element::<Enum>().unwrap(), Some(Enum::Unit));
             assert_eq!(seq.next_element::<()>().unwrap(), None);
             assert_eq!(seq.next_element::<()>().unwrap(), None);
+        }
+
+        #[test]
+        fn mixed_whitespace_delimiters() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("one two\nthree\rfour\tfive six")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("one"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("two"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("three"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("four"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("five"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("six"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
         }
     }
 
