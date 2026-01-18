@@ -73,8 +73,12 @@ impl Parser for ElementParser {
     }
 
     #[inline]
-    fn eof_error() -> SyntaxError {
-        SyntaxError::UnclosedTag
+    fn eof_error(self, _content: &[u8]) -> SyntaxError {
+        match self {
+            Self::Outside => SyntaxError::UnclosedTag,
+            Self::SingleQ => SyntaxError::UnclosedSingleQuotedAttributeValue,
+            Self::DoubleQ => SyntaxError::UnclosedDoubleQuotedAttributeValue,
+        }
     }
 }
 

@@ -1,7 +1,12 @@
+// std::hint::black_box stable since 1.66, but our MSRV = 1.56.
+// criterion::black_box is deprecated in since criterion 0.7.
+// Running benchmarks assumed on current Rust version, so this should be fine
+#![allow(clippy::incompatible_msrv)]
 use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
 use quick_xml::events::Event;
 use quick_xml::reader::{NsReader, Reader};
 use quick_xml::Result as XmlResult;
+use std::hint::black_box;
 
 static RPM_PRIMARY: &str = include_str!("../tests/documents/rpm_primary.xml");
 static RPM_PRIMARY2: &str = include_str!("../tests/documents/rpm_primary2.xml");
@@ -47,17 +52,17 @@ static INPUTS: &[(&str, &str)] = &[
 fn parse_document_from_str(doc: &str) -> XmlResult<()> {
     let mut r = Reader::from_str(doc);
     loop {
-        match criterion::black_box(r.read_event()?) {
+        match black_box(r.read_event()?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
-                criterion::black_box(e.unescape()?);
+                black_box(e.xml_content()?);
             }
             Event::CData(e) => {
-                criterion::black_box(e.into_inner());
+                black_box(e.into_inner());
             }
             Event::End(_) => (),
             Event::Eof => break,
@@ -72,17 +77,17 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
     let mut r = Reader::from_reader(doc);
     let mut buf = Vec::new();
     loop {
-        match criterion::black_box(r.read_event_into(&mut buf)?) {
+        match black_box(r.read_event_into(&mut buf)?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
-                criterion::black_box(e.unescape()?);
+                black_box(e.xml_content()?);
             }
             Event::CData(e) => {
-                criterion::black_box(e.into_inner());
+                black_box(e.into_inner());
             }
             Event::End(_) => (),
             Event::Eof => break,
@@ -97,20 +102,20 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
 fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
     let mut r = NsReader::from_str(doc);
     loop {
-        match criterion::black_box(r.read_resolved_event()?) {
+        match black_box(r.read_resolved_event()?) {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
-                criterion::black_box(resolved_ns);
+                black_box(resolved_ns);
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
-                criterion::black_box(e.unescape()?);
-                criterion::black_box(resolved_ns);
+                black_box(e.xml_content()?);
+                black_box(resolved_ns);
             }
             (resolved_ns, Event::CData(e)) => {
-                criterion::black_box(e.into_inner());
-                criterion::black_box(resolved_ns);
+                black_box(e.into_inner());
+                black_box(resolved_ns);
             }
             (_, Event::End(_)) => (),
             (_, Event::Eof) => break,
@@ -125,20 +130,20 @@ fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
     let mut r = NsReader::from_reader(doc);
     let mut buf = Vec::new();
     loop {
-        match criterion::black_box(r.read_resolved_event_into(&mut buf)?) {
+        match black_box(r.read_resolved_event_into(&mut buf)?) {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
-                criterion::black_box(resolved_ns);
+                black_box(resolved_ns);
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
-                criterion::black_box(e.unescape()?);
-                criterion::black_box(resolved_ns);
+                black_box(e.xml_content()?);
+                black_box(resolved_ns);
             }
             (resolved_ns, Event::CData(e)) => {
-                criterion::black_box(e.into_inner());
-                criterion::black_box(resolved_ns);
+                black_box(e.into_inner());
+                black_box(resolved_ns);
             }
             (_, Event::End(_)) => (),
             (_, Event::Eof) => break,

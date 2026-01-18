@@ -5,8 +5,8 @@
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
-use crate::name::QName;
-use crate::utils::{is_whitespace, write_byte_string, write_cow_string, Bytes};
+use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
+use crate::utils::{is_whitespace, Bytes};
 
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
@@ -40,9 +40,18 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value_with()`](Self::unescape_value_with)
     ///
-    /// This method is available only if [`encoding`] feature is **not** enabled.
+    /// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+    ///
+    /// NOTE: Because this method is available only if [`encoding`] feature is **not** enabled,
+    /// should only be used by applications.
+    /// Libs should use [`decode_and_unescape_value()`](Self::decode_and_unescape_value)
+    /// instead, because if lib will be used in a project which depends on quick_xml with
+    /// [`encoding`] feature enabled, the lib will fail to compile due to [feature unification].
+    ///
+    /// </div>
     ///
     /// [`encoding`]: ../../index.html#encoding
+    /// [feature unification]: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         self.unescape_value_with(resolve_predefined_entity)
@@ -59,9 +68,18 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value()`](Self::unescape_value)
     ///
-    /// This method is available only if [`encoding`] feature is **not** enabled.
+    /// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+    ///
+    /// NOTE: Because this method is available only if [`encoding`] feature is **not** enabled,
+    /// should only be used by applications.
+    /// Libs should use [`decode_and_unescape_value_with()`](Self::decode_and_unescape_value_with)
+    /// instead, because if lib will be used in a project which depends on quick_xml with
+    /// [`encoding`] feature enabled, the lib will fail to compile due to [feature unification].
+    ///
+    /// </div>
     ///
     /// [`encoding`]: ../../index.html#encoding
+    /// [feature unification]: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
     #[cfg(any(doc, not(feature = "encoding")))]
     #[inline]
     pub fn unescape_value_with<'entity>(
@@ -96,15 +114,50 @@ impl<'a> Attribute<'a> {
             Cow::Owned(s) => Ok(s.into()),
         }
     }
+
+    /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
+    ///
+    /// The valid boolean representations are only `"true"`, `"false"`, `"1"`, and `"0"`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let attr = Attribute::from(("attr", "false"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "0"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "true"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "1"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "bot bool"));
+    /// assert_eq!(attr.as_bool(), None);
+    /// ```
+    ///
+    /// [represents]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self.value.as_ref() {
+            b"1" | b"true" => Some(true),
+            b"0" | b"false" => Some(false),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> Debug for Attribute<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ key: ")?;
-        write_byte_string(f, self.key.as_ref())?;
-        write!(f, ", value: ")?;
-        write_cow_string(f, &self.value)?;
-        write!(f, " }}")
+        f.debug_struct("Attribute")
+            .field("key", &Bytes(self.key.as_ref()))
+            .field("value", &Bytes(&self.value))
+            .finish()
     }
 }
 
@@ -195,33 +248,81 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
+/// When [`serialize`] feature is enabled, can be converted to serde's deserializer.
+///
 /// [`with_checks(false)`]: Self::with_checks
-#[derive(Clone, Debug)]
+/// [`serialize`]: ../../index.html#serialize
+#[derive(Clone)]
 pub struct Attributes<'a> {
     /// Slice of `BytesStart` corresponding to attributes
     bytes: &'a [u8],
     /// Iterator state, independent from the actual source of bytes
     state: IterState,
+    /// Encoding used for `bytes`
+    decoder: Decoder,
 }
 
 impl<'a> Attributes<'a> {
     /// Internal constructor, used by `BytesStart`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(buf: &'a [u8], pos: usize, html: bool) -> Self {
+    pub(crate) const fn wrap(buf: &'a [u8], pos: usize, html: bool, decoder: Decoder) -> Self {
         Self {
             bytes: buf,
             state: IterState::new(pos, html),
+            decoder,
         }
     }
 
-    /// Creates a new attribute iterator from a buffer.
+    /// Creates a new attribute iterator from a buffer, which recognizes only XML-style
+    /// attributes, i. e. those which in the form `name = "value"` or `name = 'value'`.
+    /// HTML style attributes (i. e. without quotes or only name) will return a error.
+    ///
+    /// # Parameters
+    /// - `buf`: a buffer with a tag name and attributes, usually this is the whole
+    ///   string between `<` and `>` (or `/>`) of a tag;
+    /// - `pos`: a position in the `buf` where tag name is finished and attributes
+    ///   is started. It is not necessary to point exactly to the end of a tag name,
+    ///   although that is usually that. If it will be more than the `buf` length,
+    ///   then the iterator will return `None`` immediately.
+    ///
+    /// # Example
+    /// ```
+    /// # use quick_xml::events::attributes::{Attribute, Attributes};
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let mut iter = Attributes::new("tag-name attr1 = 'value1' attr2='value2' ", 9);
+    /// //                              ^0       ^9
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr1", "value1")))));
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr2", "value2")))));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub const fn new(buf: &'a str, pos: usize) -> Self {
-        Self::wrap(buf.as_bytes(), pos, false)
+        Self::wrap(buf.as_bytes(), pos, false, Decoder::utf8())
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
+    ///
+    /// # Parameters
+    /// - `buf`: a buffer with a tag name and attributes, usually this is the whole
+    ///   string between `<` and `>` (or `/>`) of a tag;
+    /// - `pos`: a position in the `buf` where tag name is finished and attributes
+    ///   is started. It is not necessary to point exactly to the end of a tag name,
+    ///   although that is usually that. If it will be more than the `buf` length,
+    ///   then the iterator will return `None`` immediately.
+    ///
+    /// # Example
+    /// ```
+    /// # use quick_xml::events::attributes::{Attribute, Attributes};
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let mut iter = Attributes::html("tag-name attr1 = value1 attr2 ", 9);
+    /// //                               ^0       ^9
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr1", "value1")))));
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr2", "")))));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub const fn html(buf: &'a str, pos: usize) -> Self {
-        Self::wrap(buf.as_bytes(), pos, true)
+        Self::wrap(buf.as_bytes(), pos, true, Decoder::utf8())
     }
 
     /// Changes whether attributes should be checked for uniqueness.
@@ -233,6 +334,107 @@ impl<'a> Attributes<'a> {
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.state.check_duplicates = val;
         self
+    }
+
+    /// Checks if the current tag has a [`xsi:nil`] attribute. This method ignores any errors in
+    /// attributes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::QName;
+    /// use quick_xml::reader::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str("
+    ///     <root xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
+    ///         <true xsi:nil='true'/>
+    ///         <false xsi:nil='false'/>
+    ///         <none/>
+    ///         <non-xsi xsi:nil='true' xmlns:xsi='namespace'/>
+    ///         <unbound-nil nil='true' xmlns='http://www.w3.org/2001/XMLSchema-instance'/>
+    ///         <another-xmlns f:nil='true' xmlns:f='http://www.w3.org/2001/XMLSchema-instance'/>
+    ///     </root>
+    /// ");
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// macro_rules! check {
+    ///     ($reader:expr, $name:literal, $value:literal) => {
+    ///         let event = match $reader.read_event().unwrap() {
+    ///             Event::Empty(e) => e,
+    ///             e => panic!("Unexpected event {:?}", e),
+    ///         };
+    ///         assert_eq!(
+    ///             (event.name(), event.attributes().has_nil($reader.resolver())),
+    ///             (QName($name.as_bytes()), $value),
+    ///         );
+    ///     };
+    /// }
+    ///
+    /// let root = match reader.read_event().unwrap() {
+    ///     Event::Start(e) => e,
+    ///     e => panic!("Unexpected event {:?}", e),
+    /// };
+    /// assert_eq!(root.attributes().has_nil(reader.resolver()), false);
+    ///
+    /// // definitely true
+    /// check!(reader, "true",          true);
+    /// // definitely false
+    /// check!(reader, "false",         false);
+    /// // absence of the attribute means that attribute is not set
+    /// check!(reader, "none",          false);
+    /// // attribute not bound to the correct namespace
+    /// check!(reader, "non-xsi",       false);
+    /// // attributes without prefix not bound to any namespace
+    /// check!(reader, "unbound-nil",   false);
+    /// // prefix can be any while it is bound to the correct namespace
+    /// check!(reader, "another-xmlns", true);
+    /// ```
+    ///
+    /// [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
+    pub fn has_nil(&mut self, resolver: &NamespaceResolver) -> bool {
+        use crate::name::ResolveResult::*;
+
+        self.any(|attr| {
+            if let Ok(attr) = attr {
+                match resolver.resolve_attribute(attr.key) {
+                    (
+                        Bound(Namespace(b"http://www.w3.org/2001/XMLSchema-instance")),
+                        LocalName(b"nil"),
+                    ) => attr.as_bool().unwrap_or_default(),
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Get the decoder, used to decode bytes, read by the reader which produces
+    /// this iterator, to the strings.
+    ///
+    /// When iterator was created manually or get from a manually created [`BytesStart`],
+    /// encoding is UTF-8.
+    ///
+    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
+    ///
+    /// [`BytesStart`]: crate::events::BytesStart
+    /// [`encoding`]: ../index.html#encoding
+    #[inline]
+    pub const fn decoder(&self) -> Decoder {
+        self.decoder
+    }
+}
+
+impl<'a> Debug for Attributes<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("Attributes")
+            .field("bytes", &Bytes(self.bytes))
+            .field("state", &self.state)
+            .field("decoder", &self.decoder)
+            .finish()
     }
 }
 

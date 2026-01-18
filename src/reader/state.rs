@@ -2,11 +2,12 @@
 use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::errors::{Error, IllFormedError, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use crate::parser::{Parser, PiParser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{BangType, Config, ParseState};
+use crate::reader::{BangType, Config, DtdParser, ParseState};
 use crate::utils::{is_whitespace, name_len};
 
 /// A struct that holds a current reader state and a parser configuration.
@@ -144,7 +145,7 @@ impl ReaderState {
             // https://www.w3.org/TR/xml11/#sec-prolog-dtd
             // HTML5 allows mixed case for doctype declarations:
             // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
-            BangType::DocType(0) if uncased_starts_with(buf, b"!DOCTYPE") => {
+            BangType::DocType(DtdParser::Finished) if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         // Cut of `!DOCTYPE` and any number of spaces from start
@@ -156,7 +157,7 @@ impl ReaderState {
                         // We want report error at place where name is expected - this is just
                         // before `>`
                         self.last_error_offset = self.offset - 1;
-                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
+                        Err(Error::IllFormed(IllFormedError::MissingDoctypeName))
                     }
                 }
             }
@@ -239,7 +240,7 @@ impl ReaderState {
     ///
     /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        debug_assert!(buf.len() > 0);
+        debug_assert!(!buf.is_empty());
         debug_assert_eq!(buf[0], b'?');
 
         let len = buf.len();
@@ -251,7 +252,7 @@ impl ReaderState {
             let len = content.len();
 
             if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
+                let event = BytesDecl::from_start(BytesStart::wrap(content, 3, self.decoder()));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -263,14 +264,18 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesPI::wrap(content, name_len(content))))
+                Ok(Event::PI(BytesPI::wrap(
+                    content,
+                    name_len(content),
+                    self.decoder(),
+                )))
             }
         } else {
-            // <?....EOF
-            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+            // <?....>
+            //  ^^^^^ - `buf` does not contain `<`, but we want to report error at `<`,
             //          so we move offset to it (-2 for `<` and `>`)
             self.last_error_offset = self.offset - len as u64 - 2;
-            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+            Err(Error::Syntax(PiParser(false).eof_error(buf)))
         }
     }
 
@@ -281,7 +286,7 @@ impl ReaderState {
     pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Event<'b> {
         if let Some(content) = content.strip_suffix(b"/") {
             // This is self-closed tag `<something/>`
-            let event = BytesStart::wrap(content, name_len(content));
+            let event = BytesStart::wrap(content, name_len(content), self.decoder());
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
@@ -292,7 +297,7 @@ impl ReaderState {
                 Event::Empty(event)
             }
         } else {
-            let event = BytesStart::wrap(content, name_len(content));
+            let event = BytesStart::wrap(content, name_len(content), self.decoder());
 
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be

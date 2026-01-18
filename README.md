@@ -53,7 +53,7 @@ loop {
                 _ => (),
             }
         }
-        Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+        Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
 
         // There are several other `Event`s we do not consider here
         _ => (),
@@ -79,7 +79,7 @@ loop {
     match reader.read_event() {
         Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
 
-            // crates a new element ... alternatively we could reuse `e` by calling
+            // creates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
             let mut elem = BytesStart::new("my_elem");
 

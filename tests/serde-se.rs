@@ -2,7 +2,7 @@ use quick_xml::de::from_str;
 use quick_xml::se::{SeError, Serializer};
 use quick_xml::utils::Bytes;
 
-use serde::{serde_if_integer128, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -250,18 +250,16 @@ mod without_root {
     err!(i16_:   -4200i16             => Unsupported("cannot serialize `i16` without defined root tag"));
     err!(i32_:   -42000000i32         => Unsupported("cannot serialize `i32` without defined root tag"));
     err!(i64_:   -42000000000000i64   => Unsupported("cannot serialize `i64` without defined root tag"));
-    err!(isize_: -42000000000000isize => Unsupported("cannot serialize `i64` without defined root tag"));
+    err!(isize_: -42000000isize       => Unsupported("cannot serialize `i64` without defined root tag"));
 
     err!(u8_:    42u8                => Unsupported("cannot serialize `u8` without defined root tag"));
     err!(u16_:   4200u16             => Unsupported("cannot serialize `u16` without defined root tag"));
     err!(u32_:   42000000u32         => Unsupported("cannot serialize `u32` without defined root tag"));
     err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
-    err!(usize_: 42000000000000usize => Unsupported("cannot serialize `u64` without defined root tag"));
+    err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
-    serde_if_integer128! {
-        err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
-        err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
-    }
+    err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
+    err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
 
     err!(f32_: 4.2f32 => Unsupported("cannot serialize `f32` without defined root tag"));
     err!(f64_: 4.2f64 => Unsupported("cannot serialize `f64` without defined root tag"));
@@ -1296,18 +1294,16 @@ mod without_root {
         err!(i16_:   -4200i16             => Unsupported("cannot serialize `i16` without defined root tag"));
         err!(i32_:   -42000000i32         => Unsupported("cannot serialize `i32` without defined root tag"));
         err!(i64_:   -42000000000000i64   => Unsupported("cannot serialize `i64` without defined root tag"));
-        err!(isize_: -42000000000000isize => Unsupported("cannot serialize `i64` without defined root tag"));
+        err!(isize_: -42000000isize       => Unsupported("cannot serialize `i64` without defined root tag"));
 
         err!(u8_:    42u8                => Unsupported("cannot serialize `u8` without defined root tag"));
         err!(u16_:   4200u16             => Unsupported("cannot serialize `u16` without defined root tag"));
         err!(u32_:   42000000u32         => Unsupported("cannot serialize `u32` without defined root tag"));
         err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
-        err!(usize_: 42000000000000usize => Unsupported("cannot serialize `u64` without defined root tag"));
+        err!(usize_: 42000000usize       => Unsupported("cannot serialize `u64` without defined root tag"));
 
-        serde_if_integer128! {
-            err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
-            err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
-        }
+        err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
+        err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
 
         err!(f32_: 4.2f32 => Unsupported("cannot serialize `f32` without defined root tag"));
         err!(f64_: 4.2f64 => Unsupported("cannot serialize `f64` without defined root tag"));
@@ -1846,18 +1842,16 @@ mod with_root {
     serialize_as!(i16_:   -4200i16             => "<root>-4200</root>");
     serialize_as!(i32_:   -42000000i32         => "<root>-42000000</root>");
     serialize_as!(i64_:   -42000000000000i64   => "<root>-42000000000000</root>");
-    serialize_as!(isize_: -42000000000000isize => "<root>-42000000000000</root>");
+    serialize_as!(isize_: -42000000isize       => "<root>-42000000</root>");
 
     serialize_as!(u8_:    42u8                => "<root>42</root>");
     serialize_as!(u16_:   4200u16             => "<root>4200</root>");
     serialize_as!(u32_:   42000000u32         => "<root>42000000</root>");
     serialize_as!(u64_:   42000000000000u64   => "<root>42000000000000</root>");
-    serialize_as!(usize_: 42000000000000usize => "<root>42000000000000</root>");
+    serialize_as!(usize_: 42000000usize       => "<root>42000000</root>");
 
-    serde_if_integer128! {
-        serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
-        serialize_as!(u128_:  420000000000000000000000000000u128 => "<root>420000000000000000000000000000</root>");
-    }
+    serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
+    serialize_as!(u128_:  420000000000000000000000000000u128 => "<root>420000000000000000000000000000</root>");
 
     serialize_as!(f32_: 4.2f32 => "<root>4.2</root>");
     serialize_as!(f64_: 4.2f64 => "<root>4.2</root>");
@@ -1868,16 +1862,22 @@ mod with_root {
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
     serialize_as!(char_apos:        '\'' => "<root>'</root>");
     serialize_as!(char_quot:        '"'  => "<root>\"</root>");
-    // FIXME: Probably we should trim only for specified types when deserialize
-    serialize_as_only!(char_space:       ' '  => "<root> </root>");
+    serialize_as!(char_space:       ' '  => "<root> </root>");
 
+    serialize_as!(str_empty: ""; &str => "<root/>");
     serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
     serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;\"escaped &amp; string'&gt;</root>");
+    // NOTE: do not use \r, because it normalized to \n during deserialization
+    // but writes as is during serialization
+    serialize_as!(str_spaces_only: " \n\t"; String => "<root> \n\t</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
     serialize_as!(option_none: Option::<&str>::None => "");
     serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");
+    // NOTE: do not use \r, because it normalized to \n during deserialization
+    // but writes as is during serialization
+    serialize_as!(option_spaces_only: Some(" \n\t") => "<root> \n\t</root>");
 
     serialize_as!(unit:
         ()
@@ -1897,9 +1897,11 @@ mod with_root {
             <root>3</root>");
     serialize_as!(tuple:
         // Use to_string() to get owned type that is required for deserialization
-        ("<\"&'>".to_string(), "with\t\r\n spaces", 3usize)
+        // NOTE: do not use \r, because it normalized to \n during deserialization
+        // but writes as is during serialization
+        ("<\"&'>".to_string(), "with\t\n spaces", 3usize)
         => "<root>&lt;\"&amp;'&gt;</root>\
-            <root>with\t\r\n spaces</root>\
+            <root>with\t\n spaces</root>\
             <root>3</root>");
     serialize_as!(tuple_struct:
         Tuple(42.0, "answer")

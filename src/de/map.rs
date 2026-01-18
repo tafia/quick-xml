@@ -6,17 +6,14 @@ use crate::{
     de::simple_type::SimpleTypeDeserializer,
     de::text::TextDeserializer,
     de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
-    encoding::Decoder,
     errors::serialize::DeError,
     errors::Error,
     events::attributes::IterState,
     events::BytesStart,
     name::QName,
-    utils::CowRef,
 };
 use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{self, DeserializeSeed, Deserializer as _, MapAccess, SeqAccess, Visitor};
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -193,6 +190,9 @@ where
     /// <tag>value for VALUE_KEY field<tag>
     /// ```
     has_value_field: bool,
+    /// If `true`, then the deserialized struct has a field with a special name:
+    /// [`TEXT_KEY`].
+    has_text_field: bool,
 }
 
 impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
@@ -205,15 +205,38 @@ where
         de: &'d mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
-    ) -> Result<Self, DeError> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             de,
             iter: IterState::new(start.name().as_ref().len(), false),
             start,
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
-        })
+            has_text_field: fields.contains(&TEXT_KEY),
+        }
+    }
+
+    /// Determines if subtree started with the specified event shoould be skipped.
+    ///
+    /// Used to map elements with `xsi:nil` attribute set to true to `None` in optional contexts.
+    ///
+    /// We need to handle two attributes:
+    /// - on parent element: `<map xsi:nil="true"><foo/></map>`
+    /// - on this element:   `<map><foo xsi:nil="true"/></map>`
+    ///
+    /// We check parent element too because `xsi:nil` affects only nested elements of the
+    /// tag where it is defined. We can map structure with fields mapped to attributes to
+    /// the `<map>` element and set to `None` all its optional elements.
+    fn should_skip_subtree(&self, start: &BytesStart) -> bool {
+        self.de.reader.reader.has_nil_attr(&self.start) || self.de.reader.reader.has_nil_attr(start)
+    }
+
+    /// Skips whitespaces when they are not preserved
+    #[inline]
+    fn skip_whitespaces(&mut self) -> Result<(), DeError> {
+        // TODO: respect the `xml:space` attribute and probably some deserialized type sign
+        self.de.skip_whitespaces()
     }
 }
 
@@ -232,23 +255,27 @@ where
 
         // FIXME: There error positions counted from the start of tag name - need global position
         let slice = &self.start.buf;
-        let decoder = self.de.reader.decoder();
+        let decoder = self.start.decoder();
 
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
 
+            // Attributes in mapping starts from @ prefix
+            // TODO: Customization point - may customize prefix
+            self.de.key_buf.clear();
+            self.de.key_buf.push('@');
+
             let de =
                 QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
         } else {
+            self.skip_whitespaces()?;
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
-                // We shouldn't have both `$value` and `$text` fields in the same
-                // struct, so if we have `$value` field, the we should deserialize
-                // text content to `$value`
-                DeEvent::Text(_) if self.has_value_field => {
+                // If we have dedicated "$text" field, it will not be passed to "$value" field
+                DeEvent::Text(_) if self.has_value_field && !self.has_text_field => {
                     self.source = ValueSource::Content;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -280,7 +307,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
+                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e)? => {
                     self.source = ValueSource::Content;
 
                     let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
@@ -289,7 +316,7 @@ where
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
 
-                    let de = QNameDeserializer::from_elem(e.raw_name(), decoder)?;
+                    let de = QNameDeserializer::from_elem(e)?;
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
@@ -303,7 +330,9 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
-                DeEvent::Eof => Err(Error::missed_end(self.start.name(), decoder).into()),
+                DeEvent::Eof => {
+                    Err(Error::missed_end(self.start.name(), self.start.decoder()).into())
+                }
             }
         }
     }
@@ -316,8 +345,7 @@ where
             ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_part(
                 &self.start.buf,
                 value,
-                true,
-                self.de.reader.decoder(),
+                self.start.decoder(),
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -540,8 +568,14 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
+        // We cannot use result of `peek()` directly because of borrow checker
+        let _ = self.map.de.peek()?;
+        match self.map.de.last_peeked() {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Start(start) if self.map.should_skip_subtree(start) => {
+                self.map.de.skip_next_tree()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
@@ -583,7 +617,7 @@ where
                 _ => unreachable!(),
             }
         } else {
-            TagFilter::Exclude(self.map.fields)
+            TagFilter::Exclude(self.map.fields, self.map.has_text_field)
         };
         visitor.visit_seq(MapValueSeqAccess {
             #[cfg(feature = "overlapped-lists")]
@@ -662,12 +696,8 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
         let (name, is_text) = match self.map.de.peek()? {
-            DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
-                false,
-            ),
+            DeEvent::Start(e) => (seed.deserialize(QNameDeserializer::from_elem(e)?)?, false),
             DeEvent::Text(_) => (
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
@@ -769,7 +799,7 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }
@@ -785,12 +815,8 @@ where
 /// get a string representation of a tag.
 ///
 /// Returns `true`, if `start` is not in the `fields` list and `false` otherwise.
-fn not_in(
-    fields: &'static [&'static str],
-    start: &BytesStart,
-    decoder: Decoder,
-) -> Result<bool, DeError> {
-    let tag = decoder.decode(start.local_name().into_inner())?;
+fn not_in(fields: &'static [&'static str], start: &BytesStart) -> Result<bool, DeError> {
+    let tag = start.decoder().decode(start.local_name().into_inner())?;
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }
@@ -832,15 +858,27 @@ enum TagFilter<'de> {
     Include(BytesStart<'de>), //TODO: Need to store only name instead of a whole tag
     /// A `SeqAccess` interested in tags with any name, except explicitly listed.
     /// Excluded tags are used as struct field names and therefore should not
-    /// fall into a `$value` category
-    Exclude(&'static [&'static str]),
+    /// fall into a `$value` category.
+    ///
+    /// The `bool` represents the having of a `$text` special field in fields array.
+    /// It is used to exclude text events when `$text` fields is defined together with
+    /// `$value` fieldб and `$value` accepts sequence.
+    Exclude(&'static [&'static str], bool),
 }
 
 impl<'de> TagFilter<'de> {
-    fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
+    fn is_suitable(&self, start: &BytesStart) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
-            Self::Exclude(fields) => not_in(fields, start, decoder),
+            Self::Exclude(fields, _) => not_in(fields, start),
+        }
+    }
+    const fn need_skip_text(&self) -> bool {
+        match self {
+            // If we look only for tags, we should skip any $text keys
+            Self::Include(_) => true,
+            // If we look fo any data, we should exclude $text keys if it in the list
+            Self::Exclude(_, has_text_field) => *has_text_field,
         }
     }
 }
@@ -916,18 +954,26 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
         loop {
+            self.map.skip_whitespaces()?;
             break match self.map.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => {
+                    self.map.de.skip()?;
+                    continue;
+                }
+                // Skip any text events if sequence expects only specific tag names
+                #[cfg(feature = "overlapped-lists")]
+                DeEvent::Text(_) if self.filter.need_skip_text() => {
                     self.map.de.skip()?;
                     continue;
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => Ok(None),
+                #[cfg(not(feature = "overlapped-lists"))]
+                DeEvent::Text(_) if self.filter.need_skip_text() => Ok(None),
 
                 // Stop iteration after reaching a closing tag
                 // The matching tag name is guaranteed by the reader
@@ -937,7 +983,9 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
-                DeEvent::Eof => Err(Error::missed_end(self.map.start.name(), decoder).into()),
+                DeEvent::Eof => {
+                    Err(Error::missed_end(self.map.start.name(), self.map.start.decoder()).into())
+                }
 
                 DeEvent::Text(_) => match self.map.de.next()? {
                     DeEvent::Text(e) => seed.deserialize(TextDeserializer(e)).map(Some),
@@ -1094,7 +1142,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
+        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields))
     }
 
     fn deserialize_enum<V>(
@@ -1130,10 +1178,7 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let name = seed.deserialize(QNameDeserializer::from_elem(
-            self.start.raw_name(),
-            self.de.reader.decoder(),
-        )?)?;
+        let name = seed.deserialize(QNameDeserializer::from_elem(&self.start)?)?;
         Ok((name, self))
     }
 }
@@ -1186,27 +1231,18 @@ fn test_not_in() {
 
     let tag = BytesStart::new("tag");
 
-    assert_eq!(not_in(&[], &tag, Decoder::utf8()).unwrap(), true);
-    assert_eq!(
-        not_in(&["no", "such", "tags"], &tag, Decoder::utf8()).unwrap(),
-        true
-    );
-    assert_eq!(
-        not_in(&["some", "tag", "included"], &tag, Decoder::utf8()).unwrap(),
-        false
-    );
+    assert_eq!(not_in(&[], &tag).unwrap(), true);
+    assert_eq!(not_in(&["no", "such", "tags"], &tag).unwrap(), true);
+    assert_eq!(not_in(&["some", "tag", "included"], &tag).unwrap(), false);
 
     let tag_ns = BytesStart::new("ns1:tag");
+    assert_eq!(not_in(&["no", "such", "tags"], &tag_ns).unwrap(), true);
     assert_eq!(
-        not_in(&["no", "such", "tags"], &tag_ns, Decoder::utf8()).unwrap(),
-        true
-    );
-    assert_eq!(
-        not_in(&["some", "tag", "included"], &tag_ns, Decoder::utf8()).unwrap(),
+        not_in(&["some", "tag", "included"], &tag_ns).unwrap(),
         false
     );
     assert_eq!(
-        not_in(&["some", "namespace", "ns1:tag"], &tag_ns, Decoder::utf8()).unwrap(),
+        not_in(&["some", "namespace", "ns1:tag"], &tag_ns).unwrap(),
         true
     );
 }

@@ -13,6 +13,52 @@ mod async_tokio;
 #[cfg(feature = "serialize")]
 use {crate::se::SeError, serde::Serialize};
 
+/// A struct that holds a writer configuration.
+///
+/// Current writer configuration can be retrieved by calling [`Writer::config()`]
+/// and changed by changing properties of the object returned by a call to
+/// [`Writer::config_mut()`].
+///
+/// [`Writer::config()`]: crate::writer::Writer::config
+/// [`Writer::config_mut()`]: crate::writer::Writer::config_mut
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
+#[non_exhaustive]
+pub struct Config {
+    /// Whether to add a space before the closing slash in empty elements.
+    /// According to the [W3C guidelines], this is recommended as for maximum compatibility.
+    ///
+    /// When set to `true`, empty elements will be terminated with "` />`".
+    /// When set to `false`, empty elements will be terminated with "`/>`".
+    ///
+    /// Default: `false`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::reader::Reader;
+    /// use quick_xml::writer::Writer;
+    /// use std::io::Cursor;
+    ///
+    /// let mut writer = Writer::new(Cursor::new(Vec::new()));
+    /// writer.config_mut().add_space_before_slash_in_empty_elements = true;
+    ///
+    /// writer.create_element("tag")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .write_empty()
+    ///     .unwrap();
+    ///
+    /// let result = writer.into_inner().into_inner();
+    /// let expected = r#"<tag attr1="value1" />"#;
+    /// assert_eq!(result, expected.as_bytes());
+    /// ```
+    ///
+    /// [W3C guidelines]: https://www.w3.org/TR/xhtml1/#guidelines
+    pub add_space_before_slash_in_empty_elements: bool,
+}
+
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
 /// # Examples
@@ -31,7 +77,7 @@ use {crate::se::SeError, serde::Serialize};
 ///     match reader.read_event() {
 ///         Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
 ///
-///             // crates a new element ... alternatively we could reuse `e` by calling
+///             // creates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
 ///             let mut elem = BytesStart::new("my_elem");
 ///
@@ -62,6 +108,12 @@ use {crate::se::SeError, serde::Serialize};
 pub struct Writer<W> {
     /// underlying writer
     writer: W,
+
+    /// writer configuration
+    config: Config,
+
+    /// indentation configuration and state; stored separately from
+    /// other configuration since it also tracks writer state
     indent: Option<Indentation>,
 }
 
@@ -70,6 +122,9 @@ impl<W> Writer<W> {
     pub const fn new(inner: W) -> Writer<W> {
         Writer {
             writer: inner,
+            config: Config {
+                add_space_before_slash_in_empty_elements: false,
+            },
             indent: None,
         }
     }
@@ -78,6 +133,9 @@ impl<W> Writer<W> {
     pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
         Writer {
             writer: inner,
+            config: Config {
+                add_space_before_slash_in_empty_elements: false,
+            },
             indent: Some(Indentation::new(indent_char, indent_size)),
         }
     }
@@ -95,6 +153,16 @@ impl<W> Writer<W> {
     /// Get a reference to the underlying writer.
     pub const fn get_ref(&self) -> &W {
         &self.writer
+    }
+
+    /// Returns reference to the writer configuration
+    pub const fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// Returns mutable reference to the writer configuration
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
     }
 
     /// Provides a simple, high-level API for writing XML elements.
@@ -206,7 +274,15 @@ impl<W: Write> Writer<W> {
                 }
                 self.write_wrapped(b"</", &e, b">")
             }
-            Event::Empty(e) => self.write_wrapped(b"<", &e, b"/>"),
+            Event::Empty(e) => self.write_wrapped(
+                b"<",
+                &e,
+                if self.config.add_space_before_slash_in_empty_elements {
+                    b" />"
+                } else {
+                    b"/>"
+                },
+            ),
             Event::Text(e) => {
                 next_should_line_break = false;
                 self.write(&e)
@@ -221,6 +297,7 @@ impl<W: Write> Writer<W> {
             Event::Decl(e) => self.write_wrapped(b"<?", &e, b"?>"),
             Event::PI(e) => self.write_wrapped(b"<?", &e, b"?>"),
             Event::DocType(e) => self.write_wrapped(b"<!DOCTYPE ", &e, b">"),
+            Event::GeneralRef(e) => self.write_wrapped(b"&", &e, b";"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
@@ -232,7 +309,7 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value).map_err(Into::into)
+        self.writer.write_all(value)
     }
 
     #[inline]
@@ -496,7 +573,7 @@ impl<'a, W> ElementWriter<'a, W> {
                         self.spaces.resize(indent, b' ');
                     }
                     self.start_tag.push_indent(&self.spaces[..indent]);
-                    self.start_tag.push_attr(attr.into());
+                    self.start_tag.push_attr(attr);
                     AttributeIndent::Spaces(indent)
                 }
                 // .new_line() was not called, but .with_attribute() was.
@@ -510,7 +587,7 @@ impl<'a, W> ElementWriter<'a, W> {
                 // New line was already written
                 AttributeIndent::WriteConfigured(indent) => {
                     self.start_tag.push_indent(i.additional(indent));
-                    self.start_tag.push_attr(attr.into());
+                    self.start_tag.push_attr(attr);
                     AttributeIndent::Configured(indent)
                 }
                 // .new_line() was not called, but .with_attribute() was.
@@ -589,7 +666,7 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct Indentation {
     /// todo: this is an awkward fit as it has no impact on indentation logic, but it is
     /// only applicable when an indentation exists. Potentially refactor later

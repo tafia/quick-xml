@@ -40,18 +40,14 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
         let (name, is_text) = match self.de.peek()? {
-            DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
-                false,
-            ),
+            DeEvent::Start(e) => (seed.deserialize(QNameDeserializer::from_elem(e)?)?, false),
             DeEvent::Text(_) => (
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
         };
@@ -136,7 +132,7 @@ where
         V: Visitor<'de>,
     {
         match self.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }

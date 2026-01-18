@@ -2,8 +2,7 @@ use criterion::{self, criterion_group, criterion_main, BenchmarkId, Criterion, T
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use serde::Deserialize;
-use serde_xml_rs;
+use std::hint::black_box;
 use xml::reader::{EventReader, XmlEvent};
 
 static RPM_PRIMARY: &str = include_str!("../../tests/documents/rpm_primary.xml");
@@ -33,7 +32,7 @@ static TEST_FILES: [(&str, &str, usize); 12] = [
     // medium length, mostly empty tags, a few short attributes per element, no escaping
     ("document.xml", DOCUMENT, 342),
     // medium length, lots of namespaces, no escaping
-    ("test_writer_ident.xml", TEST_WRITER_INDENT, 34),
+    ("test_writer_indent.xml", TEST_WRITER_INDENT, 34),
     // short, mix of attributes and text, lots of escapes
     ("sample_1.xml", SAMPLE_1, 15),
     // medium length, lots of attributes, short attributes, few escapes
@@ -60,7 +59,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut reader = Reader::from_str(input);
                     reader.config_mut().check_end_names = false;
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     loop {
                         match reader.read_event() {
                             Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
@@ -80,7 +79,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut reader = Reader::from_reader(input.as_bytes());
                     reader.config_mut().check_end_names = false;
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     let mut buf = Vec::new();
                     loop {
                         match reader.read_event_into(&mut buf) {
@@ -96,7 +95,29 @@ fn low_level_comparison(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("maybe_xml", filename),
+            BenchmarkId::new("maybe_xml:0.10", filename),
+            *data,
+            |b, input| {
+                use maybe_xml_0_10::token::Ty;
+                use maybe_xml_0_10::Reader;
+
+                b.iter(|| {
+                    let reader = Reader::from_str(input);
+
+                    let mut count = black_box(0);
+                    for token in reader.into_iter() {
+                        match token.ty() {
+                            Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
+                            _ => (),
+                        }
+                    }
+                    assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("maybe_xml:0.11", filename),
             *data,
             |b, input| {
                 use maybe_xml::token::Ty;
@@ -105,7 +126,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let reader = Reader::from_str(input);
 
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     for token in reader.into_iter() {
                         match token.ty() {
                             Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
@@ -124,7 +145,7 @@ fn low_level_comparison(c: &mut Criterion) {
         //     b.iter(|| {
         //         let mut r = Parser::new(input.as_bytes());
 
-        //         let mut count = criterion::black_box(0);
+        //         let mut count = black_box(0);
         //         loop {
         //             // Makes no progress if error is returned, so need unwrap()
         //             match r.next().unwrap().code() {
@@ -147,7 +168,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 use xmlparser::{Token, Tokenizer};
 
                 b.iter(|| {
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     for token in Tokenizer::from(input) {
                         match token {
                             Ok(Token::ElementStart { .. }) => count += 1,
@@ -159,6 +180,59 @@ fn low_level_comparison(c: &mut Criterion) {
             },
         );
 
+        // rxml does not support parsing comments yet, so disable those tests for it
+        // https://codeberg.org/jssfr/rxml/issues/24
+        if data.as_ptr() != TEST_WRITER_INDENT.as_ptr()
+            && data.as_ptr() != PLAYERS.as_ptr()
+            && data.as_ptr() != LINESCORE.as_ptr()
+            // contains processing instructions, which are not supported by rxml
+            && data.as_ptr() != SAMPLE_RSS.as_ptr()
+        {
+            group.bench_with_input(
+                BenchmarkId::new("rxml:borrowed", filename),
+                *data,
+                |b, input| {
+                    use rxml::{Event, Parse, Parser};
+
+                    b.iter(|| {
+                        let mut doc = input.as_bytes();
+                        let mut p = Parser::new();
+                        let mut count = black_box(0);
+                        while doc.len() > 0 {
+                            // true = doc contains the entire document
+                            match p.parse(&mut doc, true).unwrap() {
+                                Some(Event::StartElement(..)) => count += 1,
+                                None => break,
+                                _ => (),
+                            }
+                        }
+                        assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                    })
+                },
+            );
+
+            group.bench_with_input(
+                BenchmarkId::new("rxml:buffered", filename),
+                *data,
+                |b, input| {
+                    use rxml::{as_eof_flag, Event, Reader};
+                    use std::io::BufReader;
+
+                    b.iter(|| {
+                        let reader = BufReader::new(input.as_bytes());
+                        let mut reader = Reader::new(reader);
+                        let mut count = black_box(0);
+                        let result = as_eof_flag(reader.read_all(|event| match event {
+                            Event::StartElement(..) => count += 1,
+                            _ => (),
+                        }));
+                        assert_eq!(result.unwrap(), true); // true indicates eof
+                        assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                    })
+                },
+            );
+        }
+
         group.bench_with_input(BenchmarkId::new("RustyXml", filename), *data, |b, input| {
             use rusty_xml::{Event, Parser};
 
@@ -166,7 +240,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 let mut r = Parser::new();
                 r.feed_str(input);
 
-                let mut count = criterion::black_box(0);
+                let mut count = black_box(0);
                 for event in r {
                     match event.unwrap() {
                         Event::ElementStart(_) => count += 1,
@@ -187,7 +261,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut r = Parser::from_reader(input.as_bytes());
 
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     loop {
                         // Makes no progress if error is returned, so need unwrap()
                         match r.read_event().unwrap() {
@@ -202,38 +276,51 @@ fn low_level_comparison(c: &mut Criterion) {
         );
 
         group.bench_with_input(BenchmarkId::new("xml5ever", filename), *data, |b, input| {
-            use xml5ever::buffer_queue::BufferQueue;
-            use xml5ever::tokenizer::{TagKind, Token, TokenSink, XmlTokenizer};
+            use markup5ever::buffer_queue::BufferQueue;
+            use std::cell::Cell;
+            use xml5ever::tokenizer::{ProcessResult, TagKind, Token, TokenSink, XmlTokenizer};
 
-            struct Sink(usize);
+            struct Sink(Cell<usize>);
             impl TokenSink for Sink {
-                fn process_token(&mut self, token: Token) {
+                type Handle = ();
+
+                fn process_token(&self, token: Token) -> ProcessResult<Self::Handle> {
                     match token {
-                        Token::TagToken(tag) if tag.kind == TagKind::StartTag => self.0 += 1,
-                        Token::TagToken(tag) if tag.kind == TagKind::EmptyTag => self.0 += 1,
+                        Token::Tag(tag) if tag.kind == TagKind::StartTag => {
+                            self.0.set(self.0.get() + 1);
+                        }
+                        Token::Tag(tag) if tag.kind == TagKind::EmptyTag => {
+                            self.0.set(self.0.get() + 1);
+                        }
                         _ => (),
                     }
+                    ProcessResult::Continue
                 }
             }
 
             // Copied from xml5ever benchmarks
-            // https://github.com/servo/html5ever/blob/429f23943b24f739b78f4d703620d7b1b526475b/xml5ever/benches/xml5ever.rs
+            // https://github.com/servo/html5ever/blob/a7c9d989b9b3426288a4ed362fb4c4671b2dd8c2/xml5ever/benches/xml5ever.rs#L57-L68
             b.iter(|| {
-                let sink = criterion::black_box(Sink(0));
-                let mut tok = XmlTokenizer::new(sink, Default::default());
-                let mut buffer = BufferQueue::new();
+                let sink = black_box(Sink(Cell::new(0)));
+                let tok = XmlTokenizer::new(sink, Default::default());
+                let buffer = BufferQueue::default();
                 buffer.push_back(input.into());
-                let _ = tok.feed(&mut buffer);
+                let _ = tok.feed(&buffer);
                 tok.end();
 
-                assert_eq!(tok.sink.0, total_tags, "Overall tag count in {}", filename);
+                assert_eq!(
+                    tok.sink.0.into_inner(),
+                    total_tags,
+                    "Overall tag count in {}",
+                    filename
+                );
             })
         });
 
         group.bench_with_input(BenchmarkId::new("xml_rs", filename), *data, |b, input| {
             b.iter(|| {
                 let r = EventReader::new(input.as_bytes());
-                let mut count = criterion::black_box(0);
+                let mut count = black_box(0);
                 for e in r {
                     if let Ok(XmlEvent::StartElement { .. }) = e {
                         count += 1;
@@ -247,96 +334,5 @@ fn low_level_comparison(c: &mut Criterion) {
     group.finish();
 }
 
-/// Runs benchmarks for several XML libraries using serde deserialization
-#[allow(dead_code)] // We do not use structs
-fn serde_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("serde");
-
-    #[derive(Debug, Deserialize)]
-    struct Rss<E> {
-        channel: Channel<E>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Channel<E> {
-        title: String,
-        #[serde(rename = "item", default = "Vec::new")]
-        items: Vec<Item<E>>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Item<E> {
-        title: String,
-        link: String,
-        #[serde(rename = "pubDate")]
-        pub_date: String,
-        enclosure: Option<E>,
-    }
-
-    group.throughput(Throughput::Bytes(SAMPLE_RSS.len() as u64));
-
-    group.bench_with_input(
-        BenchmarkId::new("quick_xml", "sample_rss.xml"),
-        SAMPLE_RSS,
-        |b, input| {
-            #[derive(Debug, Deserialize)]
-            struct Enclosure {
-                #[serde(rename = "@url")]
-                url: String,
-
-                #[serde(rename = "@length")]
-                length: String,
-
-                #[serde(rename = "@type")]
-                typ: String,
-            }
-
-            b.iter(|| {
-                let rss: Rss<Enclosure> =
-                    criterion::black_box(quick_xml::de::from_str(input).unwrap());
-                assert_eq!(rss.channel.items.len(), 99);
-            })
-        },
-    );
-
-    /* NOTE: Most parts of deserializer are not implemented yet, so benchmark failed
-    group.bench_with_input(BenchmarkId::new("rapid-xml", "sample_rss.xml"), SAMPLE_RSS, |b, input| {
-        use rapid_xml::de::Deserializer;
-        use rapid_xml::parser::Parser;
-
-        b.iter(|| {
-            let mut r = Parser::new(input.as_bytes());
-            let mut de = Deserializer::new(&mut r).unwrap();
-            let rss = criterion::black_box(Rss::deserialize(&mut de).unwrap());
-            assert_eq!(rss.channel.items.len(), 99);
-        });
-    });*/
-
-    group.bench_with_input(
-        BenchmarkId::new("xml_rs", "sample_rss.xml"),
-        SAMPLE_RSS,
-        |b, input| {
-            // serde_xml_rs supports @-notation for attributes, but applies it only
-            // for serialization
-            #[derive(Debug, Deserialize)]
-            struct Enclosure {
-                url: String,
-                length: String,
-
-                #[serde(rename = "type")]
-                typ: String,
-            }
-
-            b.iter(|| {
-                let rss: Rss<Enclosure> =
-                    criterion::black_box(serde_xml_rs::from_str(input).unwrap());
-                assert_eq!(rss.channel.items.len(), 99);
-            })
-        },
-    );
-
-    group.finish();
-}
-
-criterion_group!(benches, low_level_comparison, serde_comparison);
+criterion_group!(benches, low_level_comparison);
 criterion_main!(benches);

@@ -1,7 +1,8 @@
 //! Manage xml character escapes
 
-use memchr::memchr2_iter;
+use memchr::{memchr, memchr2_iter, memchr3};
 use std::borrow::Cow;
+use std::fmt::{self, Write};
 use std::num::ParseIntError;
 use std::ops::Range;
 
@@ -147,12 +148,33 @@ pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'&'))
 }
 
+pub(crate) fn escape_char<W>(writer: &mut W, value: &str, from: usize, to: usize) -> fmt::Result
+where
+    W: fmt::Write,
+{
+    writer.write_str(&value[from..to])?;
+    match value.as_bytes()[to] {
+        b'<' => writer.write_str("&lt;")?,
+        b'>' => writer.write_str("&gt;")?,
+        b'\'' => writer.write_str("&apos;")?,
+        b'&' => writer.write_str("&amp;")?,
+        b'"' => writer.write_str("&quot;")?,
+
+        // This set of escapes handles characters that should be escaped
+        // in elements of xs:lists, because those characters works as
+        // delimiters of list elements
+        b'\t' => writer.write_str("&#9;")?,
+        b'\n' => writer.write_str("&#10;")?,
+        b'\r' => writer.write_str("&#13;")?,
+        b' ' => writer.write_str("&#32;")?,
+        _ => unreachable!("Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"),
+    }
+    Ok(())
+}
+
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-pub(crate) fn _escape<'a, F: Fn(u8) -> bool>(
-    raw: impl Into<Cow<'a, str>>,
-    escape_chars: F,
-) -> Cow<'a, str> {
+fn _escape<'a, F: Fn(u8) -> bool>(raw: impl Into<Cow<'a, str>>, escape_chars: F) -> Cow<'a, str> {
     let raw = raw.into();
     let bytes = raw.as_bytes();
     let mut escaped = None;
@@ -160,41 +182,21 @@ pub(crate) fn _escape<'a, F: Fn(u8) -> bool>(
     let mut pos = 0;
     while let Some(i) = iter.position(|&b| escape_chars(b)) {
         if escaped.is_none() {
-            escaped = Some(Vec::with_capacity(raw.len()));
+            escaped = Some(String::with_capacity(raw.len()));
         }
         let escaped = escaped.as_mut().expect("initialized");
         let new_pos = pos + i;
-        escaped.extend_from_slice(&bytes[pos..new_pos]);
-        match bytes[new_pos] {
-            b'<' => escaped.extend_from_slice(b"&lt;"),
-            b'>' => escaped.extend_from_slice(b"&gt;"),
-            b'\'' => escaped.extend_from_slice(b"&apos;"),
-            b'&' => escaped.extend_from_slice(b"&amp;"),
-            b'"' => escaped.extend_from_slice(b"&quot;"),
-
-            // This set of escapes handles characters that should be escaped
-            // in elements of xs:lists, because those characters works as
-            // delimiters of list elements
-            b'\t' => escaped.extend_from_slice(b"&#9;"),
-            b'\n' => escaped.extend_from_slice(b"&#10;"),
-            b'\r' => escaped.extend_from_slice(b"&#13;"),
-            b' ' => escaped.extend_from_slice(b"&#32;"),
-            _ => unreachable!(
-                "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"
-            ),
-        }
+        // SAFETY: It should fail only on OOM
+        escape_char(escaped, &raw, pos, new_pos).unwrap();
         pos = new_pos + 1;
     }
 
     if let Some(mut escaped) = escaped {
-        if let Some(raw) = bytes.get(pos..) {
-            escaped.extend_from_slice(raw);
+        if let Some(raw) = raw.get(pos..) {
+            // SAFETY: It should fail only on OOM
+            escaped.write_str(raw).unwrap();
         }
-        // SAFETY: we operate on UTF-8 input and search for an one byte chars only,
-        // so all slices that was put to the `escaped` is a valid UTF-8 encoded strings
-        // TODO: Can be replaced with `unsafe { String::from_utf8_unchecked() }`
-        // if unsafe code will be allowed
-        Cow::Owned(String::from_utf8(escaped).unwrap())
+        Cow::Owned(escaped)
     } else {
         raw
     }
@@ -207,7 +209,7 @@ pub(crate) fn _escape<'a, F: Fn(u8) -> bool>(
 ///
 /// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
-pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
+pub fn unescape(raw: &str) -> Result<Cow<'_, str>, EscapeError> {
     unescape_with(raw, resolve_predefined_entity)
 }
 
@@ -301,6 +303,219 @@ where
         Ok(Cow::Borrowed(raw))
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO: It would be better to reuse buffer after decoding if possible
+pub(crate) fn normalize_xml11_eols<'input>(text: &'input str) -> Cow<'input, str> {
+    let bytes = text.as_bytes();
+
+    // The following sequences of UTF-8 encoded input should be translated into
+    // a single `\n` (U+000a) character to normalize EOLs:
+    //
+    // |UTF-8   |String|
+    // |--------|------|
+    // |0d 0a   |\r\n  |
+    // |0d c2 85|\r\x85|
+    // |0d      |\r    |
+    // |c2 85   |\x85  |
+    // |e2 80 a8|\u2028|
+    if let Some(i) = memchr3(b'\r', 0xC2, 0xE2, bytes) {
+        // We found a character that requires normalization, so create new normalized
+        // string, put the prefix as is and then put normalized character
+        let mut normalized = String::with_capacity(text.len());
+        // NOTE: unsafe { text.get_unchecked(0..i) } could be used because
+        // we are sure that index within string
+        normalized.push_str(&text[0..i]);
+
+        let mut pos = normalize_xml11_eol_step(&mut normalized, text, i, '\n');
+        while let Some(i) = memchr3(b'\r', 0xC2, 0xE2, &bytes[pos..]) {
+            let index = pos + i;
+            // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
+            // we are sure that index within string
+            normalized.push_str(&text[pos..index]);
+            pos = normalize_xml11_eol_step(&mut normalized, text, index, '\n');
+        }
+        if let Some(rest) = text.get(pos..) {
+            normalized.push_str(rest);
+        }
+        return normalized.into();
+    }
+    Cow::Borrowed(text)
+}
+
+/// All line breaks MUST have been normalized on input to #xA as described
+/// in [2.11 End-of-Line Handling][eof], so the rest of this algorithm operates
+/// on text normalized in this way.
+///
+/// To simplify the tasks of applications, the XML processor MUST behave
+/// as if it normalized all line breaks in external parsed entities
+/// (including the document entity) on input, before parsing, by translating
+/// all of the following to a single #xA character (_which attribute normalization
+/// routine will replace by #x20 character_):
+///
+/// 1. the two-character sequence #xD #xA
+/// 2. the two-character sequence #xD #x85
+/// 3. the single character #x85
+/// 4. the single character #x2028
+/// 5. any #xD character that is not immediately followed by #xA or #x85.
+///
+/// The characters #x85 and #x2028 cannot be reliably recognized and translated
+/// until an entity's encoding declaration (if present) has been read.
+/// Therefore, it is a fatal error to use them within the XML declaration or text declaration.
+///
+/// Note, that this function cannot be used to normalize HTML values. The text in HTML
+/// normally is not normalized in any way; normalization is performed only in limited
+/// contexts and [only for] `\r\n` and `\r`.
+///
+/// # Parameters
+///
+/// - `normalized`: the string with the result of normalization
+/// - `input`: UTF-8 bytes of the string to be normalized
+/// - `index`: a byte index into `input` of character which is processed right now.
+///   It always points to the first byte of character in UTF-8 encoding
+/// - `ch`: a character that should be put to the string instead of newline sequence
+///
+/// Returns the index of next unprocessed byte in the `input`.
+///
+/// [eof]: https://www.w3.org/TR/xml11/#sec-line-ends
+/// [only for]: https://html.spec.whatwg.org/#normalize-newlines
+fn normalize_xml11_eol_step(normalized: &mut String, text: &str, index: usize, ch: char) -> usize {
+    let input = text.as_bytes();
+    match input[index] {
+        b'\r' => {
+            if index + 1 < input.len() {
+                let next = input[index + 1];
+                if next == b'\n' {
+                    normalized.push(ch);
+                    return index + 2; // skip \r\n
+                }
+                if next == 0xC2 {
+                    // UTF-8 encoding of #x85 character is [c2 85]
+                    if index + 2 < input.len() && input[index + 2] == 0x85 {
+                        normalized.push(ch);
+                    } else {
+                        normalized.push(ch);
+                        // NOTE: unsafe { text.get_unchecked(index..index + 3) } could be used because
+                        // we are sure that index within string
+                        normalized.push_str(&text[index + 1..index + 3]);
+                    }
+                    return index + 3; // skip \r + UTF-8 encoding of character (c2 xx)
+                }
+            }
+            normalized.push(ch);
+            index + 1 // skip \r
+        }
+        b'\n' => {
+            normalized.push(ch);
+            index + 1 // skip \n
+        }
+        // Start of UTF-8 encoding of #x85 character (c2 85)
+        0xC2 => {
+            if index + 1 < input.len() && input[index + 1] == 0x85 {
+                normalized.push(ch);
+            } else {
+                // NOTE: unsafe { text.get_unchecked(index..index + 2) } could be used because
+                // we are sure that index within string
+                normalized.push_str(&text[index..index + 2]);
+            }
+            index + 2 // skip UTF-8 encoding of character (c2 xx)
+        }
+        // Start of UTF-8 encoding of #x2028 character (e2 80 a8)
+        0xE2 => {
+            if index + 2 < input.len() && input[index + 1] == 0x80 && input[index + 2] == 0xA8 {
+                normalized.push(ch);
+            } else {
+                // NOTE: unsafe { text.get_unchecked(index..index + 3) } could be used because
+                // we are sure that index within string
+                normalized.push_str(&text[index..index + 3]);
+            }
+            index + 3 // skip UTF-8 encoding of character (e2 xx xx)
+        }
+
+        x => unreachable!(
+            "at {}: expected ''\\n', '\\r', '\\xC2', or '\\xE2', found '{}' / {} / `0x{:X}`",
+            index, x as char, x, x
+        ),
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO: It would be better to reuse buffer after decoding if possible
+pub(crate) fn normalize_xml10_eols<'input>(text: &'input str) -> Cow<'input, str> {
+    let bytes = text.as_bytes();
+
+    // The following sequences of UTF-8 encoded input should be translated into
+    // a single `\n` (U+000a) character to normalize EOLs:
+    //
+    // |UTF-8   |String|
+    // |--------|------|
+    // |0d 0a   |\r\n  |
+    // |0d      |\r    |
+    if let Some(i) = memchr(b'\r', bytes) {
+        // We found a character that requires normalization, so create new normalized
+        // string, put the prefix as is and then put normalized character
+        let mut normalized = String::with_capacity(text.len());
+        // NOTE: unsafe { text.get_unchecked(0..i) } could be used because
+        // we are sure that index within string
+        normalized.push_str(&text[0..i]);
+
+        let mut pos = normalize_xml10_eol_step(&mut normalized, bytes, i, '\n');
+        while let Some(i) = memchr(b'\r', &bytes[pos..]) {
+            let index = pos + i;
+            // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
+            // we are sure that index within string
+            normalized.push_str(&text[pos..index]);
+            pos = normalize_xml10_eol_step(&mut normalized, bytes, index, '\n');
+        }
+        if let Some(rest) = text.get(pos..) {
+            normalized.push_str(rest);
+        }
+        return normalized.into();
+    }
+    Cow::Borrowed(text)
+}
+
+/// The text in HTML normally is not normalized in any way; normalization is
+/// performed only in limited contexts and [only for] `\r\n` and `\r`.
+///
+/// # Parameters
+///
+/// - `normalized`: the string with the result of normalization
+/// - `input`: UTF-8 bytes of the string to be normalized
+/// - `index`: a byte index into `input` of character which is processed right now.
+///   It always points to the first byte of character in UTF-8 encoding
+/// - `ch`: a character that should be put to the string instead of newline sequence
+///
+/// [only for]: https://html.spec.whatwg.org/#normalize-newlines
+fn normalize_xml10_eol_step(
+    normalized: &mut String,
+    input: &[u8],
+    index: usize,
+    ch: char,
+) -> usize {
+    match input[index] {
+        b'\r' => {
+            normalized.push(ch);
+            if index + 1 < input.len() && input[index + 1] == b'\n' {
+                return index + 2; // skip \r\n
+            }
+            index + 1 // skip \r
+        }
+        b'\n' => {
+            normalized.push(ch);
+            index + 1 // skip \n
+        }
+
+        x => unreachable!(
+            "at {}: expected ''\\n' or '\\r', found '{}' / {} / `0x{:X}`",
+            index, x as char, x, x
+        ),
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Resolves predefined XML entities or all HTML5 entities depending on the feature
 /// [`escape-html`](https://docs.rs/quick-xml/latest/quick_xml/#escape-html).
@@ -1820,7 +2035,7 @@ pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     Some(s)
 }
 
-fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
+pub(crate) fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
     let code = if let Some(hex) = num.strip_prefix('x') {
         from_str_radix(hex, 16)?
     } else {
@@ -1842,5 +2057,232 @@ fn from_str_radix(src: &str, radix: u32) -> Result<u32, ParseCharRefError> {
         // We also handle `-` to be consistent in returned errors
         Some(b'+') | Some(b'-') => Err(ParseCharRefError::UnexpectedSign),
         _ => u32::from_str_radix(src, radix).map_err(ParseCharRefError::InvalidNumber),
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod normalization {
+    use super::*;
+
+    mod eol {
+        use super::*;
+
+        mod xml11 {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[test]
+            fn empty() {
+                assert_eq!(normalize_xml11_eols(""), "");
+            }
+
+            #[test]
+            fn already_normalized() {
+                assert_eq!(
+                    normalize_xml11_eols("\nalready \n\n normalized\n"),
+                    "\nalready \n\n normalized\n",
+                );
+            }
+
+            #[test]
+            fn cr_lf() {
+                assert_eq!(
+                    normalize_xml11_eols("\r\nsome\r\n\r\ntext"),
+                    "\nsome\n\ntext"
+                );
+            }
+
+            #[test]
+            fn cr_u0085() {
+                assert_eq!(
+                    normalize_xml11_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
+                    "\nsome\n\ntext",
+                );
+            }
+
+            #[test]
+            fn u0085() {
+                assert_eq!(
+                    normalize_xml11_eols("\u{0085}some\u{0085}\u{0085}text"),
+                    "\nsome\n\ntext",
+                );
+            }
+
+            #[test]
+            fn u2028() {
+                assert_eq!(
+                    normalize_xml11_eols("\u{2028}some\u{2028}\u{2028}text"),
+                    "\nsome\n\ntext",
+                );
+            }
+
+            #[test]
+            fn mixed() {
+                assert_eq!(
+                    normalize_xml11_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
+                    "\n\n\n\n\n\nsome\n\n\ntext",
+                );
+            }
+
+            #[test]
+            fn utf8_0xc2() {
+                // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
+                // Second byte follows the pattern 10xxxxxx
+                let first = std::str::from_utf8(&[0b11000010, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = std::str::from_utf8(&[0b11000010, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut utf8 = [0; 2];
+                for ch in first..=last {
+                    ch.encode_utf8(&mut utf8);
+                    let description = format!("UTF-8 [{:02x} {:02x}] = `{}`", utf8[0], utf8[1], ch);
+                    let input = std::str::from_utf8(&utf8).expect(&description);
+
+                    dbg!((input, &description));
+                    if ch == '\u{0085}' {
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
+                    } else {
+                        assert_eq!(normalize_xml11_eols(input), input, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 64);
+            }
+
+            #[test]
+            fn utf8_0x0d_0xc2() {
+                // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
+                // Second byte follows the pattern 10xxxxxx
+                let first = std::str::from_utf8(&[0b11000010, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = std::str::from_utf8(&[0b11000010, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut utf8 = [b'\r', 0, 0];
+                for ch in first..=last {
+                    ch.encode_utf8(&mut utf8[1..]);
+                    let description = format!(
+                        "UTF-8 [{:02x} {:02x} {:02x}] = `{}`",
+                        utf8[0], utf8[1], utf8[2], ch
+                    );
+                    let input = std::str::from_utf8(&utf8).expect(&description);
+
+                    dbg!((input, &description));
+                    if ch == '\u{0085}' {
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
+                    } else {
+                        // utf8 is copied, because [u8; 3] implements Copy
+                        let mut expected = utf8;
+                        expected[0] = b'\n';
+                        let expected = std::str::from_utf8(&expected).expect(&description);
+                        assert_eq!(normalize_xml11_eols(input), expected, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 64);
+            }
+
+            #[test]
+            fn utf8_0xe2() {
+                // All possible characters encoded in 3 bytes in UTF-8 which first byte is 0xE2 (0b11100010)
+                // Second and third bytes follows the pattern 10xxxxxx
+                let first = std::str::from_utf8(&[0b11100010, 0b10000000, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = std::str::from_utf8(&[0b11100010, 0b10111111, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut buf = [0; 3];
+                for ch in first..=last {
+                    let input = &*ch.encode_utf8(&mut buf);
+                    let buf = input.as_bytes();
+                    let description = format!(
+                        "UTF-8 [{:02x} {:02x} {:02x}] = `{}`",
+                        buf[0], buf[1], buf[2], ch
+                    );
+
+                    dbg!((input, &description));
+                    if ch == '\u{2028}' {
+                        assert_eq!(normalize_xml11_eols(input), "\n", "{}", description);
+                    } else {
+                        assert_eq!(normalize_xml11_eols(input), input, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 4096);
+            }
+        }
+
+        mod xml10 {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[test]
+            fn empty() {
+                assert_eq!(normalize_xml10_eols(""), "");
+            }
+
+            #[test]
+            fn already_normalized() {
+                assert_eq!(
+                    normalize_xml10_eols("\nalready \n\n normalized\n"),
+                    "\nalready \n\n normalized\n",
+                );
+            }
+
+            #[test]
+            fn cr_lf() {
+                assert_eq!(
+                    normalize_xml10_eols("\r\nsome\r\n\r\ntext"),
+                    "\nsome\n\ntext"
+                );
+            }
+
+            #[test]
+            fn cr_u0085() {
+                assert_eq!(
+                    normalize_xml10_eols("\r\u{0085}some\r\u{0085}\r\u{0085}text"),
+                    "\n\u{0085}some\n\u{0085}\n\u{0085}text",
+                );
+            }
+
+            #[test]
+            fn u0085() {
+                assert_eq!(
+                    normalize_xml10_eols("\u{0085}some\u{0085}\u{0085}text"),
+                    "\u{0085}some\u{0085}\u{0085}text",
+                );
+            }
+
+            #[test]
+            fn u2028() {
+                assert_eq!(
+                    normalize_xml10_eols("\u{2028}some\u{2028}\u{2028}text"),
+                    "\u{2028}some\u{2028}\u{2028}text",
+                );
+            }
+
+            #[test]
+            fn mixed() {
+                assert_eq!(
+                    normalize_xml10_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
+                    "\n\n\n\u{2028}\n\nsome\n\u{0085}\n\u{0085}text",
+                );
+            }
+        }
     }
 }

@@ -7,12 +7,12 @@ use crate::de::Text;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use crate::utils::CowRef;
+use crate::utils::{trim_xml_spaces, CowRef};
+use memchr::memchr;
 use serde::de::value::UnitDeserializer;
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
 };
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
@@ -24,9 +24,9 @@ macro_rules! deserialize_num {
             V: Visitor<'de>,
         {
             let text: &str = self.content.as_ref();
-            match text.parse() {
+            match trim_xml_spaces(text).parse() {
                 Ok(number) => visitor.$visit(number),
-                Err(_) => self.content.deserialize_str(visitor),
+                Err(_) => self.deserialize_str(visitor),
             }
         }
     };
@@ -145,7 +145,20 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        self.content.deserialize_bool(visitor)
+        let text = self.content.as_ref();
+        let text = if self.escaped {
+            unescape(text)?
+        } else {
+            Cow::Borrowed(text)
+        };
+        match trim_xml_spaces(&text) {
+            "1" | "true" => visitor.visit_bool(true),
+            "0" | "false" => visitor.visit_bool(false),
+            _ => match text {
+                Cow::Borrowed(_) => self.content.deserialize_str(visitor),
+                Cow::Owned(s) => visitor.visit_string(s),
+            },
+        }
     }
 
     deserialize_num!(deserialize_i8  => visit_i8);
@@ -158,10 +171,8 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     deserialize_num!(deserialize_u32 => visit_u32);
     deserialize_num!(deserialize_u64 => visit_u64);
 
-    serde_if_integer128! {
-        deserialize_num!(deserialize_i128 => visit_i128);
-        deserialize_num!(deserialize_u128 => visit_u128);
-    }
+    deserialize_num!(deserialize_i128 => visit_i128);
+    deserialize_num!(deserialize_u128 => visit_u128);
 
     deserialize_num!(deserialize_f32 => visit_f32);
     deserialize_num!(deserialize_f64 => visit_f64);
@@ -171,7 +182,24 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_str(visitor)
+        let text: &str = self.content.as_ref();
+        let text = if self.escaped {
+            unescape(text)?
+        } else {
+            Cow::Borrowed(text)
+        };
+        let trimmed = trim_xml_spaces(&text);
+        // If string is empty or contains only XML space characters (probably only one),
+        // deserialize as usual string and allow visitor to accept or reject it.
+        // Otherwise trim spaces and allow visitor to accept or reject the rest.
+        if trimmed.is_empty() {
+            match text {
+                Cow::Borrowed(_) => self.content.deserialize_str(visitor),
+                Cow::Owned(s) => visitor.visit_string(s),
+            }
+        } else {
+            visitor.visit_str(trimmed)
+        }
     }
 
     /// Supply to the visitor borrowed string, string slice, or owned string
@@ -434,7 +462,8 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                         // Skip additional bytes if we own data for next iteration, but deserialize from
                         // the borrowed data from our buffer
                         Content::Owned(s, skip) => {
-                            let item = s.split_at(skip + end).0;
+                            let rest = s.split_at(skip).1;
+                            let item = rest.split_at(end).0;
                             let result = seed.deserialize(AtomicDeserializer {
                                 content: CowRef::Slice(item),
                                 escaped: self.escaped,
@@ -543,14 +572,13 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     pub(crate) fn from_part(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
-        escaped: bool,
         decoder: Decoder,
     ) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
             Cow::Owned(slice) => CowRef::Slice(&slice[range]),
         };
-        Self::new(content, escaped, decoder)
+        Self::new(content, true, decoder)
     }
 
     /// Constructor for tests
@@ -607,51 +635,17 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     deserialize_primitive!(deserialize_u32);
     deserialize_primitive!(deserialize_u64);
 
-    serde_if_integer128! {
-        deserialize_primitive!(deserialize_i128);
-        deserialize_primitive!(deserialize_u128);
-    }
+    deserialize_primitive!(deserialize_i128);
+    deserialize_primitive!(deserialize_u128);
 
     deserialize_primitive!(deserialize_f32);
     deserialize_primitive!(deserialize_f64);
 
+    deserialize_primitive!(deserialize_char);
     deserialize_primitive!(deserialize_str);
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    /// Forwards deserialization to the [`Self::deserialize_str`]
-    #[inline]
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_bytes(visitor)
-    }
+    deserialize_primitive!(deserialize_string);
+    deserialize_primitive!(deserialize_bytes);
+    deserialize_primitive!(deserialize_byte_buf);
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -990,10 +984,8 @@ mod tests {
         deserialized_to!(u32_: u32 = "3" => 3);
         deserialized_to!(u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            deserialized_to!(i128_: i128 = "-2" => -2);
-            deserialized_to!(u128_: u128 = "2" => 2);
-        }
+        deserialized_to!(i128_: i128 = "-2" => -2);
+        deserialized_to!(u128_: u128 = "2" => 2);
 
         deserialized_to!(f32_: f32 = "1.23" => 1.23);
         deserialized_to!(f64_: f64 = "1.23" => 1.23);
@@ -1205,10 +1197,8 @@ mod tests {
         simple!(utf8, u32_: u32 = "3" => 3);
         simple!(utf8, u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            simple!(utf8, i128_: i128 = "-2" => -2);
-            simple!(utf8, u128_: u128 = "2" => 2);
-        }
+        simple!(utf8, i128_: i128 = "-2" => -2);
+        simple!(utf8, u128_: u128 = "2" => 2);
 
         simple!(utf8, f32_: f32 = "1.23" => 1.23);
         simple!(utf8, f64_: f64 = "1.23" => 1.23);
@@ -1295,10 +1285,8 @@ mod tests {
         utf16!(u32_: u32 = "3" => 3);
         utf16!(u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            utf16!(i128_: i128 = "-2" => -2);
-            utf16!(u128_: u128 = "2" => 2);
-        }
+        utf16!(i128_: i128 = "-2" => -2);
+        utf16!(u128_: u128 = "2" => 2);
 
         utf16!(f32_: f32 = "1.23" => 1.23);
         utf16!(f64_: f64 = "1.23" => 1.23);

@@ -5,7 +5,7 @@
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.write_str(&value.to_string())?;
+            self.write_fmt(format_args!("{}", value))?;
             Ok(self.writer)
         }
     };
@@ -25,16 +25,14 @@ macro_rules! write_primitive {
         write_primitive!(serialize_u32(u32));
         write_primitive!(serialize_u64(u64));
 
-        serde_if_integer128! {
-            write_primitive!(serialize_i128(i128));
-            write_primitive!(serialize_u128(u128));
-        }
+        write_primitive!(serialize_i128(i128));
+        write_primitive!(serialize_u128(u128));
 
         write_primitive!(serialize_f32(f32));
         write_primitive!(serialize_f64(f64));
 
         fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-            self.serialize_str(&value.to_string())
+            self.serialize_str(value.encode_utf8(&mut [0u8; 4]))
         }
 
         fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
@@ -84,7 +82,6 @@ use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
 use crate::writer::{Indentation, ToFmtWrite};
 use serde::ser::{self, Serialize};
-use serde::serde_if_integer128;
 use std::fmt::Write;
 use std::str::from_utf8;
 
@@ -147,7 +144,6 @@ where
 /// # use serde::Serialize;
 /// # use pretty_assertions::assert_eq;
 /// # use std::io::BufWriter;
-/// # use std::str;
 /// #[derive(Serialize)]
 /// struct Root<'a> {
 ///     #[serde(rename = "@attribute")]
@@ -167,7 +163,7 @@ where
 /// to_utf8_io_writer(&mut BufWriter::new(&mut buffer), &data).unwrap();
 ///
 /// assert_eq!(
-///     str::from_utf8(&buffer).unwrap(),
+///     std::str::from_utf8(&buffer).unwrap(),
 ///     // The root tag name is automatically deduced from the struct name
 ///     // This will not work for other types or struct with #[serde(flatten)] fields
 ///     "<Root attribute=\"attribute content\">\
@@ -321,6 +317,16 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Defines the format for text content serialization
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TextFormat {
+    /// Serialize as regular text content with escaping
+    Text,
+    /// Serialize as CDATA section without escaping
+    CData,
+}
+
 /// Defines which characters would be escaped in [`Text`] events and attribute
 /// values.
 ///
@@ -365,6 +371,26 @@ pub enum QuoteLevel {
     /// `<`      | `&lt;`
     /// `&`      | `&amp;`
     Minimal,
+}
+
+/// Specifies how empty elements are serialized.
+/// The default is self-closed with no space before the slash.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum EmptyElementHandling {
+    /// Empty elements will be written as `<element/>`. This is the default behavior.
+    #[default]
+    SelfClosed,
+
+    /// The same, as [`SelfClosed`], but an extra space will be written before
+    /// the slash, so empty elements will be written as `<element />`.
+    /// This is recommended by the [W3C guidelines] for XHTML.
+    ///
+    /// [`SelfClosed`]: Self::SelfClosed
+    /// [W3C guidelines]: https://www.w3.org/TR/xhtml1/#guidelines
+    SelfClosedWithSpace,
+
+    /// Empty elements will be expanded, as in: `<element></element>`.
+    Expanded,
 }
 
 /// Classification of the type written by the serializer.
@@ -426,6 +452,8 @@ macro_rules! forward {
 ///
 /// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
 const fn is_xml11_name_start_char(ch: char) -> bool {
+    // Not need to use macro when core primitives is enough
+    #[allow(clippy::match_like_matches_macro)]
     match ch {
         ':'
         | 'A'..='Z'
@@ -458,7 +486,7 @@ const fn is_xml11_name_char(ch: char) -> bool {
 
 /// Helper struct to self-defense from errors
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(self) struct XmlName<'n>(&'n str);
+struct XmlName<'n>(&'n str);
 
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
@@ -494,7 +522,7 @@ pub(crate) enum Indent<'i> {
 }
 
 impl<'i> Indent<'i> {
-    pub fn borrow(&mut self) -> Indent {
+    pub fn borrow(&mut self) -> Indent<'_> {
         match self {
             Self::None => Indent::None,
             Self::Owned(ref mut i) => Indent::Borrow(i),
@@ -558,8 +586,9 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                text_format: TextFormat::Text,
                 allow_primitive: true,
-                expand_empty_elements: false,
+                empty_element_handling: EmptyElementHandling::SelfClosed,
             },
             root_tag: None,
         }
@@ -624,14 +653,74 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                text_format: TextFormat::Text,
                 allow_primitive: true,
-                expand_empty_elements: false,
+                empty_element_handling: EmptyElementHandling::SelfClosed,
             },
-            root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
+            root_tag: root_tag.map(XmlName::try_from).transpose()?,
         })
     }
 
-    /// Enable or disable expansion of empty elements. Defaults to `false`.
+    /// Enable or disable expansion of empty elements. Defaults to [`EmptyElementHandling::SelfClosed`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::{Serializer, EmptyElementHandling};
+    /// #
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Struct {
+    ///     question: Option<String>,
+    /// }
+    ///
+    /// let data = Struct {
+    ///     question: None,
+    /// };
+    ///
+    /// {
+    ///     let mut buffer = String::new();
+    ///     let mut ser = Serializer::new(&mut buffer);
+    ///     ser.empty_element_handling(EmptyElementHandling::SelfClosed);
+    ///     data.serialize(ser).unwrap();
+    ///     assert_eq!(
+    ///         buffer,
+    ///         "<Struct><question/></Struct>"
+    ///     );
+    /// }
+    ///
+    /// {
+    ///     let mut buffer = String::new();
+    ///     let mut ser = Serializer::new(&mut buffer);
+    ///     ser.empty_element_handling(EmptyElementHandling::SelfClosedWithSpace);
+    ///     data.serialize(ser).unwrap();
+    ///     assert_eq!(
+    ///         buffer,
+    ///         "<Struct><question /></Struct>"
+    ///     );
+    /// }
+    ///
+    /// {
+    ///     let mut buffer = String::new();
+    ///     let mut ser = Serializer::new(&mut buffer);
+    ///     ser.empty_element_handling(EmptyElementHandling::Expanded);
+    ///     data.serialize(ser).unwrap();
+    ///     assert_eq!(
+    ///         buffer,
+    ///         "<Struct><question></question></Struct>"
+    ///     );
+    /// }
+    /// ```
+    pub fn empty_element_handling(&mut self, handling: EmptyElementHandling) -> &mut Self {
+        self.ser.empty_element_handling = handling;
+        self
+    }
+
+    /// Enable or disable expansion of empty elements (without adding space before `/>`).
+    ///
+    /// This is the historycally first way to configure empty element handling. You can use
+    /// [`empty_element_handling`](Self::empty_element_handling) for more control.
     ///
     /// # Examples
     ///
@@ -639,7 +728,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
     /// # use quick_xml::se::Serializer;
-    ///
+    /// #
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct Struct {
     ///     question: Option<String>,
@@ -650,7 +739,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// ser.expand_empty_elements(true);
     ///
     /// let data = Struct {
-    ///   question: None,
+    ///     question: None,
     /// };
     ///
     /// data.serialize(ser).unwrap();
@@ -660,7 +749,44 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// );
     /// ```
     pub fn expand_empty_elements(&mut self, expand: bool) -> &mut Self {
-        self.ser.expand_empty_elements = expand;
+        self.empty_element_handling(if expand {
+            EmptyElementHandling::Expanded
+        } else {
+            EmptyElementHandling::SelfClosed
+        })
+    }
+
+    /// Set the text format used for serializing text content.
+    ///
+    /// - [`TextFormat::Text`]: Regular XML escaping (default)
+    /// - [`TextFormat::CData`]: CDATA sections for text content
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::{Serializer, TextFormat};
+    ///
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Document {
+    ///     #[serde(rename = "$text")]
+    ///     content: String,
+    /// }
+    ///
+    /// let mut buffer = String::new();
+    /// let mut ser = Serializer::with_root(&mut buffer, Some("doc")).unwrap();
+    /// ser.text_format(TextFormat::CData);
+    ///
+    /// let data = Document {
+    ///     content: "Content with <markup> & entities".to_string(),
+    /// };
+    ///
+    /// data.serialize(ser).unwrap();
+    /// assert_eq!(buffer, "<doc><![CDATA[Content with <markup> & entities]]></doc>");
+    /// ```
+    pub fn text_format(&mut self, format: TextFormat) -> &mut Self {
+        self.ser.text_format = format;
         self
     }
 
@@ -734,10 +860,8 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     forward!(serialize_u32(u32));
     forward!(serialize_u64(u64));
 
-    serde_if_integer128! {
-        forward!(serialize_i128(i128));
-        forward!(serialize_u128(u128));
-    }
+    forward!(serialize_i128(i128));
+    forward!(serialize_u128(u128));
 
     forward!(serialize_f32(f32));
     forward!(serialize_f64(f64));

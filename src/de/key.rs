@@ -1,10 +1,11 @@
 use crate::de::simple_type::UnitOnly;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
+use crate::events::BytesStart;
 use crate::name::QName;
 use crate::utils::CowRef;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, Visitor};
-use serde::{forward_to_deserialize_any, serde_if_integer128};
+use serde::forward_to_deserialize_any;
 use std::borrow::Cow;
 
 macro_rules! deserialize_num {
@@ -41,10 +42,12 @@ fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, De
 /// - if it is an [`attribute`] name, put `@` in front of the identifier
 /// - if it is a namespace binding (`xmlns` or `xmlns:xxx`) put the decoded name
 ///   to the identifier
+/// - if it is an attribute in the `xml` namespace, put the decoded name
+///   to the identifier
 /// - put the decoded [`local_name()`] of a name to the identifier
 ///
-/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding`
-/// (where `[]` means optional element).
+/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding` or
+/// `xml:attribute` (where `[]` means optional element).
 ///
 /// The deserializer also supports deserializing names as other primitive types:
 /// - numbers
@@ -83,16 +86,20 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
         decoder: Decoder,
         key_buf: &'d mut String,
     ) -> Result<Self, DeError> {
-        key_buf.clear();
-        key_buf.push('@');
-
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         if name.as_namespace_binding().is_some() {
             decoder.decode_into(name.into_inner(), key_buf)?;
         } else {
-            let local = name.local_name();
-            decoder.decode_into(local.into_inner(), key_buf)?;
+            // https://github.com/tafia/quick-xml/issues/841
+            // we also want to map to the full name for `xml:xxx`, because `xml:xxx` attributes
+            // can apper only in this literal form, as `xml` prefix cannot be redeclared or unbound
+            let (local, prefix_opt) = name.decompose();
+            if prefix_opt.map_or(false, |prefix| prefix.is_xml()) {
+                decoder.decode_into(name.into_inner(), key_buf)?;
+            } else {
+                decoder.decode_into(local.into_inner(), key_buf)?;
+            }
         };
 
         Ok(Self {
@@ -101,20 +108,14 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     }
 
     /// Creates deserializer from name of an element
-    pub fn from_elem(name: CowRef<'i, 'd, [u8]>, decoder: Decoder) -> Result<Self, DeError> {
-        let local = match name {
-            CowRef::Input(borrowed) => match decode_name(QName(borrowed), decoder)? {
+    pub fn from_elem(start: &'d BytesStart<'i>) -> Result<Self, DeError> {
+        let local = match start.buf {
+            Cow::Borrowed(b) => match decode_name(QName(&b[..start.name_len]), start.decoder())? {
                 Cow::Borrowed(borrowed) => CowRef::Input(borrowed),
                 Cow::Owned(owned) => CowRef::Owned(owned),
             },
-            CowRef::Slice(borrowed) => match decode_name(QName(borrowed), decoder)? {
+            Cow::Owned(ref o) => match decode_name(QName(&o[..start.name_len]), start.decoder())? {
                 Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
-                Cow::Owned(owned) => CowRef::Owned(owned),
-            },
-            CowRef::Owned(owned) => match decode_name(QName(&owned), decoder)? {
-                // SAFETY: Because result is borrowed, no changes was done
-                // and we can safely unwrap here
-                Cow::Borrowed(_) => CowRef::Owned(String::from_utf8(owned).unwrap()),
                 Cow::Owned(owned) => CowRef::Owned(owned),
             },
         };
@@ -154,10 +155,8 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'de, 'd> {
     deserialize_num!(deserialize_u32, visit_u32);
     deserialize_num!(deserialize_u64, visit_u64);
 
-    serde_if_integer128! {
-        deserialize_num!(deserialize_i128, visit_i128);
-        deserialize_num!(deserialize_u128, visit_u128);
-    }
+    deserialize_num!(deserialize_i128, visit_i128);
+    deserialize_num!(deserialize_u128, visit_u128);
 
     deserialize_num!(deserialize_f32, visit_f32);
     deserialize_num!(deserialize_f64, visit_f64);
@@ -388,10 +387,8 @@ mod tests {
     deserialized_to!(u32_: u32 = "3" => 3);
     deserialized_to!(u64_: u64 = "3" => 3);
 
-    serde_if_integer128! {
-        deserialized_to!(i128_: i128 = "-2" => -2);
-        deserialized_to!(u128_: u128 = "2" => 2);
-    }
+    deserialized_to!(i128_: i128 = "-2" => -2);
+    deserialized_to!(u128_: u128 = "2" => 2);
 
     deserialized_to!(f32_: f32 = "1.23" => 1.23);
     deserialized_to!(f64_: f64 = "1.23" => 1.23);

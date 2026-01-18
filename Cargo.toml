@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.37.2"
+version = "0.39.0"
 description = "High performance xml reader and writer"
 edition = "2021"
 
@@ -22,12 +22,19 @@ include = ["src/*", "LICENSE-MIT.md", "README.md"]
 arbitrary = { version = "1", features = ["derive"], optional = true }
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-serde = { version = ">=1.0.139", optional = true }
+# 1.0.180 is the first version that requires compiler with integer128 support (1.26)
+# Because serde_if_integer128 is deprecated since 1.0.221, we do not use it anymore
+serde = { version = ">=1.0.180", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
 
 [dev-dependencies]
-criterion = "0.4"
+# msrv workflow uses `cargo check` which tries to resolve all dependencies, even
+# not used (for example, when calling `cargo check --lib` only `dependencies` is
+# required, `dev-dependencies` are not used). `criterion` 0.6 has msrv = 1.80, so
+# we cannot check minimal versions with it. We allow to use `criterion` 0.4 for that
+# See https://github.com/rust-lang/cargo/issues/10958
+criterion = ">=0.4,<0.9"
 pretty_assertions = "1.4"
 regex = "1"
 # https://github.com/serde-rs/serde/issues/1904 is fixed since 1.0.206
@@ -39,6 +46,11 @@ tokio-test = "0.4"
 
 [lib]
 bench = false
+
+[profile.bench]
+# For better information from cargo flamegraph
+debug = true
+lto = true
 
 [[bench]]
 name = "microbenches"
@@ -177,15 +189,15 @@ overlapped-lists = []
 ## This feature does NOT provide XML serializer or deserializer. You should use
 ## the `serialize` feature for that instead.
 # Cannot name "serde" to avoid clash with dependency.
-# "dep:" prefix only avalible from Rust 1.60
+# "dep:" prefix only available from Rust 1.60
 serde-types = ["serde/derive"]
 
 ## Enables support for [`serde`] serialization and deserialization. When this
 ## feature is enabled, quick-xml provides serializer and deserializer for XML.
 ##
-## This feature does NOT enables serializaton of the types inside quick-xml.
+## This feature does NOT enables serialization of the types inside quick-xml.
 ## If you need that, use the `serde-types` feature.
-serialize = ["serde"] # "dep:" prefix only avalible from Rust 1.60
+serialize = ["serde"] # "dep:" prefix only available from Rust 1.60
 
 [package.metadata.docs.rs]
 # document all features
@@ -212,11 +224,6 @@ required-features = ["escape-html"]
 path = "tests/html.rs"
 
 [[test]]
-name = "serde_roundtrip"
-required-features = ["serialize"]
-path = "tests/serde_roundtrip.rs"
-
-[[test]]
 name = "serde-de"
 required-features = ["serialize"]
 path = "tests/serde-de.rs"
@@ -232,14 +239,14 @@ required-features = ["serialize"]
 path = "tests/serde-de-seq.rs"
 
 [[test]]
+name = "serde-de-xsi"
+required-features = ["serialize"]
+path = "tests/serde-de-xsi.rs"
+
+[[test]]
 name = "serde-se"
 required-features = ["serialize"]
 path = "tests/serde-se.rs"
-
-[[test]]
-name = "serde-migrated"
-required-features = ["serialize"]
-path = "tests/serde-migrated.rs"
 
 [[test]]
 name = "serde-issues"

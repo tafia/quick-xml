@@ -218,6 +218,23 @@ fn issue429() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/497.
+#[test]
+fn issue497() {
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+    struct Player {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spawn_forced: Option<bool>,
+    }
+    let data = Player { spawn_forced: None };
+
+    let deserialize_buffer = to_string(&data).unwrap();
+    dbg!(&deserialize_buffer);
+
+    let p: Player = from_reader(deserialize_buffer.as_bytes()).unwrap();
+    assert_eq!(p, data);
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/500.
 #[test]
 fn issue500() {
@@ -551,5 +568,283 @@ fn issue683() {
             cancelReason: Some(918),
             locations: vec![ScheduleLocation::Destination],
         }
+    );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/841.
+/// `xml:`-attributes should be able to roundtrip serialization - deserialization
+#[test]
+fn issue841() {
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    struct ElementWithXmlLang {
+        #[serde(rename = "$text")]
+        content: String,
+        #[serde(rename = "@xml:lang")]
+        language: String,
+    }
+
+    let value = ElementWithXmlLang {
+        content: "content".to_string(),
+        language: "en-US".to_string(),
+    };
+    let sr = to_string(&value).unwrap();
+    let ds: ElementWithXmlLang = from_str(&sr).unwrap();
+    assert_eq!(ds, value);
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/868.
+#[test]
+fn issue868() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "root")]
+    pub struct Root {
+        #[serde(rename = "key")]
+        pub key: Key,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "key")]
+    pub struct Key {
+        #[serde(rename = "value")]
+        pub values: Option<Vec<Value>>,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "Value")]
+    pub struct Value {
+        #[serde(rename = "@id")]
+        pub id: String,
+
+        #[serde(rename = "$text")]
+        pub text: Option<String>,
+    }
+    let xml = r#"
+        <?xml version="1.0" encoding="utf-8"?>
+        <root>
+            <key>
+                <value id="1">text1</value>
+                <value id="2">text2</value>
+                <value id="3">text3</value>
+                <value id="4">text4</value>d
+                <value id="5">text5</value>
+                <value id="6">text6</value>
+            </key>
+        </root>"#;
+    let data = quick_xml::de::from_str::<Root>(xml);
+    #[cfg(feature = "overlapped-lists")]
+    assert_eq!(
+        data.unwrap(),
+        Root {
+            key: Key {
+                values: Some(vec![
+                    Value {
+                        id: "1".to_string(),
+                        text: Some("text1".to_string())
+                    },
+                    Value {
+                        id: "2".to_string(),
+                        text: Some("text2".to_string())
+                    },
+                    Value {
+                        id: "3".to_string(),
+                        text: Some("text3".to_string())
+                    },
+                    Value {
+                        id: "4".to_string(),
+                        text: Some("text4".to_string())
+                    },
+                    Value {
+                        id: "5".to_string(),
+                        text: Some("text5".to_string())
+                    },
+                    Value {
+                        id: "6".to_string(),
+                        text: Some("text6".to_string())
+                    },
+                ]),
+            },
+        }
+    );
+    #[cfg(not(feature = "overlapped-lists"))]
+    match data {
+        Err(quick_xml::DeError::Custom(e)) => assert_eq!(e, "duplicate field `value`"),
+        e => panic!(
+            r#"Expected `Err(Custom("duplicate field `value`"))`, but got `{:?}`"#,
+            e
+        ),
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/pull/888.
+#[cfg(feature = "encoding")]
+#[test]
+fn issue888() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct Root {
+        #[serde(rename = "@list")]
+        list: Vec<String>,
+    }
+
+    let xml = r#"
+        <?xml version="1.0" encoding="windows-1251"?>
+        <root list="текст требующий декодирования"/>"#;
+
+    let (xml, enc, _) = dbg!(encoding_rs::WINDOWS_1251.encode(xml));
+    assert_eq!(
+        enc,
+        encoding_rs::WINDOWS_1251,
+        "windows-1251 should be used for the test"
+    );
+
+    let data: Root = quick_xml::de::from_reader(xml.as_ref()).unwrap();
+    assert_eq!(
+        data,
+        Root {
+            list: vec![
+                // Translation from Russian:
+                "текст".to_string(),         // text
+                "требующий".to_string(),     // that-requires
+                "декодирования".to_string(), // decoding
+            ],
+        }
+    );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/928.
+#[cfg(feature = "serde-types")]
+#[test]
+fn issue928() {
+    use quick_xml::impl_deserialize_for_internally_tagged_enum;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Root {
+        #[serde(rename = "action")]
+        actions: Vec<Action>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    #[serde(rename_all = "kebab-case")]
+    enum Element {
+        Node {
+            #[serde(rename = "@id")]
+            id: u64,
+            #[serde(rename = "tag")]
+            tags: Option<Vec<Tag>>,
+        },
+        Way,
+        #[serde(other)]
+        Other,
+    }
+
+    #[derive(Debug, Deserialize, Clone, PartialEq)]
+    struct Tag {
+        #[serde(rename = "@k")]
+        k: String,
+        #[serde(rename = "@v")]
+        v: String,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct ElementHolder {
+        #[serde(rename = "$value")]
+        e: Element,
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum Action {
+        Create(ElementHolder),
+        Modify {
+            old: ElementHolder,
+            new: ElementHolder,
+        },
+        Delete {
+            old: ElementHolder,
+            new: ElementHolder,
+        },
+    }
+
+    impl_deserialize_for_internally_tagged_enum! {
+        Action, "@type": ["$value", "old", "new"],
+        ("create" => Create(ElementHolder)),
+        ("modify" => Modify {
+            old: ElementHolder,
+            new: ElementHolder
+        }),
+        ("delete" => Delete {
+            old: ElementHolder,
+            new: ElementHolder
+        })
+    }
+
+    assert_eq!(
+        from_str::<Root>(
+            r#"
+<root>
+  <action type="create">
+    <node id="123">
+      <tag k="key" v="value"/>
+    </node>
+  </action>
+  <action type="modify">
+    <old>
+      <node id="456">
+        <tag k="key" v="old_value"/>
+      </node>
+    </old>
+    <new>
+      <node id="456">
+        <tag k="key" v="new_value"/>
+      </node>
+    </new>
+  </action>
+  <action type="modify">
+    <old>
+      <way />
+    </old>
+    <new>
+      <way />
+    </new>
+  </action>
+</root>
+     "#
+        )
+        .unwrap(),
+        Root {
+            actions: vec![
+                Action::Create(ElementHolder {
+                    e: Element::Node {
+                        id: 123,
+                        tags: Some(vec![Tag {
+                            k: "key".to_string(),
+                            v: "value".to_string(),
+                        }]),
+                    },
+                }),
+                Action::Modify {
+                    old: ElementHolder {
+                        e: Element::Node {
+                            id: 456,
+                            tags: Some(vec![Tag {
+                                k: "key".to_string(),
+                                v: "old_value".to_string(),
+                            }]),
+                        },
+                    },
+                    new: ElementHolder {
+                        e: Element::Node {
+                            id: 456,
+                            tags: Some(vec![Tag {
+                                k: "key".to_string(),
+                                v: "new_value".to_string(),
+                            }]),
+                        },
+                    },
+                },
+                Action::Modify {
+                    old: ElementHolder { e: Element::Way },
+                    new: ElementHolder { e: Element::Way },
+                },
+            ],
+        },
     );
 }

@@ -31,8 +31,7 @@ mod externally_tagged {
     enum Node {
         Unit,
         Newtype(bool),
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             float: f64,
             string: String,
@@ -70,12 +69,6 @@ mod externally_tagged {
         },
     }
 
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    enum Workaround {
-        Tuple(f64, String),
-    }
-
     #[test]
     fn unit() {
         let data: Node = from_str("<Unit/>").unwrap();
@@ -90,8 +83,8 @@ mod externally_tagged {
 
     #[test]
     fn tuple_struct() {
-        let data: Workaround = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
-        assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+        let data: Node = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
+        assert_eq!(data, Node::Tuple(42.0, "answer".into()));
     }
 
     mod struct_ {
@@ -248,7 +241,6 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
                 assert_eq!(data, Text::Unit);
@@ -268,7 +260,7 @@ mod externally_tagged {
             #[test]
             fn text() {
                 let data: Text = from_str(" text ").unwrap();
-                assert_eq!(data, Text::Newtype("text".into()));
+                assert_eq!(data, Text::Newtype(" text ".into()));
             }
 
             #[test]
@@ -278,10 +270,9 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
-                assert_eq!(data, Text::Newtype("te  cdata  xt".into()));
+                assert_eq!(data, Text::Newtype(" te  cdata  xt ".into()));
             }
         }
 
@@ -310,7 +301,6 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" 4.2 <![CDATA[ cdata ]]>").unwrap();
                 assert_eq!(data, Text::Tuple(4.2, "cdata".into()));
@@ -333,10 +323,10 @@ mod externally_tagged {
                 match from_str::<Text>(" text ") {
                     Err(DeError::Custom(reason)) => assert_eq!(
                         reason,
-                        "invalid type: string \"text\", expected struct variant Text::Struct"
+                        "invalid type: string \" text \", expected struct variant Text::Struct"
                     ),
                     x => panic!(
-                        r#"Expected `Err(Custom("invalid type: string \"text\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Custom("invalid type: string \" text \", expected struct variant Text::Struct"))`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -361,10 +351,10 @@ mod externally_tagged {
                 match from_str::<Text>(" te <![CDATA[ cdata ]]> xt ") {
                     Err(DeError::Custom(reason)) => assert_eq!(
                         reason,
-                        "invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"
+                        "invalid type: string \" te  cdata  xt \", expected struct variant Text::Struct"
                     ),
                     x => panic!(
-                        r#"Expected `Err(Custom("invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Custom("invalid type: string \" te  cdata  xt \", expected struct variant Text::Struct"))`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -602,8 +592,7 @@ mod adjacently_tagged {
     enum Node {
         Unit,
         Newtype(bool),
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             float: f64,
             string: String,
@@ -626,6 +615,7 @@ mod adjacently_tagged {
     enum NodeAttrSimple {
         Unit,
         Newtype(bool),
+        Tuple(f64, String),
     }
 
     /// Type where all fields of struct variants and a tag represented by attributes
@@ -633,8 +623,7 @@ mod adjacently_tagged {
     #[derive(Debug, Deserialize, PartialEq)]
     #[serde(tag = "@tag", content = "content")]
     enum NodeAttrComplex {
-        //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-        // Tuple(f64, String),
+        Tuple(f64, String),
         Struct {
             #[serde(rename = "@float")]
             float: f64,
@@ -652,20 +641,6 @@ mod adjacently_tagged {
             #[serde(rename = "@string")]
             string: String,
         },
-    }
-
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(tag = "tag", content = "content")]
-    enum Workaround {
-        Tuple(f64, String),
-    }
-
-    /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-    #[derive(Debug, Deserialize, PartialEq)]
-    #[serde(tag = "@tag", content = "@content")]
-    enum WorkaroundAttr {
-        Tuple(f64, String),
     }
 
     mod unit {
@@ -716,22 +691,22 @@ mod adjacently_tagged {
 
         #[test]
         fn elements() {
-            let data: Workaround = from_str(
+            let data: Node = from_str(
                 r#"<root><tag>Tuple</tag><content>42</content><content>answer</content></root>"#,
             )
             .unwrap();
-            assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+            assert_eq!(data, Node::Tuple(42.0, "answer".into()));
         }
 
         #[test]
         #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
         fn attributes() {
-            let data: WorkaroundAttr = from_str(
+            let data: NodeAttrSimple = from_str(
                 // We cannot have two attributes with the same name, so both values stored in one attribute
                 r#"<root tag="Tuple" content="42 answer"/>"#,
             )
             .unwrap();
-            assert_eq!(data, WorkaroundAttr::Tuple(42.0, "answer".into()));
+            assert_eq!(data, NodeAttrSimple::Tuple(42.0, "answer".into()));
         }
     }
 

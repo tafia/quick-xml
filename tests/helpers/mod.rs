@@ -149,3 +149,291 @@ macro_rules! small_buffers_tests {
         }
     };
 }
+
+/// Tests for reader-errors and reader-dtd.
+#[macro_export]
+macro_rules! event_ok {
+    ($test:ident($xml:literal) => $pos:literal : $event:expr) => {
+        mod $test {
+            use super::*;
+
+            mod reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (reader.read_event().unwrap(), reader.buffer_position()),
+                        ($event, $pos)
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (
+                            reader.read_event_into(&mut buf).unwrap(),
+                            reader.buffer_position()
+                        ),
+                        ($event, $pos)
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (
+                            reader.read_event_into_async(&mut buf).await.unwrap(),
+                            reader.buffer_position()
+                        ),
+                        ($event, $pos)
+                    );
+                }
+            }
+
+            mod ns_reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (
+                            reader.read_resolved_event().unwrap().1,
+                            reader.buffer_position()
+                        ),
+                        ($event, $pos)
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (
+                            reader.read_resolved_event_into(&mut buf).unwrap().1,
+                            reader.buffer_position()
+                        ),
+                        ($event, $pos)
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        (
+                            reader
+                                .read_resolved_event_into_async(&mut buf)
+                                .await
+                                .unwrap()
+                                .1,
+                            reader.buffer_position()
+                        ),
+                        ($event, $pos)
+                    );
+                }
+            }
+        }
+    };
+}
+
+/// Tests for reader-errors and reader-dtd.
+#[macro_export]
+macro_rules! syntax_err {
+    ($test:ident($xml:literal) => $pos:expr, $cause:expr) => {
+        mod $test {
+            use super::*;
+
+            mod reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = Reader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_event()
+                            .expect("parser should return `Event::Text`"),
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_event() {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_event()
+                            .expect("parser should return `Event::Eof` after error"),
+                        Event::Eof
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_event_into(&mut buf)
+                            .expect("parser should return `Event::Text`"),
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_event_into(&mut buf) {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_event_into(&mut buf)
+                            .expect("parser should return `Event::Eof` after error"),
+                        Event::Eof
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_event_into_async(&mut buf)
+                            .await
+                            .expect("parser should return `Event::Text`"),
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_event_into_async(&mut buf).await {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_event_into_async(&mut buf)
+                            .await
+                            .expect("parser should return `Event::Eof` after error"),
+                        Event::Eof
+                    );
+                }
+            }
+
+            mod ns_reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = NsReader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_resolved_event()
+                            .expect("parser should return `Event::Text`")
+                            .1,
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_resolved_event() {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event()
+                            .expect("parser should return `Event::Eof` after error")
+                            .1,
+                        Event::Eof
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into(&mut buf)
+                            .expect("parser should return `Event::Text`")
+                            .1,
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_resolved_event_into(&mut buf) {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into(&mut buf)
+                            .expect("parser should return `Event::Eof` after error")
+                            .1,
+                        Event::Eof
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into_async(&mut buf)
+                            .await
+                            .expect("parser should return `Event::Text`")
+                            .1,
+                        Event::Text(BytesText::new("."))
+                    );
+                    match reader.read_resolved_event_into_async(&mut buf).await {
+                        Err(Error::Syntax(cause)) => assert_eq!(
+                            (cause, reader.error_position(), reader.buffer_position()),
+                            ($cause, 1, $pos),
+                        ),
+                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into_async(&mut buf)
+                            .await
+                            .expect("parser should return `Event::Eof` after error")
+                            .1,
+                        Event::Eof
+                    );
+                }
+            }
+        }
+    };
+    ($test:ident($xml:literal) => $cause:expr) => {
+        syntax_err!($test($xml) => $xml.len() as u64, $cause);
+    };
+}

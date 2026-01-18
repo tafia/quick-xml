@@ -81,7 +81,7 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub(crate) fn utf8() -> Self {
+    pub(crate) const fn utf8() -> Self {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: UTF_8,
@@ -89,7 +89,7 @@ impl Decoder {
     }
 
     #[cfg(all(test, feature = "encoding", feature = "serialize"))]
-    pub(crate) fn utf16() -> Self {
+    pub(crate) const fn utf16() -> Self {
         Decoder { encoding: UTF_16LE }
     }
 }
@@ -148,6 +148,30 @@ impl Decoder {
             Cow::Borrowed(bytes) => self.decode(bytes),
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
             Cow::Owned(bytes) => Ok(self.decode(bytes)?.into_owned().into()),
+        }
+    }
+
+    /// Decodes the `Cow` buffer, normalizes XML EOLs, preserves the lifetime
+    pub(crate) fn content<'b>(
+        &self,
+        bytes: &Cow<'b, [u8]>,
+        normalize_eol: impl Fn(&str) -> Cow<str>,
+    ) -> Result<Cow<'b, str>, EncodingError> {
+        match bytes {
+            Cow::Borrowed(bytes) => {
+                let text = self.decode(bytes)?;
+                match normalize_eol(&text) {
+                    // If text borrowed after normalization that means that it's not changed
+                    Cow::Borrowed(_) => Ok(text),
+                    Cow::Owned(s) => Ok(Cow::Owned(s)),
+                }
+            }
+            Cow::Owned(bytes) => {
+                let text = self.decode(bytes)?;
+                let text = normalize_eol(&text);
+                // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+                Ok(text.into_owned().into())
+            }
         }
     }
 }
@@ -224,6 +248,8 @@ pub fn decode_into(
 /// |`3C 3F 78 6D`|UTF-8, ISO 646, ASCII, some part of ISO 8859, Shift-JIS, EUC, or any other 7-bit, 8-bit, or mixed-width encoding which ensures that the characters of ASCII have their normal positions, width, and values; the actual encoding declaration must be read to detect which of these applies, but since all of these encodings use the same bit patterns for the relevant ASCII characters, the encoding declaration itself may be read reliably
 #[cfg(feature = "encoding")]
 pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
+    // Prevent suggesting "<?xm". We want to have the same formatted lines for all arms.
+    #[allow(clippy::byte_char_slices)]
     match bytes {
         // with BOM
         _ if bytes.starts_with(UTF16_BE_BOM) => Some((UTF_16BE, 2)),

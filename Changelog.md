@@ -1,10 +1,11 @@
 > Release checklist (minimal list of actions for cutting a release):
+> 0. Check if dependencies in child projects (mostly `compare`) need to be updated and update them
 > 1. `$env:RUSTDOCFLAGS="--cfg docsrs"; cargo +nightly doc --all-features` and check generated documentation for missing / unclear things
 > 2. Update version in `Cargo.toml`
 > 3. Update `Changelog.md` with date of release, add new empty Unreleased headings
 > 4. Commit changes with message "Release x.y.z"
 > 5. `cargo package` for final check
-> 6. Push `master` to my fork, wait while CI pass. Repeat with force pushs if necessary
+> 6. Push `master` to my fork, wait while CI pass. Repeat with force pushes if necessary
 > 7. `cargo publish`
 > 8. Create and push tag `vx.y.z` and push `master` to upstream
 > 9. Create a Release on GitHub (in GitHub UI)
@@ -22,6 +23,212 @@
 [#843]: https://github.com/tafia/quick-xml/pull/843
 
 ### Misc Changes
+
+
+## 0.39.0 -- 2026-01-11
+
+Added a way to configure `Writer`. Now all configuration is contained in the `writer::Config`
+struct and can be applied at once. When `serde-types` feature is enabled, configuration is serializable.
+
+### New Features
+
+- [#846]: Add methods `config()` and `config_mut()` to inspect and change the writer configuration.
+- [#846]: Add ability to write space before `/>` in self-closed tags for maximum compatibility with
+  XHTML.
+- [#846]: Add method `empty_element_handling()` as a more powerful alternative to `expand_empty_elements()`
+  in `Serializer`.
+- [#929]: Allow to pass list of field names to `impl_deserialize_for_internally_tagged_enum!` macro
+  which is required if you enum variants contains `$value` fields.
+
+### Bug Fixes
+
+- [#923]: Implement correct skipping of well-formed DTD.
+
+### Misc Changes
+
+- [#908]: Increase minimal supported `serde` version from 1.0.139 to 1.0.180.
+- [#913]: Deprecate `.prefixes()`, `.resolve()`, `.resolve_attribute()`, and `.resolve_element()`
+  of `NsReader`. Use `.resolver().bindings()` and `.resolver().resolve()` methods instead.
+- [#913]: `Attributes::has_nil` now accepts `NamespaceResolver` instead of `Reader<R>`.
+- [#924]: (breaking change) Split `SyntaxError::UnclosedPIOrXmlDecl` into `UnclosedPI` and
+  `UnclosedXmlDecl` for more precise error reporting.
+- [#924]: (breaking change) `Parser::eof_error` now takes `&self` and content `&[u8]` parameters.
+- [#926]: (breaking change) Split `SyntaxError::UnclosedTag` into `UnclosedTag`,
+  `UnclosedSingleQuotedAttributeValue` and `UnclosedDoubleQuotedAttributeValue` for more precise error reporting.
+
+[#846]: https://github.com/tafia/quick-xml/issues/846
+[#908]: https://github.com/tafia/quick-xml/pull/908
+[#913]: https://github.com/tafia/quick-xml/pull/913
+[#923]: https://github.com/tafia/quick-xml/issues/923
+[#924]: https://github.com/tafia/quick-xml/pull/924
+[#926]: https://github.com/tafia/quick-xml/issues/926
+[#929]: https://github.com/tafia/quick-xml/pull/929
+
+
+## 0.38.4 -- 2025-11-11
+
+### New Features
+
+- [#353]: Add ability to serialize textual content as CDATA sections in `Serializer`.
+  Everywhere where the text node may be created, a CDATA section(s) could be produced instead.
+  See the new [`Serializer::text_format()`] method.
+
+### Bug Fixes
+
+- [#912]: Fix deserialization of numbers, booleans and characters that is space-wrapped, for example
+  `<int>  42  </int>`. That space characters are usually indent added during serialization and
+  other XML serialization libraries trims them
+
+### Misc Changes
+
+- [#901]: Fix running tests on 32-bit architecture
+- [#909]: Avoid some allocations in the `Serializer`
+
+[#353]: https://github.com/tafia/quick-xml/issues/353
+[#901]: https://github.com/tafia/quick-xml/pull/901
+[#909]: https://github.com/tafia/quick-xml/pull/909
+[#912]: https://github.com/tafia/quick-xml/pull/912
+[`Serializer::text_format()`]: https://docs.rs/quick-xml/0.38.4/quick_xml/se/struct.Serializer.html#method.text_format
+
+
+## 0.38.3 -- 2025-08-24
+
+### Bug Fixes
+
+- [#895]: Fix incorrect normalization of `\rX` EOL sequences where `X` is a char which is
+  UTF-8 encoded as [c2 xx], except [c2 85].
+
+### Misc Changes
+
+- [#895]: Add new `xml10_content()` and `xml11_content()` methods which behaves the same as
+  `html_content()` and `xml_content()` methods, but express intention more clearly.
+
+[#895]: https://github.com/tafia/quick-xml/pull/895
+
+
+## 0.38.2 -- 2025-08-19
+
+### New Features
+
+- [#893]: Implement `FusedIterator` for `NamespaceBindingsIter`.
+- [#893]: Make `NamespaceResolver` public.
+- [#893]: Add `NsReader::resolver()` for access to namespace resolver.
+
+### Misc Changes
+
+- [#893]: Rename `PrefixIter` to `NamespaceBindingsIter`.
+
+[#893]: https://github.com/tafia/quick-xml/pull/893
+
+
+## 0.38.1 -- 2025-08-03
+
+### Important changes
+
+To get text in events according to the XML specification (normalized EOLs) use the
+new methods `xml_content()` instead of `decode()`. `Deserializer` uses new method
+automatically.
+
+### New Features
+
+- [#882]: Add new methods to create `Deserializer` from existing `NsReader`:
+  - `Deserializer::borrowing`
+  - `Deserializer::borrowing_with_resolver`
+  - `Deserializer::buffering`
+  - `Deserializer::buffering_with_resolver`
+- [#878]: Add ability to serialize structs in `$value` fields. The struct name will
+  be used as a tag name. Previously only enums was allowed there.
+- [#806]: Add `BytesText::xml_content`, `BytesCData::xml_content` and `BytesRef::xml_content`
+  methods which returns XML EOL normalized strings.
+- [#806]: Add `BytesText::html_content`, `BytesCData::html_content` and `BytesRef::html_content`
+  methods which returns HTML EOL normalized strings.
+
+### Bug Fixes
+
+- [#806]: Properly normalize EOL characters in `Deserializer`.
+- [#888]: Properly split attribute values by items when deserialize attribute into
+  list of values and attribute requires decoding.
+
+[#806]: https://github.com/tafia/quick-xml/issues/806
+[#878]: https://github.com/tafia/quick-xml/pull/878
+[#882]: https://github.com/tafia/quick-xml/pull/882
+[#888]: https://github.com/tafia/quick-xml/pull/888
+
+
+## 0.38.0 -- 2025-06-28
+
+### Significant changes
+
+Now references to entities (as predefined, such as `&lt;`, as user-defined) reported as a new
+`Event::GeneralRef`.
+Caller can parse the content of the entity and stream events from it as it is required by the
+XML specification. See the updated `custom_entities` example!
+
+Implement whitespace behavior in the standard in `Deserializer`, which says string primitive
+types should preserve whitespace, while all other primitives have collapse behavior.
+
+### New Features
+
+- [#863]: Add `Attributes::into_map_access(&str)` and `Attributes::into_deserializer()` when `serialize`
+  feature is enabled. This will allow do deserialize serde types right from attributes. Both methods
+  returns the same type which implements serde's `Deserializer` and `MapAccess` traits.
+- [#766]: Allow to parse resolved entities as XML fragments and stream events from them.
+- [#766]: Added new event `Event::GeneralRef` with content of [general entity].
+- [#766]: Added new configuration option `allow_dangling_amp` which allows to have
+  a `&` not followed by `;` in the textual data which is required for some applications
+  for compatibility reasons.
+- [#285]: Add ability to `quick_xml::de::Text` to access text with trimmed spaces
+
+### Bug Fixes
+
+- [#868]: Allow to have both `$text` and `$value` special fields in one struct. Previously
+  any text will be recognized as `$value` field even when `$text` field is also presented.
+- [#868]: Skip text events when deserialize a sequence of items overlapped with text (including CDATA).
+- [#841]: Do not strip `xml` prefix from the attributes when map them to struct fields in `Deserializer`.
+
+### Misc Changes
+
+- [#863]: Remove `From<QName<'a>> for BytesStart<'a>` because now `BytesStart` stores the
+  encoding in which its data is encoded, but `QName` is a simple wrapper around byte slice.
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
+
+[#285]: https://github.com/tafia/quick-xml/issues/285
+[#766]: https://github.com/tafia/quick-xml/pull/766
+[#841]: https://github.com/tafia/quick-xml/issues/841
+[#863]: https://github.com/tafia/quick-xml/pull/863
+[#868]: https://github.com/tafia/quick-xml/pull/868
+[general entity]: https://www.w3.org/TR/xml11/#gen-entity
+
+
+## 0.37.5 -- 2025-04-27
+
+### New Features
+
+- [#857]: Add `BytesCData::decode()`.
+
+[#857]: https://github.com/tafia/quick-xml/pull/857
+
+
+## 0.37.4 -- 2025-04-01
+
+### Misc Changes
+
+- [#852]: Add `Debug` impl for `NsReader` and `Reader` and `Clone` impl for `NsReader`
+
+[#852]: https://github.com/tafia/quick-xml/pull/852
+
+
+## 0.37.3 -- 2025-03-25
+
+### New Features
+
+- [#850]: Add `Attribute::as_bool()` method to get an attribute value as a boolean.
+- [#850]: Add `Attributes::has_nil()` method to check if attributes has `xsi:nil` attribute set to `true`.
+- [#497]: Handle `xsi:nil` attribute in serde Deserializer to better process optional fields.
+
+[#497]: https://github.com/tafia/quick-xml/issues/497
+[#850]: https://github.com/tafia/quick-xml/pull/850
 
 
 ## 0.37.2 -- 2024-12-29

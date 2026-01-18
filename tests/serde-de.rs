@@ -5,7 +5,6 @@ use quick_xml::DeError;
 use pretty_assertions::assert_eq;
 
 use serde::de::IgnoredAny;
-use serde::serde_if_integer128;
 use serde::Deserialize;
 
 mod serde_helpers;
@@ -112,10 +111,8 @@ mod trivial {
             eof!(u64_:   u64   = $value);
             eof!(usize_: usize = $value);
 
-            serde_if_integer128! {
-                eof!(u128_: u128 = $value);
-                eof!(i128_: i128 = $value);
-            }
+            eof!(u128_: u128 = $value);
+            eof!(i128_: i128 = $value);
 
             eof!(f32_: f32 = $value);
             eof!(f64_: f64 = $value);
@@ -178,17 +175,160 @@ mod trivial {
     }
 
     macro_rules! in_struct {
+        // string, char and bool have some specifics in some tests
+        (string: $type:ty = $value:expr, $expected:literal) => {
+            in_struct!(
+                string: $type = $value, $expected.into(), concat!(" \n\t", $expected, " \n\t").into();
+
+                /// Try to deserialize type from a root tag without data or with only spaces
+                #[test]
+                fn wrapped_empty() {
+                    let item: $type = from_str("<root/>").unwrap();
+                    let expected: $type = "".into();
+                    assert_eq!(item, expected);
+
+                    let item: $type = from_str("<root> \r\n\t</root>").unwrap();
+                    // \r\n normalized to \n
+                    let expected: $type = " \n\t".into();
+                    assert_eq!(item, expected);
+                }
+
+                #[test]
+                fn field_empty() {
+                    let item: Field<$type> = from_str("<root><value/></root>").unwrap();
+                    assert_eq!(item, Field { value: "".into() });
+
+                    let item: Field<$type> = from_str("<root><value> \r\n\t</value></root>").unwrap();
+                    // \r\n normalized to \n
+                    assert_eq!(item, Field { value: " \n\t".into() });
+                }
+            );
+        };
+        (char_: $type:ty = $value:expr, $expected:expr) => {
+            in_struct!(
+                char_: $type = $value, $expected, $expected;
+
+                /// Try to deserialize type from a root tag without data or with only spaces
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<$type>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<$type>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string " \n\t", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<$type>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string "", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<Field<$type>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid value: string " \n\t", expected a character"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
+        ($name:ident: bool = $value:expr, $expected:expr) => {
+            in_struct!(
+                $name: bool = $value, $expected, $expected;
+
+                /// Try to deserialize type from a root tag without data or with only spaces
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<bool>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<bool>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string " \n\t", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<bool>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string "", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<Field<bool>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, r#"invalid type: string " \n\t", expected a boolean"#),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
         ($name:ident: $type:ty = $value:expr, $expected:expr) => {
+            in_struct!(
+                $name: $type = $value, $expected, $expected;
+
+                /// Try to deserialize type from a root tag without data or with only spaces
+                #[test]
+                fn wrapped_empty() {
+                    match from_str::<$type>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<$type>("<root> \r\n\t</root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string " \n\t", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
+                #[test]
+                fn field_empty() {
+                    match from_str::<Field<$type>>("<root><value/></root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string "", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<Field<$type>>("<root><value> \r\n\t</value></root>") {
+                        // \r\n normalized to \n
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, concat!(r#"invalid type: string " \n\t", expected "#, stringify!($type))),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+            );
+        };
+        ($name:ident: $type:ty = $value:expr, $expected:expr, $expected_with_indent:expr; $($specific_tests:item)*) => {
             mod $name {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
+                $($specific_tests)*
+
+                /// Try to deserialize type wrapped in a tag, optionally surround with spaces
                 #[test]
-                fn naked() {
+                fn wrapped() {
                     let item: $type = from_str(&format!("<root>{}</root>", $value)).unwrap();
                     let expected: $type = $expected;
                     assert_eq!(item, expected);
 
+                    let item: $type =
+                        from_str(&format!("<root> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    let expected: $type = $expected_with_indent;
+                    assert_eq!(item, expected);
+                }
+
+                /// Try to deserialize type wrapped in two tags
+                #[test]
+                fn nested() {
                     match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
@@ -198,6 +338,22 @@ mod trivial {
                         ),
                     }
 
+                    match from_str::<$type>(&format!(
+                        "<root> \r\n\t<nested>{}</nested> \r\n\t</root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                /// Try to deserialize type wrapped in a tag with another tag after content
+                #[test]
+                fn tag_after() {
                     match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
@@ -207,7 +363,10 @@ mod trivial {
                         ),
                     }
 
-                    match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
+                    match from_str::<$type>(&format!(
+                        "<root> \r\n\t{} \r\n\t<something-else/></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
@@ -217,12 +376,45 @@ mod trivial {
                     }
                 }
 
+                /// Try to deserialize type wrapped in a tag with another tag before content
+                #[test]
+                fn tag_before() {
+                    match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<$type>(&format!(
+                        "<root><something-else/> \r\n\t{} \r\n\t</root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                /// Try to deserialize type which is a field of a struct
                 #[test]
                 fn field() {
                     let item: Field<$type> =
                         from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
                     assert_eq!(item, Field { value: $expected });
 
+                    let item: Field<$type> =
+                        from_str(&format!("<root><value> \r\n\t{} \r\n\t</value></root>", $value)).unwrap();
+                    assert_eq!(item, Field { value: $expected_with_indent });
+                }
+
+                #[test]
+                fn field_nested() {
                     match from_str::<Field<$type>>(&format!(
                         "<root><value><nested>{}</nested></value></root>",
                         $value
@@ -236,6 +428,21 @@ mod trivial {
                     }
 
                     match from_str::<Field<$type>>(&format!(
+                        "<root><value> \r\n\t<nested>{}</nested> \r\n\t</value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn field_tag_after() {
+                    match from_str::<Field<$type>>(&format!(
                         "<root><value>{}<something-else/></value></root>",
                         $value
                     )) {
@@ -248,7 +455,7 @@ mod trivial {
                     }
 
                     match from_str::<Field<$type>>(&format!(
-                        "<root><value><something-else/>{}</value></root>",
+                        "<root><value> \r\n\t{} \r\n\t<something-else/></value></root>",
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
@@ -260,6 +467,46 @@ mod trivial {
                     }
                 }
 
+                #[test]
+                fn field_tag_before() {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><something-else/>{}</value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><something-else/> \r\n\t{} \r\n\t</value></root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn text_empty() {
+                    match from_str::<Trivial<$type>>("<root/>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, "missing field `$text`"),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+
+                    match from_str::<Trivial<$type>>("<root> \r\n\t</root>") {
+                        Err(DeError::Custom(msg)) => assert_eq!(msg, "missing field `$text`"),
+                        x => panic!("Expected `Err(Custom(_))`, but got `{:?}`", x),
+                    }
+                }
+
                 /// Tests deserialization from top-level tag content: `<root>...content...</root>`
                 #[test]
                 fn text() {
@@ -267,18 +514,13 @@ mod trivial {
                         from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    // Unlike `naked` test, here we have a struct that is serialized to XML with
-                    // an implicit field `$text` and some other field "something-else" which not interested
-                    // for us in the Trivial structure. If you want the same behavior as for naked primitive,
-                    // use `$value` field which would consume all data, unless a dedicated field would present
                     let item: Trivial<$type> =
-                        from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
-                    assert_eq!(item, Trivial { value: $expected });
+                        from_str(&format!("<root> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
+                }
 
-                    let item: Trivial<$type> =
-                        from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
-                    assert_eq!(item, Trivial { value: $expected });
-
+                #[test]
+                fn text_nested() {
                     match from_str::<Trivial<$type>>(&format!(
                         "<root><nested>{}</nested></root>",
                         $value
@@ -290,6 +532,44 @@ mod trivial {
                             x
                         ),
                     }
+
+                    match from_str::<Trivial<$type>>(&format!(
+                        "<root> \r\n\t<nested>{}</nested> \r\n\t</root>",
+                        $value
+                    )) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
+                        x => panic!(
+                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn text_tag_after() {
+                    // Unlike `wrapped` test, here we have a struct that is serialized to XML with
+                    // an implicit field `$text` and some other field "something-else" which not interested
+                    // for us in the Trivial structure. If you want the same behavior as for naked primitive,
+                    // use `$value` field which would consume all data, unless a dedicated field would present
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root> \r\n\t{} \r\n\t<something-else/></root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
+                }
+
+                #[test]
+                fn text_tag_before() {
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root><something-else/> \r\n\t{} \r\n\t</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected_with_indent });
                 }
             }
         };
@@ -322,18 +602,16 @@ mod trivial {
         in_struct!(i16_:   i16   = "-4200", -4200i16);
         in_struct!(i32_:   i32   = "-42000000", -42000000i32);
         in_struct!(i64_:   i64   = "-42000000000000", -42000000000000i64);
-        in_struct!(isize_: isize = "-42000000000000", -42000000000000isize);
+        in_struct!(isize_: isize = "-42000000", -42000000isize);
 
         in_struct!(u8_:    u8    = "42", 42u8);
         in_struct!(u16_:   u16   = "4200", 4200u16);
         in_struct!(u32_:   u32   = "42000000", 42000000u32);
         in_struct!(u64_:   u64   = "42000000000000", 42000000000000u64);
-        in_struct!(usize_: usize = "42000000000000", 42000000000000usize);
+        in_struct!(usize_: usize = "42000000", 42000000usize);
 
-        serde_if_integer128! {
-            in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
-            in_struct!(i128_: i128 = "-420000000000000000000000000000", -420000000000000000000000000000i128);
-        }
+        in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
+        in_struct!(i128_: i128 = "-420000000000000000000000000000", -420000000000000000000000000000i128);
 
         in_struct!(f32_: f32 = "4.2", 4.2f32);
         in_struct!(f64_: f64 = "4.2", 4.2f64);
@@ -342,7 +620,7 @@ mod trivial {
         in_struct!(true_: bool = "true", true);
         in_struct!(char_: char = "r", 'r');
 
-        in_struct!(string: String = "escaped&#x20;string", "escaped string".into());
+        in_struct!(string: String = "escaped&#x20;string", "escaped string");
 
         /// XML does not able to store binary data
         #[test]
@@ -384,18 +662,16 @@ mod trivial {
         in_struct!(i16_:   i16   = "<![CDATA[-4200]]>", -4200i16);
         in_struct!(i32_:   i32   = "<![CDATA[-42000000]]>", -42000000i32);
         in_struct!(i64_:   i64   = "<![CDATA[-42000000000000]]>", -42000000000000i64);
-        in_struct!(isize_: isize = "<![CDATA[-42000000000000]]>", -42000000000000isize);
+        in_struct!(isize_: isize = "<![CDATA[-42000000]]>", -42000000isize);
 
         in_struct!(u8_:    u8    = "<![CDATA[42]]>", 42u8);
         in_struct!(u16_:   u16   = "<![CDATA[4200]]>", 4200u16);
         in_struct!(u32_:   u32   = "<![CDATA[42000000]]>", 42000000u32);
         in_struct!(u64_:   u64   = "<![CDATA[42000000000000]]>", 42000000000000u64);
-        in_struct!(usize_: usize = "<![CDATA[42000000000000]]>", 42000000000000usize);
+        in_struct!(usize_: usize = "<![CDATA[42000000]]>", 42000000usize);
 
-        serde_if_integer128! {
-            in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
-            in_struct!(i128_: i128 = "<![CDATA[-420000000000000000000000000000]]>", -420000000000000000000000000000i128);
-        }
+        in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
+        in_struct!(i128_: i128 = "<![CDATA[-420000000000000000000000000000]]>", -420000000000000000000000000000i128);
 
         in_struct!(f32_: f32 = "<![CDATA[4.2]]>", 4.2f32);
         in_struct!(f64_: f64 = "<![CDATA[4.2]]>", 4.2f64);
@@ -405,7 +681,7 @@ mod trivial {
         in_struct!(char_: char = "<![CDATA[r]]>", 'r');
 
         // Escape sequences does not processed inside CDATA section
-        in_struct!(string: String = "<![CDATA[escaped&#x20;string]]>", "escaped&#x20;string".into());
+        in_struct!(string: String = "<![CDATA[escaped&#x20;string]]>", "escaped&#x20;string");
 
         /// XML does not able to store binary data
         #[test]
@@ -742,6 +1018,65 @@ macro_rules! maplike_errors {
                 }
             }
         }
+
+        mod incomplete_tag {
+            use super::*;
+            use quick_xml::errors::{Error, SyntaxError};
+
+            #[test]
+            fn attributes() {
+                let err = from_str::<$attributes>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42" string="answer""#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+
+            #[test]
+            fn elements_root() {
+                let err = from_str::<$mixed>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42"><string>answer</string><root"#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+
+            #[test]
+            fn elements_child() {
+                let err = from_str::<$mixed>(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root float="42"><string>answer</string"#,
+                )
+                .unwrap_err();
+                match err {
+                    // TODO: add error position to errors and check it here
+                    // Related: https://github.com/tafia/quick-xml/issues/625
+                    DeError::InvalidXml(Error::Syntax(SyntaxError::UnclosedTag)) => (),
+                    _ => panic!(
+                        "Expected `Err(InvalidXml(Syntax(UnclosedTag)))`, but got `{:?}`",
+                        err
+                    ),
+                }
+            }
+        }
     };
 }
 
@@ -967,10 +1302,10 @@ mod struct_ {
             ) {
                 Err(DeError::Custom(reason)) => assert_eq!(
                     reason,
-                    "invalid type: string \"excess text\", expected struct Elements",
+                    "invalid type: string \"\\nexcess text\\t\", expected struct Elements",
                 ),
                 x => panic!(
-                    r#"Expected `Err(Custom("invalid type: string \"excess text\", expected struct Elements"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"\\nexcess text\\t\", expected struct Elements"))`, but got `{:?}`"#,
                     x
                 ),
             };
@@ -1216,10 +1551,8 @@ mod xml_schema_lists {
         list!(u32_: u32 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
         list!(u64_: u64 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
 
-        serde_if_integer128! {
-            list!(i128_: i128 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
-            list!(u128_: u128 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
-        }
+        list!(i128_: i128 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+        list!(u128_: u128 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
 
         list!(f32_: f32 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
         list!(f64_: f64 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
@@ -1264,10 +1597,8 @@ mod xml_schema_lists {
             list!(u32_: u32 = "<root>1 2  3</root>" => vec![1, 2, 3]);
             list!(u64_: u64 = "<root>1 2  3</root>" => vec![1, 2, 3]);
 
-            serde_if_integer128! {
-                list!(i128_: i128 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
-                list!(u128_: u128 = "<root>1 2  3</root>" => vec![1, 2, 3]);
-            }
+            list!(i128_: i128 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+            list!(u128_: u128 = "<root>1 2  3</root>" => vec![1, 2, 3]);
 
             list!(f32_: f32 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
             list!(f64_: f64 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
@@ -1303,10 +1634,8 @@ mod xml_schema_lists {
             list!(u32_: u32 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
             list!(u64_: u64 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
 
-            serde_if_integer128! {
-                list!(i128_: i128 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
-                list!(u128_: u128 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
-            }
+            list!(i128_: i128 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+            list!(u128_: u128 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
 
             list!(f32_: f32 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);
             list!(f64_: f64 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);
@@ -1491,7 +1820,7 @@ mod borrow {
             BTreeMap::from_iter([
                 // Comment to prevent formatting in one line
                 ("element", "element content"),
-                ("$text", "text content"),
+                ("$text", "\n                text content\n            "),
             ])
         );
     }

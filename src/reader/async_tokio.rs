@@ -7,12 +7,14 @@ use std::task::{Context, Poll};
 
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
 
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::events::{BytesRef, Event};
 use crate::name::{QName, ResolveResult};
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{BangType, BinaryStream, NsReader, ParseState, ReadTextResult, Reader, Span};
+use crate::reader::{
+    BangType, BinaryStream, NsReader, ParseState, ReadRefResult, ReadTextResult, Reader, Span,
+};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
@@ -101,7 +103,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// loop {
     ///     match reader.read_event_into_async(&mut buf).await {
     ///         Ok(Event::Start(_)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+    ///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
@@ -119,7 +121,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         mut buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
         read_event_impl!(
-            self, buf,
+            self,
+            buf,
             TokioAdapter(&mut self.reader),
             read_until_close_async,
             await
@@ -181,7 +184,16 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         end: QName<'n>,
         buf: &mut Vec<u8>,
     ) -> Result<Span> {
-        Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
+        Ok(read_to_end!(
+            self,
+            end,
+            buf,
+            read_event_into_async,
+            {
+                buf.clear();
+            },
+            await
+        ))
     }
 
     /// Private function to read until `>` is found. This function expects that
@@ -198,7 +210,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// given buffer.
     ///
     /// This method manages namespaces but doesn't resolve them automatically.
-    /// You should call [`resolve_element()`] if you want to get a namespace.
+    /// You should call [`resolver().resolve_element()`] if you want to get a namespace.
     ///
     /// You also can use [`read_resolved_event_into_async()`] instead if you want
     /// to resolve namespace as soon as you get an event.
@@ -227,7 +239,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///     match reader.read_event_into_async(&mut buf).await.unwrap() {
     ///         Event::Start(e) => {
     ///             count += 1;
-    ///             let (ns, local) = reader.resolve_element(e.name());
+    ///             let (ns, local) = reader.resolver().resolve_element(e.name());
     ///             match local.as_ref() {
     ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
     ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
@@ -235,7 +247,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///             }
     ///         }
     ///         Event::Text(e) => {
-    ///             txt.push(e.unescape().unwrap().into_owned())
+    ///             txt.push(e.decode().unwrap().into_owned())
     ///         }
     ///         Event::Eof => break,
     ///         _ => (),
@@ -248,7 +260,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: NsReader::read_event_into
-    /// [`resolve_element()`]: Self::resolve_element
+    /// [`resolver().resolve_element()`]: crate::name::NamespaceResolver::resolve_element
     /// [`read_resolved_event_into_async()`]: Self::read_resolved_event_into_async
     pub async fn read_event_into_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.pop();
@@ -371,7 +383,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
     ///         (_, Event::Text(e)) => {
-    ///             txt.push(e.unescape().unwrap().into_owned())
+    ///             txt.push(e.decode().unwrap().into_owned())
     ///         }
     ///         (_, Event::Eof) => break,
     ///         _ => (),
@@ -394,8 +406,8 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
         &'ns mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
-        let event = self.read_event_into_async(buf).await;
-        self.resolve_event(event)
+        let event = self.read_event_into_async(buf).await?;
+        Ok(self.resolver().resolve_event(event))
     }
 }
 
@@ -410,7 +422,8 @@ mod test {
         read_until_close_async,
         TokioAdapter,
         &mut Vec::new(),
-        async, await
+        async,
+        await
     );
 
     #[test]
