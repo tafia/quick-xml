@@ -44,12 +44,30 @@ mod text {
             content: String,
         }
 
-        let item: Item = from_str(r#"<root>content</root>"#).unwrap();
+        let item: Item = from_str(r#"<root>content </root>"#).unwrap();
 
         assert_eq!(
             item,
             Item {
-                content: "content".into()
+                content: "content ".into()
+            }
+        );
+    }
+
+    #[test]
+    fn explicit_space() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item {
+            #[serde(rename = "$text")]
+            content: String,
+        }
+
+        let item: Item = from_str(r#"<root> </root>"#).unwrap();
+
+        assert_eq!(
+            item,
+            Item {
+                content: " ".into()
             }
         );
     }
