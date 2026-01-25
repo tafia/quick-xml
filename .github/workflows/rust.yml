@@ -57,7 +57,7 @@ jobs:
     - name: Build
       run: cargo build
     - name: Build benchmarks
-      run: cargo bench --no-run
+      run: cargo bench --features async-tokio --no-run
     - name: Build benchmarks (compare)
       working-directory: compare
       run: cargo bench --no-run
