@@ -41,7 +41,7 @@ regex = "1"
 # serde does not follow semver in numbering and their dependencies, so we specifying patch here
 serde_derive = { version = "1.0.206" }
 serde-value = "0.7"
-tokio = { version = "1.21", default-features = false, features = ["macros", "rt", "rt-multi-thread"] }
+tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
 
 [lib]

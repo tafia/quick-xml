@@ -31,17 +31,21 @@ pub fn bench_async(c: &mut Criterion) {
 
     group.throughput(Throughput::Bytes(SAMPLE_RSS.len() as u64));
     group.bench_function("sample_rss.xml", |b| {
-        b.to_async(tokio::runtime::Runtime::new().unwrap())
-            .iter(|| async {
-                let mut r = Reader::from_reader(SAMPLE_RSS);
-                let mut buf = Vec::new();
-                while !matches!(
-                    black_box(r.read_event_into_async(&mut buf).await.unwrap()),
-                    Event::Eof
-                ) {
-                    buf.clear();
-                }
-            })
+        b.to_async(
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap(),
+        )
+        .iter(|| async {
+            let mut r = Reader::from_reader(SAMPLE_RSS);
+            let mut buf = Vec::new();
+            while !matches!(
+                black_box(r.read_event_into_async(&mut buf).await.unwrap()),
+                Event::Eof
+            ) {
+                buf.clear();
+            }
+        })
     });
 
     group.finish();
