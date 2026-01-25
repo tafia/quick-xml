@@ -34,14 +34,14 @@ memchr = "2.1"
 # required, `dev-dependencies` are not used). `criterion` 0.6 has msrv = 1.80, so
 # we cannot check minimal versions with it. We allow to use `criterion` 0.4 for that
 # See https://github.com/rust-lang/cargo/issues/10958
-criterion = ">=0.4,<0.9"
+criterion = { version = ">=0.4,<0.9", features = ["async_tokio"] }
 pretty_assertions = "1.4"
 regex = "1"
 # https://github.com/serde-rs/serde/issues/1904 is fixed since 1.0.206
 # serde does not follow semver in numbering and their dependencies, so we specifying patch here
 serde_derive = { version = "1.0.206" }
 serde-value = "0.7"
-tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
+tokio = { version = "1.21", default-features = false, features = ["macros", "rt", "rt-multi-thread"] }
 tokio-test = "0.4"
 
 [lib]
@@ -61,6 +61,12 @@ path = "benches/microbenches.rs"
 name = "macrobenches"
 harness = false
 path = "benches/macrobenches.rs"
+
+[[bench]]
+name = "compare_sync_async"
+harness = false
+path = "benches/compare_sync_async.rs"
+required-features = ["async-tokio"]
 
 [features]
 default = []
