@@ -446,7 +446,7 @@ struct NamespaceBinding {
     /// Level of nesting at which this namespace was declared. The declaring element is included,
     /// i.e., a declaration on the document root has `level = 1`.
     /// This is used to pop the namespace when the element gets closed.
-    level: u16,
+    level: u32,
 }
 
 impl NamespaceBinding {
@@ -489,7 +489,7 @@ pub struct NamespaceResolver {
     bindings: Vec<NamespaceBinding>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
-    nesting_level: u16,
+    nesting_level: u32,
 }
 
 /// That constant define the one of [reserved namespaces] for the xml standard.
@@ -993,7 +993,7 @@ impl NamespaceResolver {
     /// ```
     ///
     /// [current]: Self::level
-    pub const fn bindings_of(&self, level: u16) -> NamespaceBindingsOfLevelIter<'_> {
+    pub const fn bindings_of(&self, level: u32) -> NamespaceBindingsOfLevelIter<'_> {
         NamespaceBindingsOfLevelIter {
             resolver: self,
             cursor: 0,
@@ -1030,7 +1030,7 @@ impl NamespaceResolver {
     ///
     /// [`push`]: Self::push
     /// [`pop`]: Self::pop
-    pub const fn level(&self) -> u16 {
+    pub const fn level(&self) -> u32 {
         self.nesting_level
     }
 }
@@ -1092,7 +1092,7 @@ pub type PrefixIter<'a> = NamespaceBindingsIter<'a>;
 pub struct NamespaceBindingsOfLevelIter<'a> {
     resolver: &'a NamespaceResolver,
     cursor: usize,
-    level: u16,
+    level: u32,
 }
 
 impl<'a> Iterator for NamespaceBindingsOfLevelIter<'a> {
