@@ -18,7 +18,12 @@
 
 ### Bug Fixes
 
+- [#597]: Fixed incorrect processing of namespace scopes in `NsReader::read_to_end`.
+  The scope started by a start element was not ended after that call.
+
 ### Misc Changes
+
+[#597]: https://github.com/tafia/quick-xml/issues/597
 
 
 ## 0.39.0 -- 2026-01-11
