@@ -62,6 +62,11 @@ name = "macrobenches"
 harness = false
 path = "benches/macrobenches.rs"
 
+[[bench]]
+name = "encoding"
+harness = false
+path = "benches/encoding.rs"
+
 [features]
 default = []
 
