@@ -8,8 +8,8 @@ use std::sync::mpsc;
 
 use quick_xml::errors::{Error, IllFormedError, SyntaxError};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::name::QName;
-use quick_xml::reader::Reader;
+use quick_xml::name::{Namespace, QName, ResolveResult};
+use quick_xml::reader::{NsReader, Reader};
 use quick_xml::utils::Bytes;
 
 use pretty_assertions::assert_eq;
@@ -188,6 +188,39 @@ fn issue590() {
             break;
         }
     }
+}
+
+#[test]
+fn issue597() {
+    const S: &'static str = r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5">
+        <tests>
+            <xmlfilecontent_test xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5#independent">
+            </xmlfilecontent_test>
+            <xmlfilecontent_test xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5#independent">
+            </xmlfilecontent_test>
+        </tests>
+        <objects/>
+    </oval_definitions>"#;
+
+    let mut reader = NsReader::from_str(S);
+    let objects_ns = loop {
+        let (ns, ev) = reader.read_resolved_event().unwrap();
+        match ev {
+            Event::Start(v) if v.local_name().as_ref() == b"xmlfilecontent_test" => {
+                reader.read_to_end(v.name()).unwrap();
+            }
+            Event::Empty(v) if v.local_name().as_ref() == b"objects" => break ns,
+            _ => (),
+        }
+    };
+    assert_eq!(
+        objects_ns,
+        ResolveResult::Bound(Namespace(
+            b"http://oval.mitre.org/XMLSchema/oval-definitions-5"
+        ))
+    );
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/604
@@ -566,4 +599,45 @@ mod issue923 {
 
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/939
+///
+/// Checks that reading from a short internal buffer of `BufRead` implementation
+/// does not break the parser. Here `BufReader` splits input into two 4-byte chunks:
+/// - `<r><`
+/// - `/r>`
+///
+/// Passing of this test shows that `<` in the end of the first chunk does not
+/// considered as an incomplete tag and parser correctly consumes this byte and
+/// requests the next chunk.
+#[test]
+fn issue939() {
+    let xml_file = BufReader::with_capacity(4, &b"<r></r>"[..]);
+    let mut reader = Reader::from_reader(xml_file);
+    let mut buf = Vec::new();
+
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::Start(BytesStart::new("r"))
+    );
+    assert_eq!(
+        quick_xml::utils::Bytes(&buf),
+        quick_xml::utils::Bytes(b"<r")
+    );
+    assert_eq!(
+        quick_xml::utils::Bytes(reader.get_ref().buffer()),
+        quick_xml::utils::Bytes(b"<")
+    );
+
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::End(BytesEnd::new("r"))
+    );
+    assert_eq!(
+        quick_xml::utils::Bytes(&buf),
+        quick_xml::utils::Bytes(b"<r</r")
+    );
+
+    assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
 }

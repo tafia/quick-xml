@@ -13,7 +13,7 @@ mod syntax {
     mod tag {
         use super::*;
 
-        syntax_err!(unclosed1(".<")   => SyntaxError::UnclosedTag);
+        syntax_err!(unclosed1(".<")   => 1, SyntaxError::UnclosedTag);
         syntax_err!(unclosed2(".</")  => SyntaxError::UnclosedTag);
         syntax_err!(unclosed3(".<x")  => SyntaxError::UnclosedTag);
         syntax_err!(unclosed4(".< ")  => SyntaxError::UnclosedTag);
@@ -78,10 +78,10 @@ mod syntax {
     }
 
     // Incorrect after-bang symbol is detected early, so buffer_position() stay at `!`
-    syntax_err!(unclosed_bang1(".<!")   => 2, SyntaxError::InvalidBangMarkup);
-    syntax_err!(unclosed_bang2(".<!>")  => 2, SyntaxError::InvalidBangMarkup);
-    syntax_err!(unclosed_bang3(".<!a")  => 2, SyntaxError::InvalidBangMarkup);
-    syntax_err!(unclosed_bang4(".<!a>") => 2, SyntaxError::InvalidBangMarkup);
+    syntax_err!(unclosed_bang1(".<!")   => 1, SyntaxError::InvalidBangMarkup);
+    syntax_err!(unclosed_bang2(".<!>")  => 1, SyntaxError::InvalidBangMarkup);
+    syntax_err!(unclosed_bang3(".<!a")  => 1, SyntaxError::InvalidBangMarkup);
+    syntax_err!(unclosed_bang4(".<!a>") => 1, SyntaxError::InvalidBangMarkup);
 
     /// https://www.w3.org/TR/xml11/#NT-Comment
     mod comment {

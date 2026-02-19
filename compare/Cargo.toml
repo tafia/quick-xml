@@ -9,7 +9,7 @@ edition = "2021"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
-markup5ever = "0.37"
+markup5ever = "0.38"
 # maybe_xml 0.11 regressed performance by x2, and because this was the fastest
 # XML parser, we keep benchmarking version 0.10 as well
 maybe_xml_0_10 = { version = "0.10", package = "maybe_xml" }
@@ -21,7 +21,7 @@ rxml = "0.13"
 serde-xml-rs = "0.8"
 xml_oxide = "0.3"
 xml-rs = "1.0"
-xml5ever = "0.37"
+xml5ever = "0.38"
 xmlparser = "0.13"
 # Do not use "derive" feature, because it slowdown compilation
 # See https://github.com/serde-rs/serde/pull/2588

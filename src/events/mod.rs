@@ -489,12 +489,12 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Data from various events (most notably, `Event::Text`) that stored in XML
-/// in escaped form. Internally data is stored in escaped form.
+/// Data from various events (most notably, `Event::Text`).
 ///
 /// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
 /// returns the content of this event. In case of comment this is everything
-/// between `<!--` and `-->` and the text of comment will not contain `-->` inside.
+/// between `<!--` and `-->` and the text of comment may not contain `-->` inside
+/// (if [`Config::check_comments`] is set to `true`).
 /// In case of DTD this is everything between `<!DOCTYPE` + spaces and closing `>`
 /// (i.e. in case of DTD the first character is never space):
 ///
@@ -520,6 +520,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 /// // AsRef<[u8]> for &T + deref coercion
 /// assert_eq!(event.as_ref(), content.as_bytes());
 /// ```
+///
+/// [`Config::check_comments`]: crate::reader::Config::check_comments
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     /// Escaped then encoded content of the event. Content is encoded in the XML
@@ -531,7 +533,8 @@ pub struct BytesText<'a> {
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new `BytesText` from an escaped byte sequence in the specified encoding.
+    /// Creates a new `BytesText` from a raw byte sequence as it appeared in th XML
+    /// source in the specified encoding.
     #[inline]
     pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
         Self {
@@ -540,14 +543,38 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new `BytesText` from an escaped string.
+    /// Creates a new `BytesText` from a raw string as it appeared in the XML source.
+    ///
+    /// # Warning
+    ///
+    /// `content` is not checked to not contain markup or entity references. Be warned
+    /// that writing such event may result to invalid XML if your content contains not
+    /// defined entity references or invalid XML markup.
+    ///
+    /// `content` may have any EOLs, they will be normalized when using [`xml_content()`] getters.
+    ///
+    /// [`xml_content()`]: Self::xml_content
     #[inline]
     pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
         Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
     }
 
-    /// Creates a new `BytesText` from a string. The string is expected not to
-    /// be escaped.
+    /// Creates a new `BytesText` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` will be escaped using the [`escape`] function, but that may change
+    /// in the future, because events produced by the reader never contains `&` or `<`,
+    /// and escaping of `>`, `"` and `'` is not required. If you want to preserve exact
+    /// content, use [`from_escaped()`] method, but be warned that writing such event
+    /// may result to invalid XML if your content contains not defined entity references
+    /// or invalid XML markup.
+    ///
+    /// `content` may have any EOLs, they will be normalized when using [`xml_content()`] getters.
+    ///
+    /// [`escape`]: crate::escape::escape
+    /// [`from_escaped()`]: Self::from_escaped
+    /// [`xml_content()`]: Self::xml_content
     #[inline]
     pub fn new(content: &'a str) -> Self {
         Self::from_escaped(escape(content))
@@ -580,8 +607,7 @@ impl<'a> BytesText<'a> {
 
     /// Decodes the content of the event.
     ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
+    /// This will allocate if the value is encoded in non-UTF-8 encoding.
     ///
     /// This method does not normalizes end-of-line characters as required by [specification].
     /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
@@ -597,8 +623,7 @@ impl<'a> BytesText<'a> {
     /// associated with that reader to interpret the raw bytes contained within
     /// this text event.
     ///
-    /// This will allocate if the value contains any escape sequences or in non-UTF-8
-    /// encoding, or EOL normalization is required.
+    /// This will allocate if the value is encoded in non-UTF-8 encoding, or EOL normalization is required.
     ///
     /// Note, that this method should be used only if event represents XML 1.0 or HTML content,
     /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
@@ -618,8 +643,7 @@ impl<'a> BytesText<'a> {
     /// associated with that reader to interpret the raw bytes contained within
     /// this text event.
     ///
-    /// This will allocate if the value contains any escape sequences or in non-UTF-8
-    /// encoding, or EOL normalization is required.
+    /// This will allocate if the value is encoded in non-UTF-8 encoding, or EOL normalization is required.
     ///
     /// Note, that this method should be used only if event represents XML 1.1 content,
     /// because rules for normalizing EOLs for [XML 1.0], [XML 1.1] and [HTML] differs.
@@ -1536,8 +1560,7 @@ impl<'a> BytesRef<'a> {
 
     /// Decodes the content of the event.
     ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
+    /// This will allocate if the value is encoded in non-UTF-8 encoding.
     ///
     /// This method does not normalizes end-of-line characters as required by [specification].
     /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.

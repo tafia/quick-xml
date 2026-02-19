@@ -65,7 +65,7 @@ pub enum AttributeParser {
 impl FastElementParser {
     /// Returns the length of the name and the number of consumed bytes of the current call or `None` if `>` was not found in `bytes`.
     /// A return-value of None implies, that the full butes array was consumed.
-    /// Assumes, that the initial '<' or '</' are already consumed.
+    /// Assumes, that the initial '<' or are already consumed.
     #[inline]
     pub fn feed(&mut self, bytes: &[u8]) -> Option<(usize, usize)> {
         // The number of bytes consumed in the current feed iteration.

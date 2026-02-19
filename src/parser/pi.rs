@@ -74,12 +74,12 @@ impl Parser for PiParser {
 
     #[inline]
     fn eof_error(self, content: &[u8]) -> SyntaxError {
-        // Check if content starts with "?xml" followed by whitespace, '?' or end.
+        // Check if content starts with "<?xml" followed by whitespace, '?' or end.
         // This determines whether to report an unclosed XML declaration or PI.
         // FIXME: Add support for UTF-8/ASCII incompatible encodings (UTF-16)
-        let is_xml_decl = content.starts_with(b"?xml")
+        let is_xml_decl = content.starts_with(b"<?xml")
             && content
-                .get(4)
+                .get(5)
                 .map_or(true, |&b| is_whitespace(b) || b == b'?');
         if is_xml_decl {
             SyntaxError::UnclosedXmlDecl

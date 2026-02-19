@@ -1,6 +1,9 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::events::{
+    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText,
+};
 use quick_xml::name::ResolveResult::*;
 use quick_xml::name::{Namespace, PrefixDeclaration, QName};
 use quick_xml::reader::NsReader;
@@ -497,5 +500,1050 @@ fn reserved_name() {
             "Expected empty element bound to namespace 'www1', got {:?}",
             e
         ),
+    }
+}
+
+mod read_to_end {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn decl() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?xml version=\"1.0\"?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Decl(BytesDecl::new("1.0", None, None))
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            45..65 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn doctype() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!DOCTYPE dtd>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), DocType(BytesText::new("dtd")));
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            38..58 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn pi() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?pi?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), PI(BytesPI::new("pi")));
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn comment() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!--comment-->\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Comment(BytesText::new("comment"))
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            38..58 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn start() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        reader.config_mut().check_end_names = false;
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            29..49 // <root/><root></root>
+        );
+        // NOTE: due to unbalanced XML namespace still not closed
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("element"))
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn end() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                </tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        reader.config_mut().check_end_names = false;
+        reader.config_mut().allow_unmatched_ends = true;
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn empty() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag/>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn text() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                text\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), Text(BytesText::new("text")));
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            28..48 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn cdata() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <![CDATA[cdata]]>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            CData(BytesCData::new("cdata"))
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            41..61 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn general_ref() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                &entity;\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            GeneralRef(BytesRef::new("entity"))
+        );
+        assert_eq!(
+            reader.read_to_end(QName(b"root")).unwrap(),
+            32..52 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+}
+
+mod read_to_end_into {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn decl() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?xml version=\"1.0\"?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            Decl(BytesDecl::new("1.0", None, None))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            45..65 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn doctype() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!DOCTYPE dtd>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            DocType(BytesText::new("dtd"))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            38..58 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn pi() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?pi?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), PI(BytesPI::new("pi")));
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn comment() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!--comment-->\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            Comment(BytesText::new("comment"))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            38..58 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn start() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        reader.config_mut().check_end_names = false;
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            29..49 // <root/><root></root><root></root>
+        );
+        // NOTE: due to unbalanced XML namespace still not closed
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("element"))
+            )
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn end() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                </tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        reader.config_mut().check_end_names = false;
+        reader.config_mut().allow_unmatched_ends = true;
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn empty() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag/>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            30..50 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn text() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                text\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            Text(BytesText::new("text"))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            28..48 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn cdata() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <![CDATA[cdata]]>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            CData(BytesCData::new("cdata"))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            41..61 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+
+    #[test]
+    fn general_ref() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                &entity;\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        let buf = &mut Vec::new();
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event_into(buf).unwrap(),
+            GeneralRef(BytesRef::new("entity"))
+        );
+        assert_eq!(
+            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            32..52 // <root/><root></root>
+        );
+        assert_eq!(
+            reader.read_resolved_event_into(buf).unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event_into(buf).unwrap(), Eof);
+    }
+}
+
+mod read_text {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn decl() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?xml version=\"1.0\"?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Decl(BytesDecl::new("1.0", None, None))
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    /// Yes, this test contains invalid XML but since we can parse it, we check
+    /// that it does not break our parser
+    #[test]
+    fn doctype() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!DOCTYPE dtd>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), DocType(BytesText::new("dtd")));
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn pi() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <?pi?>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), PI(BytesPI::new("pi")));
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn comment() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <!--comment-->\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Comment(BytesText::new("comment"))
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn start() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        reader.config_mut().check_end_names = false;
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        // NOTE: due to unbalanced XML namespace still not closed
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("element"))
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn end() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                </tag>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        reader.config_mut().check_end_names = false;
+        reader.config_mut().allow_unmatched_ends = true;
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn empty() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <tag/>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Empty(BytesStart::new("tag")),
+            )
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn text() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                text\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(reader.read_event().unwrap(), Text(BytesText::new("text")));
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn cdata() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                <![CDATA[cdata]]>\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            CData(BytesCData::new("cdata"))
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn general_ref() {
+        let mut reader = NsReader::from_str(
+            "\
+            <root xmlns='namespace'>\
+                &entity;\
+                <root/>\
+                <root></root>\
+            </root>\
+            <element/>",
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (
+                Bound(Namespace(b"namespace")),
+                Start(BytesStart::from_content("root xmlns='namespace'", 4)),
+            )
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            GeneralRef(BytesRef::new("entity"))
+        );
+        assert_eq!(
+            reader.read_text(QName(b"root")).unwrap(),
+            "<root/><root></root>"
+        );
+        assert_eq!(
+            reader.read_resolved_event().unwrap(),
+            (Unbound, Empty(BytesStart::new("element")))
+        );
+        assert_eq!(reader.read_event().unwrap(), Eof);
     }
 }
