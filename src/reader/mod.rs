@@ -456,10 +456,10 @@ macro_rules! read_until_close {
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
+                .read_start_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(bytes) => Ok($self.state.emit_start(bytes)),
+                Ok((name_len, bytes)) => Ok($self.state.emit_start(name_len, bytes)),
                 Err(e) => {
                     // We want to report error at `<`
                     $self.state.last_error_offset = start;
@@ -1136,6 +1136,24 @@ trait XmlSource<'r, B> {
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return `None`.
     fn peek_one(&mut self) -> io::Result<Option<u8>>;
+
+    /// Read input until start element is finished.
+    ///
+    /// This method expect that start sequence of a parser already was read.
+    ///
+    /// Returns a tuple of the length of the tag name and a slice of data read up to the end of the thing being parsed.
+    /// The end of thing and the returned content is determined by the used parser.
+    ///
+    /// If input (`Self`) is exhausted and no bytes was read, or if the specified
+    /// parser could not find the ending sequence of the thing, returns `SyntaxError`.
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
+    fn read_start_element(&mut self, buf: B, position: &mut u64) -> Result<(usize, &'r [u8]), Error>;
 }
 
 /// Possible elements started with `<!`

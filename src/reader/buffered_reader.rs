@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::parser::Parser;
+use crate::parser::{StartElementParser, Parser};
 use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
@@ -316,6 +316,7 @@ macro_rules! impl_buffered_source {
             // That method is called only when available buffer starts from '<'
             // We need to consume it
             self $(.$reader)? .consume(1);
+
             let available = loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => n,
@@ -324,6 +325,48 @@ macro_rules! impl_buffered_source {
                 };
             };
             Ok(available.first().cloned())
+        }
+
+        #[inline]
+        $($async)? fn read_start_element<'i>(&mut self, buf: &'i mut Vec<u8>, position: &mut u64) -> Result<(usize, &'i [u8])> {
+            let mut parser = StartElementParser::default();
+            let mut read = 1;
+            // '<' was consumed in peek_one(), but not placed in buf
+            buf.push(b'<');
+
+            let start = buf.len();
+            loop {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e.into()));
+                    }
+                };
+
+                if let Some((name_len, consumed)) = parser.feed(available) {
+                    buf.extend_from_slice(&available[..consumed]);
+
+                    // +1 for `>` which we do not include
+                    self $(.$reader)? .consume(consumed + 1);
+                    read += consumed as u64 + 1;
+
+                    *position += read;
+                    return Ok((name_len, &buf[start..]));
+                }
+
+                // The `>` symbol not yet found, continue reading
+                buf.extend_from_slice(available);
+
+                let used = available.len();
+                self $(.$reader)? .consume(used);
+                read += used as u64;
+            }
+
+            *position += read;
+            Err(Error::Syntax(parser.eof_error(&buf[start..])))
         }
     };
 }

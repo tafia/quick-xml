@@ -13,7 +13,7 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::parser::Parser;
+use crate::parser::{Parser, StartElementParser};
 use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
@@ -389,7 +389,27 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             "markup must start from '<':\n{:?}",
             crate::utils::Bytes(self)
         );
+
         Ok(self.get(1).copied())
+    }
+
+    #[inline]
+    fn read_start_element(&mut self, _buf: (), position: &mut u64) -> Result<(usize, &'a [u8])> {
+        *position += 1;
+        *self = &self[1..];
+
+        let mut parser = StartElementParser::default();
+
+        if let Some((name_len, consumed)) = parser.feed(self) {
+            // +1 for `>` which we do not include
+            *position += consumed as u64 + 1;
+            let bytes = &self[..consumed];
+            *self = &self[consumed + 1..];
+            return Ok((name_len, bytes));
+        }
+
+        *position += self.len() as u64;
+        Err(Error::Syntax(parser.eof_error(self)))
     }
 }
 
