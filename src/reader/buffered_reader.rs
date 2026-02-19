@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::parser::{FastElementParser, Parser};
+use crate::parser::{StartElementParser, Parser};
 use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
@@ -329,7 +329,7 @@ macro_rules! impl_buffered_source {
 
         #[inline]
         $($async)? fn read_start_element<'i>(&mut self, buf: &'i mut Vec<u8>, position: &mut u64) -> Result<(usize, &'i [u8])> {
-            let mut parser = FastElementParser::default();
+            let mut parser = StartElementParser::default();
             let mut read = 1;
             // '<' was consumed in peek_one(), but not placed in buf
             buf.push(b'<');

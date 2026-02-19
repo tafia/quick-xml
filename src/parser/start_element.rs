@@ -11,7 +11,8 @@ use crate::errors::SyntaxError;
 /// entity. Anyway, that encoding does not contain literal quotes).
 ///
 /// To use a parser create an instance of parser and [`feed`] data into it.
-/// After successful search the parser will return [`Some`] with position of
+/// After successful search the parser will return [`Some`] with the length
+/// of the element name and the position of
 /// found symbol. If search is unsuccessful, a [`None`] will be returned. You
 /// typically would expect positive result of search, so that you should feed
 /// new data until you get it.
@@ -41,7 +42,7 @@ use crate::errors::SyntaxError;
 ///
 /// [`feed`]: Self::feed()
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FastElementParser {
+pub enum StartElementParser {
     /// The initial state, inside the Tag name.
     /// Contains the current length of the tag name.
     Tag(usize),
@@ -55,17 +56,15 @@ pub enum AttributeParser {
     /// The initial state, not within ' or ".
     Outside,
     /// Inside a single-quoted region (`'...'`).
-    /// Contains the length of the tag name.
     SingleQ,
     /// Inside a double-quoted region (`"..."`).
-    /// Contains the length of the tag name.
     DoubleQ,
 }
 
-impl FastElementParser {
+impl StartElementParser {
     /// Returns the length of the name and the number of consumed bytes of the current call or `None` if `>` was not found in `bytes`.
-    /// A return-value of None implies, that the full butes array was consumed.
-    /// Assumes, that the initial '<' or are already consumed.
+    /// A return-value of None implies, that the full bytes array was consumed.
+    /// Assumes, that the initial '<' is already consumed.
     #[inline]
     pub fn feed(&mut self, bytes: &[u8]) -> Option<(usize, usize)> {
         // The number of bytes consumed in the current feed iteration.
@@ -133,7 +132,7 @@ impl FastElementParser {
     }
 }
 
-impl Default for FastElementParser {
+impl Default for StartElementParser {
     #[inline]
     fn default() -> Self {
         Self::Tag(0)
@@ -145,7 +144,7 @@ fn parse_all() {
     use pretty_assertions::assert_eq;
 
     fn parse_input(input: &[u8], name_len: usize) {
-        let mut parser = FastElementParser::default();
+        let mut parser = StartElementParser::default();
 
         assert_eq!(parser.feed(input), Some((name_len, input.len() - 1)));
     }
@@ -160,83 +159,83 @@ fn parse_all() {
 fn parse_internal_state() {
     use pretty_assertions::assert_eq;
 
-    let mut parser = FastElementParser::default();
+    let mut parser = StartElementParser::default();
     assert_eq!(parser.feed(b""), None);
-    assert_eq!(parser, FastElementParser::Tag(0));
+    assert_eq!(parser, StartElementParser::Tag(0));
 
     // start feeding the tag
     assert_eq!(parser.feed(b"tag"), None);
-    assert_eq!(parser, FastElementParser::Tag(3));
+    assert_eq!(parser, StartElementParser::Tag(3));
 
     // Finish the tag parsing after seeing some whitespace
     assert_eq!(parser.feed(b" "), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::Outside)
+        StartElementParser::Attributes(3, AttributeParser::Outside)
     );
 
     // Remain in state when no progress is made
     assert_eq!(parser.feed(b""), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::Outside)
+        StartElementParser::Attributes(3, AttributeParser::Outside)
     );
     assert_eq!(parser.feed(b"some random content"), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::Outside)
+        StartElementParser::Attributes(3, AttributeParser::Outside)
     );
 
     // Handle single qoute
     assert_eq!(parser.feed(b"\'"), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::SingleQ)
+        StartElementParser::Attributes(3, AttributeParser::SingleQ)
     );
 
     // Remain in state when no progress is made
     assert_eq!(parser.feed(b""), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::SingleQ)
+        StartElementParser::Attributes(3, AttributeParser::SingleQ)
     );
     assert_eq!(parser.feed(b"some random content \">"), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::SingleQ)
+        StartElementParser::Attributes(3, AttributeParser::SingleQ)
     );
 
     // Close single quote
     assert_eq!(parser.feed(b"'"), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::Outside)
+        StartElementParser::Attributes(3, AttributeParser::Outside)
     );
 
     // Handle double qoute
     assert_eq!(parser.feed(b"\""), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::DoubleQ)
+        StartElementParser::Attributes(3, AttributeParser::DoubleQ)
     );
 
     // Remain in state when no progress is made
     assert_eq!(parser.feed(b""), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::DoubleQ)
+        StartElementParser::Attributes(3, AttributeParser::DoubleQ)
     );
     assert_eq!(parser.feed(b"some random content '>"), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::DoubleQ)
+        StartElementParser::Attributes(3, AttributeParser::DoubleQ)
     );
 
     // Close double quote
     assert_eq!(parser.feed(b"\""), None);
     assert_eq!(
         parser,
-        FastElementParser::Attributes(3, AttributeParser::Outside)
+        StartElementParser::Attributes(3, AttributeParser::Outside)
     );
 
     assert_eq!(parser.feed(b">"), Some((3, 0)));

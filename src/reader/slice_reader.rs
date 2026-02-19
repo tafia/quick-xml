@@ -13,7 +13,7 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::parser::{FastElementParser, Parser};
+use crate::parser::{Parser, StartElementParser};
 use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
@@ -398,7 +398,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         *position += 1;
         *self = &self[1..];
 
-        let mut parser = FastElementParser::default();
+        let mut parser = StartElementParser::default();
 
         if let Some((name_len, consumed)) = parser.feed(self) {
             // +1 for `>` which we do not include
