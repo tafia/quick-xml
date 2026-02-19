@@ -283,10 +283,10 @@ impl ReaderState {
     ///
     /// # Parameters
     /// - `content`: Content of a tag between `<` and `>`
-    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Event<'b> {
+    pub fn emit_start<'b>(&mut self, name_len: usize, content: &'b [u8]) -> Event<'b> {
         if let Some(content) = content.strip_suffix(b"/") {
             // This is self-closed tag `<something/>`
-            let event = BytesStart::wrap(content, name_len(content), self.decoder());
+            let event = BytesStart::wrap(content, name_len, self.decoder());
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
@@ -297,7 +297,7 @@ impl ReaderState {
                 Event::Empty(event)
             }
         } else {
-            let event = BytesStart::wrap(content, name_len(content), self.decoder());
+            let event = BytesStart::wrap(content, name_len, self.decoder());
 
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be
