@@ -306,6 +306,53 @@ impl DetectedEncoding {
         }
     }
 }
+/// A struct for transparently decoding / validating bytes as UTF-8.
+#[derive(Debug)]
+pub struct Utf8BytesReader<R> {
+    #[cfg(feature = "encoding")]
+    reader: io::BufReader<R>,
+    #[cfg(not(feature = "encoding"))]
+    reader: io::BufReader<Utf8ValidatingReader<R>>,
+}
+
+impl<R: io::Read> Utf8BytesReader<R> {
+    /// Build a new reader which decodes a stream of bytes in an unknown encoding into UTF-8.
+    /// (TODO: well, not yet - right now it's just a dumb wrapper)
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(feature = "encoding")]
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader: io::BufReader::new(reader),
+        }
+    }
+
+    /// Build a new reader which validates UTF-8.
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(not(feature = "encoding"))]
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader: io::BufReader::new(Utf8ValidatingReader::new(reader)),
+        }
+    }
+}
+
+impl<R: io::Read> io::Read for Utf8BytesReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.reader.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.reader.consume(amt)
+    }
+}
 
 /// A reader wrapper that ensures only valid UTF-8 bytes are read.
 ///
@@ -449,6 +496,60 @@ impl<R: Read> Read for Utf8ValidatingReader<R> {
 
             // Loop back to validate and potentially return data
         }
+    }
+}
+
+#[cfg(test)]
+mod utf8_bytes_reader_tests {
+    use super::*;
+    use std::io::{BufRead, Read};
+
+    #[test]
+    fn basic_read() {
+        let data = b"Hello, World!";
+        let mut reader = Utf8BytesReader::new(&data[..]);
+        let mut buf = [0u8; 20];
+        let n = reader.read(&mut buf).unwrap();
+        assert!(n > 0);
+        assert_eq!(&buf[..n], &data[..n]);
+    }
+
+    #[test]
+    fn read_with_multibyte_chars() {
+        let data = "Hello, 世界! 😀".as_bytes();
+        let mut reader = Utf8BytesReader::new(&data[..]);
+        let mut result = Vec::new();
+        reader.read_to_end(&mut result).unwrap();
+        assert_eq!(result, data);
+        assert_eq!(std::str::from_utf8(&result).unwrap(), "Hello, 世界! 😀");
+    }
+
+    #[test]
+    fn bufread_interface() {
+        let data = b"Line1\nLine2\nLine3";
+        let mut reader = Utf8BytesReader::new(&data[..]);
+
+        // Test fill_buf
+        let buf = reader.fill_buf().unwrap();
+        assert!(!buf.is_empty());
+
+        // Test consume
+        let consumed = buf.len().min(5);
+        reader.consume(consumed);
+
+        // Read remaining
+        let mut result = Vec::new();
+        reader.read_to_end(&mut result).unwrap();
+        assert_eq!(result, &data[consumed..]);
+    }
+
+    #[test]
+    fn empty_input() {
+        let data = b"";
+        let mut reader = Utf8BytesReader::new(&data[..]);
+        let mut buf = [0u8; 10];
+        let n = reader.read(&mut buf).unwrap();
+        assert_eq!(n, 0);
     }
 }
 
