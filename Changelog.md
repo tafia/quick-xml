@@ -46,11 +46,13 @@
   accepts `XmlVersion` parameter to apply correct EOL normalization rules.
 - [#944]: `read_text()` now returns `BytesText` which allows you to get the content with
   properly normalized EOLs. To get the previous behavior use `.read_text().decode()?`.
+- [#947]: Bumped MSRV from 1.59 (Feb 2022) to 1.79 (June 2024)
 
 [#371]: https://github.com/tafia/quick-xml/issues/371
 [#914]: https://github.com/tafia/quick-xml/pull/914
 [#938]: https://github.com/tafia/quick-xml/pull/938
 [#944]: https://github.com/tafia/quick-xml/pull/944
+[#947]: https://github.com/tafia/quick-xml/pull/947
 
 
 ## 0.39.2 -- 2026-02-20

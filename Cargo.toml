@@ -10,7 +10,7 @@ repository = "https://github.com/tafia/quick-xml"
 keywords = ["xml", "serde", "parser", "writer", "html"]
 categories = ["asynchronous", "encoding", "parsing", "parser-implementations"]
 license = "MIT"
-rust-version = "1.56"
+rust-version = "1.79"
 # We exclude tests & examples & benches to reduce the size of a package.
 # Unfortunately, this is source of warnings in latest cargo when packaging:
 # > warning: ignoring {context} `{name}` as `{path}` is not included in the published package
