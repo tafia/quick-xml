@@ -31,6 +31,8 @@ pub enum Utf8ValidationError {
     },
     /// Incomplete UTF-8 sequence at end of stream
     IncompleteSequence,
+    /// Non-UTF-8 encoding detected at start of stream
+    NonUtf8EncodingDetected(DetectedEncoding),
 }
 
 impl From<Utf8Error> for Utf8ValidationError {
@@ -49,6 +51,13 @@ impl std::fmt::Display for Utf8ValidationError {
             }
             Self::IncompleteSequence => {
                 write!(f, "incomplete UTF-8 sequence at end of stream")
+            }
+            Self::NonUtf8EncodingDetected(detected) => {
+                write!(
+                    f,
+                    "non-UTF-8 encoding detected at start of stream: {:?}",
+                    detected
+                )
             }
         }
     }
@@ -322,6 +331,7 @@ pub fn detect_encoding(bytes: &[u8]) -> Option<DetectedEncoding> {
 /// Possible scenarios for start-of-xml detection of encoding
 ///
 /// See the documentation of [`detect_encoding`]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DetectedEncoding {
     /// Matches UTF-8 or some other ascii-compatible encoding
     AsciiCompatible,
@@ -413,6 +423,10 @@ impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
 /// that only valid UTF-8 bytes are written to the output buffer. Incomplete UTF-8
 /// sequences at read boundaries are buffered and combined with subsequent reads.
 ///
+/// Additionally, this reader checks the very beginning of the stream for encoding
+/// signatures (BOMs or XML declaration patterns) and rejects streams that appear to
+/// be encoded in UTF-16 or other non-UTF-8 encodings.
+///
 /// # Examples
 ///
 /// ```
@@ -430,6 +444,8 @@ pub struct Utf8ValidatingReader<R> {
     inner: R,
     /// Buffer to hold incomplete UTF-8 sequences from previous reads (max 3 bytes)
     buffer: Vec<u8>,
+    /// Whether we've checked for encoding at the start of the stream
+    encoding_checked: bool,
 }
 
 impl<R> Utf8ValidatingReader<R> {
@@ -438,6 +454,7 @@ impl<R> Utf8ValidatingReader<R> {
         Self {
             inner,
             buffer: Vec::with_capacity(4),
+            encoding_checked: false,
         }
     }
 
@@ -461,6 +478,47 @@ impl<R: Read> Read for Utf8ValidatingReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
+        }
+
+        // Check for encoding at the start of the stream
+        if !self.encoding_checked {
+            self.encoding_checked = true;
+
+            // Read at least 4 bytes to detect encoding using a stack-allocated buffer
+            let mut detection_buf = [0u8; 64];
+            let n = self.inner.read(&mut detection_buf)?;
+
+            if n > 0 {
+                self.buffer.extend_from_slice(&detection_buf[..n]);
+
+                // Try to detect encoding if we have at least 4 bytes
+                if self.buffer.len() >= 4 {
+                    if let Some(detected) = detect_encoding(&self.buffer) {
+                        match detected {
+                            DetectedEncoding::Utf8Bom | DetectedEncoding::AsciiCompatible => {
+                                // Strip BOM if present
+                                let bom_len = detected.bom_len();
+                                if bom_len > 0 {
+                                    self.buffer.drain(..bom_len);
+                                }
+                            }
+                            DetectedEncoding::Utf16Le
+                            | DetectedEncoding::Utf16LeBom
+                            | DetectedEncoding::Utf16Be
+                            | DetectedEncoding::Utf16BeBom => {
+                                // Reject UTF-16 encodings
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    EncodingError::Utf8(
+                                        Utf8ValidationError::NonUtf8EncodingDetected(detected),
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            // If we read 0 bytes or less than 4 bytes, assume UTF-8 and continue
         }
 
         loop {
@@ -1076,6 +1134,60 @@ mod utf8_validating_reader_tests {
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
             );
+        }
+    }
+
+    mod encoding_detection {
+        use super::*;
+
+        #[test]
+        fn utf8_bom_stripped() {
+            // UTF-8 BOM (0xEF 0xBB 0xBF) followed by "Hello"
+            let data = b"\xEF\xBB\xBFHello";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 20];
+            let n = reader.read(&mut buf).unwrap();
+
+            // BOM should be stripped, only "Hello" should be returned
+            assert_eq!(&buf[..n], b"Hello");
+            assert_eq!(std::str::from_utf8(&buf[..n]).unwrap(), "Hello");
+        }
+
+        #[test]
+        fn utf16le_bom_rejected() {
+            // UTF-16 LE BOM (0xFF 0xFE)
+            let data = b"\xFF\xFE<?xml";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 20];
+
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::NonUtf8EncodingDetected(DetectedEncoding::Utf16LeBom),
+            );
+        }
+
+        #[test]
+        fn utf16be_bom_rejected() {
+            // UTF-16 BE BOM (0xFE 0xFF)
+            let data = b"\xFE\xFF\x00<\x00?";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 20];
+
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::NonUtf8EncodingDetected(DetectedEncoding::Utf16BeBom),
+            );
+        }
+
+        #[test]
+        fn ascii_compatible_encoding_allowed() {
+            // ASCII-compatible XML declaration (no BOM)
+            let data = b"<?xml version=\"1.0\"?><root/>";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 50];
+
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], data);
         }
     }
 }

@@ -39,18 +39,34 @@ mod decode {
         assert_eq!(detected.encoding(), UTF_16LE);
         assert_eq!(detected.bom_len(), 2);
     }
+
+    #[test]
+    fn koi8_r_encoding() {
+        let src = include_bytes!("documents/opennews_all.rss").as_ref();
+        let mut buf = vec![];
+        let mut r = Reader::from_reader(src);
+        r.config_mut().trim_text(true);
+        loop {
+            match r.read_event_into(&mut buf) {
+                Ok(Text(e)) => {
+                    e.xml10_content().unwrap();
+                }
+                Ok(Eof) => break,
+                _ => (),
+            }
+        }
+    }
 }
+
 #[cfg(not(feature = "encoding"))]
 mod validate {
     use quick_xml::encoding::Utf8BytesReader;
 
     use super::*;
-    use quick_xml::encoding::{EncodingError, Utf8ValidationError};
+    use quick_xml::encoding::{DetectedEncoding, EncodingError, Utf8ValidationError};
     use quick_xml::errors::Error;
 
-    #[test]
-    fn test_validation_fails_on_utf16le_input() {
-        let src = include_bytes!("documents/encoding/utf16le-bom.xml").as_ref();
+    fn assert_non_utf8_encoding_detected(src: &[u8], expected: DetectedEncoding) {
         let mut buf = vec![];
         let mut r = Reader::from_reader(Utf8BytesReader::new(src));
         r.config_mut().trim_text(true);
@@ -62,64 +78,56 @@ mod validate {
             }
         };
 
-        // Assert that we got the specific error type
         match result {
-            Error::Encoding(EncodingError::Utf8(Utf8ValidationError::InvalidSequence {
-                error_len,
-            })) => {
-                assert_eq!(error_len, 1, "Expected 1-byte invalid sequence (0xFF)");
-            }
+            Error::Encoding(EncodingError::Utf8(Utf8ValidationError::NonUtf8EncodingDetected(
+                detected,
+            ))) => assert_eq!(detected, expected),
             other => panic!(
-                "Expected EncodingError::Utf8(InvalidSequence), got: {:?}",
+                "Expected EncodingError::Utf8(NonUtf8EncodingDetected), got: {:?}",
                 other
             ),
         }
     }
 
     #[test]
-    fn test_validation_fails_on_utf16be_input() {
-        let src = include_bytes!("documents/encoding/utf16be-bom.xml").as_ref();
-        let mut buf = vec![];
-        let mut r = Reader::from_reader(Utf8BytesReader::new(src));
-        r.config_mut().trim_text(true);
-
-        let result = loop {
-            match r.read_event_into(&mut buf) {
-                Ok(_) => panic!("Expected encoding error, didn't get one"),
-                Err(e) => break e,
-            }
-        };
-
-        // Assert that we got the specific error type
-        match result {
-            Error::Encoding(EncodingError::Utf8(Utf8ValidationError::InvalidSequence {
-                error_len,
-            })) => {
-                assert_eq!(error_len, 1, "Expected 1-byte invalid sequence (0xFE)");
-            }
-            other => panic!(
-                "Expected EncodingError::Utf8(InvalidSequence), got: {:?}",
-                other
-            ),
-        }
+    fn validation_fails_on_utf16le_input_with_bom() {
+        assert_non_utf8_encoding_detected(
+            include_bytes!("documents/encoding/utf16le-bom.xml"),
+            DetectedEncoding::Utf16LeBom,
+        );
     }
-}
 
-#[cfg(feature = "encoding")]
-#[test]
-fn test_koi8_r_encoding() {
-    let src = include_bytes!("documents/opennews_all.rss").as_ref();
-    let mut buf = vec![];
-    let mut r = Reader::from_reader(src);
-    r.config_mut().trim_text(true);
-    loop {
-        match r.read_event_into(&mut buf) {
-            Ok(Text(e)) => {
-                e.xml10_content().unwrap();
-            }
-            Ok(Eof) => break,
-            _ => (),
-        }
+    #[test]
+    fn validation_fails_on_utf16be_input_with_bom() {
+        assert_non_utf8_encoding_detected(
+            include_bytes!("documents/encoding/utf16be-bom.xml"),
+            DetectedEncoding::Utf16BeBom,
+        );
+    }
+
+    #[test]
+    fn validation_fails_on_utf16le_input_without_bom() {
+        assert_non_utf8_encoding_detected(
+            include_bytes!("documents/encoding/utf16le.xml"),
+            DetectedEncoding::Utf16LeLike,
+        );
+    }
+
+    #[test]
+    fn validation_fails_on_utf16be_input_without_bom() {
+        assert_non_utf8_encoding_detected(
+            include_bytes!("documents/encoding/utf16be.xml"),
+            DetectedEncoding::Utf16BeLike,
+        );
+    }
+
+    #[test]
+    #[ignore = "Validating Reader cannot yet assume that a non-UTF-8 encoding in the Decl = problem"]
+    fn validation_fails_on_koi9r_input() {
+        assert_non_utf8_encoding_detected(
+            include_bytes!("documents/encoding/KOI8-R.xml"),
+            DetectedEncoding::Utf16BeLike, // TODO: wrong variant, fix when implemented
+        );
     }
 }
 

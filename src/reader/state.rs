@@ -280,6 +280,8 @@ impl ReaderState {
             if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
                 let event = BytesDecl::from_start(BytesStart::wrap(content, 3, self.decoder()));
 
+                // TODO: once we can assume that the parser is operating on UTF-8, then we can throw
+                // an error here if we see a non-UTF-8 encoding... if encoding/decoding is not enabled.
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
                 if self.encoding.can_be_refined() {
