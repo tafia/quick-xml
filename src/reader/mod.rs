@@ -6,6 +6,8 @@ use std::io;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
+#[cfg(feature = "encoding")]
+use crate::encoding::DetectedEncoding;
 use crate::errors::{Error, IllFormedError, SyntaxError};
 use crate::events::{BytesRef, Event};
 use crate::parser::{DtdParser, ElementParser, Parser, PiParser};
@@ -267,7 +269,7 @@ macro_rules! read_event_impl {
                     #[cfg(feature = "encoding")]
                     if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
                         if $self.state.encoding.can_be_refined() {
-                            $self.state.encoding = crate::reader::EncodingRef::BomDetected(encoding);
+                            $self.state.encoding = crate::reader::EncodingRef::BomDetected(encoding.encoding());
                         }
                     }
 
@@ -1057,7 +1059,7 @@ trait XmlSource<'r, B> {
 
     /// Determines encoding from the start of input and removes BOM if it is present
     #[cfg(feature = "encoding")]
-    fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>>;
+    fn detect_encoding(&mut self) -> io::Result<Option<DetectedEncoding>>;
 
     /// Read input until start of markup (the `<`) is found, start of general entity
     /// reference (the `&`) is found or end of input is reached.

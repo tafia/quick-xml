@@ -4,18 +4,16 @@ use std::borrow::Cow;
 use std::str::Utf8Error;
 
 #[cfg(feature = "encoding")]
-use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
+use encoding_rs;
 
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-8.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 pub(crate) const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-16 with little-endian byte order.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
-#[cfg(feature = "encoding")]
 pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-16 with big-endian byte order.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
-#[cfg(feature = "encoding")]
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
 /// An error when decoding or encoding
@@ -30,7 +28,7 @@ pub enum EncodingError {
     Utf8(Utf8Error),
     /// Input did not adhere to the given encoding
     #[cfg(feature = "encoding")]
-    Other(&'static Encoding),
+    Other(&'static encoding_rs::Encoding),
 }
 
 impl From<Utf8Error> for EncodingError {
@@ -77,20 +75,22 @@ impl std::fmt::Display for EncodingError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Decoder {
     #[cfg(feature = "encoding")]
-    pub(crate) encoding: &'static Encoding,
+    pub(crate) encoding: &'static encoding_rs::Encoding,
 }
 
 impl Decoder {
     pub(crate) const fn utf8() -> Self {
         Decoder {
             #[cfg(feature = "encoding")]
-            encoding: UTF_8,
+            encoding: encoding_rs::UTF_8,
         }
     }
 
     #[cfg(all(test, feature = "encoding", feature = "serialize"))]
     pub(crate) const fn utf16() -> Self {
-        Decoder { encoding: UTF_16LE }
+        Decoder {
+            encoding: encoding_rs::UTF_16LE,
+        }
     }
 }
 
@@ -101,7 +101,7 @@ impl Decoder {
     ///
     /// [`decode`]: Self::decode
     #[cfg(feature = "encoding")]
-    pub const fn encoding(&self) -> &'static Encoding {
+    pub const fn encoding(&self) -> &'static encoding_rs::Encoding {
         self.encoding
     }
 
@@ -182,7 +182,7 @@ impl Decoder {
 #[cfg(feature = "encoding")]
 pub fn decode<'b>(
     bytes: &'b [u8],
-    encoding: &'static Encoding,
+    encoding: &'static encoding_rs::Encoding,
 ) -> Result<Cow<'b, str>, EncodingError> {
     encoding
         .decode_without_bom_handling_and_without_replacement(bytes)
@@ -193,10 +193,10 @@ pub fn decode<'b>(
 #[cfg(feature = "encoding")]
 pub fn decode_into(
     bytes: &[u8],
-    encoding: &'static Encoding,
+    encoding: &'static encoding_rs::Encoding,
     buf: &mut String,
 ) -> Result<(), EncodingError> {
-    if encoding == UTF_8 {
+    if encoding == encoding_rs::UTF_8 {
         buf.push_str(std::str::from_utf8(bytes)?);
         return Ok(());
     }
@@ -211,22 +211,21 @@ pub fn decode_into(
     );
     let (result, read) = decoder.decode_to_string_without_replacement(bytes, buf, true);
     match result {
-        DecoderResult::InputEmpty => {
+        encoding_rs::DecoderResult::InputEmpty => {
             debug_assert_eq!(read, bytes.len());
             Ok(())
         }
-        DecoderResult::Malformed(_, _) => Err(EncodingError::Other(encoding)),
+        encoding_rs::DecoderResult::Malformed(_, _) => Err(EncodingError::Other(encoding)),
         // SAFETY: We allocate enough space above
-        DecoderResult::OutputFull => unreachable!(),
+        encoding_rs::DecoderResult::OutputFull => unreachable!(),
     }
 }
 
 /// Automatic encoding detection of XML files based using the
 /// [recommended algorithm](https://www.w3.org/TR/xml11/#sec-guessing).
 ///
-/// If encoding is detected, `Some` is returned with an encoding and size of BOM
-/// in bytes, if detection was performed using BOM, or zero, if detection was
-/// performed without BOM.
+/// If encoding is detected, `Some` is returned with a [`DetectedEncoding`] that provides
+/// the BOM size in bytes (or zero if no BOM was present).
 ///
 /// IF encoding was not recognized, `None` is returned.
 ///
@@ -246,21 +245,63 @@ pub fn decode_into(
 /// |`00 3C 00 3F`|UTF-16 BE or ISO-10646-UCS-2 BE or similar 16-bit BE (use declared encoding to find the exact one)
 /// |`3C 00 3F 00`|UTF-16 LE or ISO-10646-UCS-2 LE or similar 16-bit LE (use declared encoding to find the exact one)
 /// |`3C 3F 78 6D`|UTF-8, ISO 646, ASCII, some part of ISO 8859, Shift-JIS, EUC, or any other 7-bit, 8-bit, or mixed-width encoding which ensures that the characters of ASCII have their normal positions, width, and values; the actual encoding declaration must be read to detect which of these applies, but since all of these encodings use the same bit patterns for the relevant ASCII characters, the encoding declaration itself may be read reliably
-#[cfg(feature = "encoding")]
-pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
+pub fn detect_encoding(bytes: &[u8]) -> Option<DetectedEncoding> {
     // Prevent suggesting "<?xm". We want to have the same formatted lines for all arms.
     #[allow(clippy::byte_char_slices)]
     match bytes {
         // with BOM
-        _ if bytes.starts_with(UTF16_BE_BOM) => Some((UTF_16BE, 2)),
-        _ if bytes.starts_with(UTF16_LE_BOM) => Some((UTF_16LE, 2)),
-        _ if bytes.starts_with(UTF8_BOM) => Some((UTF_8, 3)),
+        _ if bytes.starts_with(UTF16_BE_BOM) => Some(DetectedEncoding::Utf16BeBom),
+        _ if bytes.starts_with(UTF16_LE_BOM) => Some(DetectedEncoding::Utf16LeBom),
+        _ if bytes.starts_with(UTF8_BOM) => Some(DetectedEncoding::Utf8Bom),
 
         // without BOM
-        _ if bytes.starts_with(&[0x00, b'<', 0x00, b'?']) => Some((UTF_16BE, 0)), // Some BE encoding, for example, UTF-16 or ISO-10646-UCS-2
-        _ if bytes.starts_with(&[b'<', 0x00, b'?', 0x00]) => Some((UTF_16LE, 0)), // Some LE encoding, for example, UTF-16 or ISO-10646-UCS-2
-        _ if bytes.starts_with(&[b'<', b'?', b'x', b'm']) => Some((UTF_8, 0)), // Some ASCII compatible
+        _ if bytes.starts_with(&[0x00, b'<', 0x00, b'?']) => Some(DetectedEncoding::Utf16BeLike), // Some BE encoding, for example, UTF-16 or ISO-10646-UCS-2
+        _ if bytes.starts_with(&[b'<', 0x00, b'?', 0x00]) => Some(DetectedEncoding::Utf16LeLike), // Some LE encoding, for example, UTF-16 or ISO-10646-UCS-2
+        _ if bytes.starts_with(&[b'<', b'?', b'x', b'm']) => {
+            Some(DetectedEncoding::AsciiCompatible)
+        } // Some ASCII compatible
 
         _ => None,
+    }
+}
+
+/// Possible scenarios for start-of-xml detection of encoding
+///
+/// See the documentation of [`detect_encoding`]
+pub enum DetectedEncoding {
+    /// Matches UTF-8 or some other ascii-compatible encoding
+    AsciiCompatible,
+    /// We saw a UTF-8 BOM
+    Utf8Bom,
+    /// Matches UTF-16-LE or some other UTF-16 compatible encoding (e.g. ISO-10646-UCS-2)
+    Utf16LeLike,
+    /// We saw a UTF-16 BOM in little-endian orientation
+    Utf16LeBom,
+    /// Matches UTF-16-BE or some other UTF-16 compatible encoding (e.g. ISO-10646-UCS-2)
+    Utf16BeLike,
+    /// We saw a UTF-16 BOM in big-endian orientation
+    Utf16BeBom,
+}
+
+impl DetectedEncoding {
+    /// Return an Encoding object appropriate for the detected encoding
+    #[cfg(feature = "encoding")]
+    pub const fn encoding(&self) -> &'static encoding_rs::Encoding {
+        match self {
+            DetectedEncoding::AsciiCompatible | DetectedEncoding::Utf8Bom => encoding_rs::UTF_8,
+            DetectedEncoding::Utf16LeLike | DetectedEncoding::Utf16LeBom => encoding_rs::UTF_16LE,
+            DetectedEncoding::Utf16BeLike | DetectedEncoding::Utf16BeBom => encoding_rs::UTF_16BE,
+        }
+    }
+
+    /// Length of the BOM, which may need to be stripped from the input
+    pub const fn bom_len(&self) -> usize {
+        match self {
+            DetectedEncoding::Utf8Bom => 3,
+            DetectedEncoding::Utf16LeBom | DetectedEncoding::Utf16BeBom => 2,
+            DetectedEncoding::AsciiCompatible
+            | DetectedEncoding::Utf16LeLike
+            | DetectedEncoding::Utf16BeLike => 0,
+        }
     }
 }

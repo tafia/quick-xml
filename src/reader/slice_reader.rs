@@ -5,9 +5,11 @@
 use std::io;
 
 #[cfg(feature = "encoding")]
+use crate::encoding::DetectedEncoding;
+#[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs;
 
 use crate::errors::{Error, Result};
 use crate::events::{BytesText, Event};
@@ -27,7 +29,7 @@ impl<'a> Reader<&'a [u8]> {
         #[cfg(feature = "encoding")]
         {
             let mut reader = Self::from_reader(s.as_bytes());
-            reader.state.encoding = EncodingRef::Explicit(UTF_8);
+            reader.state.encoding = EncodingRef::Explicit(encoding_rs::UTF_8);
             reader
         }
 
@@ -253,10 +255,10 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     #[cfg(feature = "encoding")]
     #[inline]
-    fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>> {
-        if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
-            *self = &self[bom_len..];
-            return Ok(Some(enc));
+    fn detect_encoding(&mut self) -> io::Result<Option<DetectedEncoding>> {
+        if let Some(detected) = crate::encoding::detect_encoding(self) {
+            *self = &self[detected.bom_len() as usize..];
+            return Ok(Some(detected));
         }
         Ok(None)
     }

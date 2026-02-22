@@ -20,11 +20,22 @@ mod decode {
     #[test]
     fn test_detect_encoding() {
         // No BOM
-        assert_eq!(detect_encoding(UTF8_TEXT.as_bytes()), Some((UTF_8, 0)));
+        let detected = detect_encoding(UTF8_TEXT.as_bytes()).unwrap();
+        assert_eq!(detected.encoding(), UTF_8);
+        assert_eq!(detected.bom_len(), 0);
+
         // BOM
-        assert_eq!(detect_encoding(UTF8_TEXT_WITH_BOM), Some((UTF_8, 3)));
-        assert_eq!(detect_encoding(UTF16BE_TEXT_WITH_BOM), Some((UTF_16BE, 2)));
-        assert_eq!(detect_encoding(UTF16LE_TEXT_WITH_BOM), Some((UTF_16LE, 2)));
+        let detected = detect_encoding(UTF8_TEXT_WITH_BOM).unwrap();
+        assert_eq!(detected.encoding(), UTF_8);
+        assert_eq!(detected.bom_len(), 3);
+
+        let detected = detect_encoding(UTF16BE_TEXT_WITH_BOM).unwrap();
+        assert_eq!(detected.encoding(), UTF_16BE);
+        assert_eq!(detected.bom_len(), 2);
+
+        let detected = detect_encoding(UTF16LE_TEXT_WITH_BOM).unwrap();
+        assert_eq!(detected.encoding(), UTF_16LE);
+        assert_eq!(detected.bom_len(), 2);
     }
 }
 

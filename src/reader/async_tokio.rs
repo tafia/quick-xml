@@ -7,6 +7,7 @@ use std::task::{Context, Poll};
 
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
 
+use crate::encoding;
 use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesRef, BytesText, Event};
 use crate::name::{QName, ResolveResult};
