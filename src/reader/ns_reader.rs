@@ -9,6 +9,7 @@ use std::io::{BufRead, BufReader};
 use std::ops::Deref;
 use std::path::Path;
 
+use crate::encoding::Utf8BytesReader;
 use crate::errors::Result;
 use crate::events::{BytesText, Event};
 use crate::name::{NamespaceResolver, QName, ResolveResult};
@@ -47,6 +48,36 @@ impl<R> NsReader<R> {
     #[inline]
     pub fn config_mut(&mut self) -> &mut Config {
         self.reader.config_mut()
+    }
+}
+
+impl<R: std::io::Read> NsReader<Utf8BytesReader<R>> {
+    /// Creates an `NsReader` that reads from a given reader with UTF-8 validation.
+    ///
+    /// This constructor wraps the input reader in a [`Utf8BytesReader`], which validates
+    /// that all bytes read are valid UTF-8. If invalid UTF-8 is encountered, an error
+    /// will be returned when reading events.
+    ///
+    /// # Experimental
+    ///
+    /// **This API is experimental and may change (or disappear) in future versions.**
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quick_xml::reader::NsReader;
+    /// use std::io::Cursor;
+    ///
+    /// let data = Cursor::new(b"<tag>content</tag>".to_vec());
+    /// let reader = NsReader::from_reader_validating(data);
+    /// // Reader will validate UTF-8 as it reads
+    /// ```
+    ///
+    /// [`Utf8BytesReader`]: crate::encoding::Utf8BytesReader
+    #[inline]
+    #[cfg(not(feature = "encoding"))]
+    pub fn from_reader_validating(reader: R) -> Self {
+        Self::new(Reader::from_reader_validating(reader))
     }
 }
 
@@ -439,6 +470,18 @@ impl NsReader<BufReader<File>> {
     /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self::new(Reader::from_file(path)?))
+    }
+}
+
+impl NsReader<Utf8BytesReader<File>> {
+    /// Creates an XML reader from a file path.
+    ///
+    /// If the [`encoding`] feature is *not* enabled, the reader will validate that all
+    /// bytes read from the file are valid UTF-8. If invalid UTF-8 is encountered, an
+    /// error will be returned when reading events.
+    #[cfg(not(feature = "encoding"))]
+    pub fn from_file_validating<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Ok(Self::new(Reader::from_file_validating(path)?))
     }
 }
 

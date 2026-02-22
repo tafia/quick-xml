@@ -32,6 +32,13 @@
   - `Attribute::decode_and_unescape_value_with()`
 
   Deprecated functions now behaves the same as newly added.
+-[#947]: Add new constructors to `Reader` and `NsReader` that perform automatic streaming UTF-8
+  validation on the underlying input. Validation failures are raised as errors when the `Reader`
+  is used. These APIs are currently considered "experimental".
+  - `Reader::from_reader_validating()`
+  - `Reader::from_file_validating()`
+  - `NsReader::from_reader_validating()`
+  - `NsReader::from_file_validating()`
 
 ### Bug Fixes
 
@@ -48,6 +55,7 @@
   properly normalized EOLs. To get the previous behavior use `.read_text().decode()?`.
 - [#947]: Bumped MSRV from 1.59 (Feb 2022) to 1.79 (June 2024)
 
+[#947]: https://github.com/tafia/quick-xml/pull/947
 [#371]: https://github.com/tafia/quick-xml/issues/371
 [#914]: https://github.com/tafia/quick-xml/pull/914
 [#938]: https://github.com/tafia/quick-xml/pull/938

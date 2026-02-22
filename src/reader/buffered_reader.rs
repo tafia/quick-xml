@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use crate::encoding;
+use crate::encoding::{self, Utf8BytesReader};
 use crate::errors::{Error, Result};
 use crate::events::{BytesText, Event};
 use crate::name::QName;
@@ -575,6 +575,18 @@ impl Reader<BufReader<File>> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         Ok(Self::from_reader(reader))
+    }
+}
+
+impl Reader<Utf8BytesReader<File>> {
+    /// Creates an XML reader from a file path.
+    ///
+    /// The reader will validate that all bytes read from the file are valid UTF-8.
+    /// If invalid UTF-8 is encountered, an error will be returned when reading events.
+    #[cfg(not(feature = "encoding"))]
+    pub fn from_file_validating<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = File::open(path)?;
+        Ok(Self::from_reader_validating(file))
     }
 }
 

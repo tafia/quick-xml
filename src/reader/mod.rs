@@ -5,9 +5,9 @@ use encoding_rs::Encoding;
 use std::io;
 use std::ops::Range;
 
-use crate::encoding::Decoder;
 #[cfg(feature = "encoding")]
 use crate::encoding::DetectedEncoding;
+use crate::encoding::{Decoder, Utf8BytesReader};
 use crate::errors::{Error, IllFormedError, SyntaxError};
 use crate::events::{BytesRef, Event};
 use crate::parser::{DtdParser, ElementParser, Parser, PiParser};
@@ -778,7 +778,7 @@ impl<R> Reader<R> {
     /// Creates a `Reader` that reads from a given reader.
     pub fn from_reader(reader: R) -> Self {
         Self {
-            reader,
+            reader: reader,
             state: ReaderState::default(),
         }
     }
@@ -791,6 +791,35 @@ impl<R> Reader<R> {
     /// Returns mutable reference to the parser configuration
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.state.config
+    }
+}
+
+impl<R: std::io::Read> Reader<Utf8BytesReader<R>> {
+    /// Creates a `Reader` that reads from a given reader with UTF-8 validation.
+    ///
+    /// This constructor wraps the input reader in a [`Utf8BytesReader`], which validates
+    /// that all bytes read are valid UTF-8. If invalid UTF-8 is encountered, an error
+    /// will be returned when reading events.
+    ///
+    /// # Experimental
+    ///
+    /// **This API is experimental and may change (or disappear) in future versions.**
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quick_xml::reader::Reader;
+    /// use std::io::Cursor;
+    ///
+    /// let data = Cursor::new(b"<tag>content</tag>".to_vec());
+    /// let reader = Reader::from_reader_validating(data);
+    /// // Reader will validate UTF-8 as it reads
+    /// ```
+    ///
+    /// [`Utf8BytesReader`]: crate::encoding::Utf8BytesReader
+    #[cfg(not(feature = "encoding"))]
+    pub fn from_reader_validating(reader: R) -> Self {
+        Self::from_reader(Utf8BytesReader::new(reader))
     }
 }
 
