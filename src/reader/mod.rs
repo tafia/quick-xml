@@ -1153,7 +1153,11 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_start_element(&mut self, buf: B, position: &mut u64) -> Result<(usize, &'r [u8]), Error>;
+    fn read_start_element(
+        &mut self,
+        buf: B,
+        position: &mut u64,
+    ) -> Result<(usize, &'r [u8]), Error>;
 }
 
 /// Possible elements started with `<!`

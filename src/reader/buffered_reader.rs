@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::parser::{StartElementParser, Parser};
+use crate::parser::{Parser, StartElementParser};
 use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 

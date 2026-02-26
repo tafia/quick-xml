@@ -5,14 +5,14 @@ use crate::errors::SyntaxError;
 mod comment;
 mod dtd;
 mod element;
-mod start_element;
 mod pi;
+mod start_element;
 
 pub use comment::CommentParser;
 pub(crate) use dtd::DtdParser;
 pub use element::ElementParser;
-pub use start_element::StartElementParser;
 pub use pi::PiParser;
+pub use start_element::StartElementParser;
 
 /// Used to decouple reading of data from data source and parsing XML structure from it.
 /// This is a state preserved between getting chunks of bytes from the reader.
