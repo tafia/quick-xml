@@ -1,7 +1,7 @@
 //! A module for wrappers that encode / decode data.
 
 use std::borrow::Cow;
-use std::io::{self, Read};
+use std::io::{self, BufRead, Read};
 use std::str::Utf8Error;
 
 #[cfg(feature = "encoding")]
@@ -375,7 +375,7 @@ pub struct Utf8BytesReader<R> {
     #[cfg(feature = "encoding")]
     reader: io::BufReader<R>,
     #[cfg(not(feature = "encoding"))]
-    reader: io::BufReader<Utf8ValidatingReader<R>>,
+    reader: io::BufReader<Utf8ValidatingReader<io::BufReader<R>>>,
 }
 
 impl<R: io::Read> Utf8BytesReader<R> {
@@ -396,7 +396,7 @@ impl<R: io::Read> Utf8BytesReader<R> {
     #[cfg(not(feature = "encoding"))]
     pub fn new(reader: R) -> Self {
         Self {
-            reader: io::BufReader::new(Utf8ValidatingReader::new(reader)),
+            reader: io::BufReader::new(Utf8ValidatingReader::new(io::BufReader::new(reader))),
         }
     }
 }
@@ -417,11 +417,48 @@ impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
     }
 }
 
+/// Returns the expected total number of bytes in a UTF-8 character given its first byte
+/// (2, 3, or 4). Used to determine how many continuation bytes are needed to complete a
+/// pending incomplete sequence.
+fn utf8_char_width(first_byte: u8) -> usize {
+    if first_byte & 0x80 == 0 {
+        1
+    } else if first_byte & 0xE0 == 0xC0 {
+        2
+    } else if first_byte & 0xF0 == 0xE0 {
+        3
+    } else if first_byte & 0xF8 == 0xF0 {
+        4
+    } else {
+        1 // Invalid start byte; will be caught by from_utf8
+    }
+}
+
+/// Finds the largest byte index <= `index` that falls on a UTF-8 character boundary.
+/// Used when the caller's output buffer is smaller than the available valid data —
+/// we must avoid consuming a partial multi-byte character from the BufRead, because
+/// orphaned continuation bytes at the start of the next `fill_buf()` would be
+/// misreported as invalid UTF-8.
+///
+/// The caller must ensure that `bytes[..index]` contains valid UTF-8 data.
+fn floor_char_boundary(bytes: &[u8], index: usize) -> usize {
+    if index >= bytes.len() {
+        bytes.len()
+    } else {
+        let mut i = index;
+        while i > 0 && (bytes[i] & 0xC0) == 0x80 {
+            i -= 1;
+        }
+        i
+    }
+}
+
 /// A reader wrapper that ensures only valid UTF-8 bytes are read.
 ///
-/// This reader uses [`str::from_utf8()`] and [`Utf8Error::valid_up_to()`] to validate
-/// that only valid UTF-8 bytes are written to the output buffer. Incomplete UTF-8
-/// sequences at read boundaries are buffered and combined with subsequent reads.
+/// This reader wraps a [`BufRead`] source and uses [`str::from_utf8()`] and
+/// [`Utf8Error::valid_up_to()`] to validate that only valid UTF-8 bytes are
+/// written to the output buffer. Incomplete UTF-8 sequences at buffer boundaries
+/// are handled transparently.
 ///
 /// Additionally, this reader checks the very beginning of the stream for encoding
 /// signatures (BOMs or XML declaration patterns) and rejects streams that appear to
@@ -442,8 +479,10 @@ impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
 #[derive(Debug)]
 pub struct Utf8ValidatingReader<R> {
     inner: R,
-    /// Buffer to hold incomplete UTF-8 sequences from previous reads (max 3 bytes)
-    buffer: Vec<u8>,
+    /// Small buffer for incomplete UTF-8 sequences at BufRead boundaries.
+    /// At most 3 bytes (the start of a 2, 3, or 4-byte sequence).
+    pending: [u8; 3],
+    pending_len: u8,
     /// Whether we've checked for encoding at the start of the stream
     encoding_checked: bool,
 }
@@ -453,7 +492,8 @@ impl<R> Utf8ValidatingReader<R> {
     pub fn new(inner: R) -> Self {
         Self {
             inner,
-            buffer: Vec::with_capacity(4),
+            pending: [0; 3],
+            pending_len: 0,
             encoding_checked: false,
         }
     }
@@ -474,140 +514,184 @@ impl<R> Utf8ValidatingReader<R> {
     }
 }
 
-impl<R: Read> Read for Utf8ValidatingReader<R> {
+impl<R: BufRead> Read for Utf8ValidatingReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
         }
 
-        // Check for encoding at the start of the stream
+        // On the very first read, peek at the stream to detect encoding via BOM
+        // or XML declaration patterns. UTF-16 is rejected; UTF-8 BOM is stripped.
         if !self.encoding_checked {
             self.encoding_checked = true;
 
-            // Read at least 4 bytes to detect encoding using a stack-allocated buffer
-            let mut detection_buf = [0u8; 64];
-            let n = self.inner.read(&mut detection_buf)?;
-
-            if n > 0 {
-                self.buffer.extend_from_slice(&detection_buf[..n]);
-
-                // Try to detect encoding if we have at least 4 bytes
-                if self.buffer.len() >= 4 {
-                    if let Some(detected) = detect_encoding(&self.buffer) {
-                        match detected {
-                            DetectedEncoding::Utf8Bom | DetectedEncoding::AsciiCompatible => {
-                                // Strip BOM if present
-                                let bom_len = detected.bom_len();
-                                if bom_len > 0 {
-                                    self.buffer.drain(..bom_len);
-                                }
-                            }
-                            DetectedEncoding::Utf16Le
-                            | DetectedEncoding::Utf16LeBom
-                            | DetectedEncoding::Utf16Be
-                            | DetectedEncoding::Utf16BeBom => {
-                                // Reject UTF-16 encodings
-                                return Err(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    EncodingError::Utf8(
-                                        Utf8ValidationError::NonUtf8EncodingDetected(detected),
-                                    ),
-                                ));
-                            }
+            let available = self.inner.fill_buf()?;
+            // detect_encoding uses starts_with, so patterns longer than the
+            // available data simply won't match — no length guard needed.
+            if let Some(detected) = detect_encoding(available) {
+                match detected {
+                    DetectedEncoding::Utf8Bom | DetectedEncoding::AsciiCompatible => {
+                        let bom_len = detected.bom_len();
+                        if bom_len > 0 {
+                            self.inner.consume(bom_len);
                         }
+                    }
+                    DetectedEncoding::Utf16LeLike
+                    | DetectedEncoding::Utf16LeBom
+                    | DetectedEncoding::Utf16BeLike
+                    | DetectedEncoding::Utf16BeBom => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            EncodingError::Utf8(Utf8ValidationError::NonUtf8EncodingDetected(
+                                detected,
+                            )),
+                        ));
                     }
                 }
             }
-            // If we read 0 bytes or less than 4 bytes, assume UTF-8 and continue
         }
 
         loop {
-            // If we have buffered data, check if it's complete UTF-8
-            if !self.buffer.is_empty() {
-                match std::str::from_utf8(&self.buffer) {
-                    Ok(s) => {
-                        // All buffered bytes are valid UTF-8
-                        // Find how many complete characters fit in the buffer
-                        let mut bytes_to_copy = 0;
-                        for (idx, _) in s.char_indices() {
-                            if idx > buf.len() {
-                                break;
-                            }
-                            bytes_to_copy = idx;
-                        }
-                        // Also consider the last character
-                        if s.len() <= buf.len() {
-                            bytes_to_copy = s.len();
-                        }
-
-                        if bytes_to_copy == 0 {
-                            // Buffer too small for even one character
-                            return Ok(0);
-                        }
-
-                        buf[..bytes_to_copy].copy_from_slice(&self.buffer[..bytes_to_copy]);
-                        self.buffer.drain(..bytes_to_copy);
-                        return Ok(bytes_to_copy);
-                    }
-                    Err(e) => {
-                        let valid_up_to = e.valid_up_to();
-
-                        if let Some(error_len) = e.error_len() {
-                            // Invalid UTF-8 sequence found
-                            if valid_up_to == 0 {
-                                return Err(io::Error::new(
-                                    io::ErrorKind::InvalidData,
-                                    EncodingError::Utf8(Utf8ValidationError::InvalidSequence {
-                                        error_len,
-                                    }),
-                                ));
-                            }
-                            // Write valid portion before the error
-                            let len = valid_up_to.min(buf.len());
-                            buf[..len].copy_from_slice(&self.buffer[..len]);
-
-                            // Remove only the valid bytes, leave invalid bytes to error on next read
-                            self.buffer.drain(..valid_up_to);
-                            return Ok(len);
-                        } else {
-                            // Incomplete UTF-8 sequence - need to read more
-                            // But first, if we have valid bytes, return them
-                            if valid_up_to > 0 {
-                                let len = valid_up_to.min(buf.len());
-                                buf[..len].copy_from_slice(&self.buffer[..len]);
-                                self.buffer.drain(..len);
-                                return Ok(len);
-                            }
-                            // Otherwise fall through to read more data
-                        }
-                    }
-                }
-            }
-
-            // Read more data from the underlying reader directly into self.buffer
-            let read_size = buf.len().max(64); // Read at least 64 bytes for efficiency
-            let buf_start = self.buffer.len();
-            self.buffer.resize(buf_start + read_size, 0);
-            let n = self.inner.read(&mut self.buffer[buf_start..])?;
-
-            // Trim buffer to actual bytes read
-            self.buffer.truncate(buf_start + n);
-
-            // If we read nothing
-            if n == 0 {
-                if buf_start == 0 {
-                    // True EOF with no buffered data
-                    return Ok(0);
-                } else {
-                    // EOF with incomplete UTF-8 sequence
+            // ------ Pending path ------------
+            // On a previous iteration, the BufRead's buffer ended with the first 1-3 bytes of a
+            // multi-byte character. We consumed those bytes into `self.pending` so the BufRead
+            // could refill. Now we combine them with fresh data to complete the character.
+            if self.pending_len > 0 {
+                let available = self.inner.fill_buf()?;
+                if available.is_empty() {
+                    self.pending_len = 0;
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         EncodingError::Utf8(Utf8ValidationError::IncompleteSequence),
                     ));
                 }
+
+                // The first byte of a UTF-8 sequence encodes the total length (2, 3, or 4).
+                // The pending buffer holds at most 3 bytes (seq_len - 1); the final byte always
+                // comes from the inner reader. Use that total to determine how many more bytes
+                // we need.
+                let plen = self.pending_len as usize;
+                let seq_len = utf8_char_width(self.pending[0]);
+                let needed = seq_len - plen;
+
+                if available.len() < needed {
+                    // Inner reader still doesn't have enough bytes (e.g. a network reader
+                    // returning one byte at a time). Accumulate what we can and loop to try again.
+                    let take = available.len().min(3 - plen);
+                    self.pending[plen..plen + take].copy_from_slice(&available[..take]);
+                    self.pending_len += take as u8;
+                    self.inner.consume(take);
+                    continue;
+                }
+
+                // Reconstruct the full character from pending + fresh bytes.
+                let mut seq = [0u8; 4];
+                seq[..plen].copy_from_slice(&self.pending[..plen]);
+                seq[plen..seq_len].copy_from_slice(&available[..needed]);
+
+                match std::str::from_utf8(&seq[..seq_len]) {
+                    Ok(_) => {
+                        if buf.len() < seq_len {
+                            return Ok(0);
+                        }
+                        buf[..seq_len].copy_from_slice(&seq[..seq_len]);
+                        self.inner.consume(needed);
+                        self.pending_len = 0;
+                        return Ok(seq_len);
+                    }
+                    Err(e) => {
+                        self.pending_len = 0;
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            EncodingError::Utf8(if let Some(error_len) = e.error_len() {
+                                Utf8ValidationError::InvalidSequence { error_len }
+                            } else {
+                                Utf8ValidationError::IncompleteSequence
+                            }),
+                        ));
+                    }
+                }
             }
 
-            // Loop back to validate and potentially return data
+            // ------- Main path---------
+            // Peek at the inner BufRead's buffer and validate its contents. We only consume bytes
+            // we actually copy to the caller's buf, so bytes after an error remain available for
+            // the next call.
+            let available = self.inner.fill_buf()?;
+            if available.is_empty() {
+                return Ok(0);
+            }
+
+            match std::str::from_utf8(available) {
+                Ok(_) => {
+                    // All available bytes are valid UTF-8. Copy as many complete characters as
+                    // fit in buf. We must land on a character boundary to avoid consuming a
+                    // partial character from the BufRead — otherwise the next fill_buf() would
+                    // start with orphaned continuation bytes, causing a false validation error.
+                    let len = floor_char_boundary(available, buf.len());
+                    if len == 0 {
+                        return Ok(0);
+                    }
+                    buf[..len].copy_from_slice(&available[..len]);
+                    self.inner.consume(len);
+                    return Ok(len);
+                }
+                Err(e) => {
+                    let valid_up_to = e.valid_up_to();
+
+                    if let Some(error_len) = e.error_len() {
+                        // Definite invalid UTF-8 sequence.
+                        if valid_up_to == 0 {
+                            // Starts with invalid bytes — error immediately.
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                EncodingError::Utf8(Utf8ValidationError::InvalidSequence {
+                                    error_len,
+                                }),
+                            ));
+                        }
+                        // There is a valid prefix before the error. Return as much of it as
+                        // fits in buf (on a char boundary); the invalid bytes stay unconsumed
+                        // in the BufRead and will trigger an error on the next read() call.
+                        let len = floor_char_boundary(available, valid_up_to.min(buf.len()));
+                        if len == 0 {
+                            return Ok(0);
+                        }
+                        buf[..len].copy_from_slice(&available[..len]);
+                        self.inner.consume(len);
+                        return Ok(len);
+                    } else {
+                        // Incomplete multi-byte sequence at the end of the BufRead's buffer — we
+                        // need more data to decide whether it's valid. Return any valid prefix first.
+                        if valid_up_to > 0 {
+                            let len = floor_char_boundary(available, valid_up_to.min(buf.len()));
+                            if len > 0 {
+                                buf[..len].copy_from_slice(&available[..len]);
+                                self.inner.consume(len);
+                                return Ok(len);
+                            }
+                            // buf too small for even the first character.
+                            return Ok(0);
+                        }
+                        // The BufRead's buffer contains ONLY incomplete leading bytes (1-3 bytes,
+                        // e.g. [0xF0, 0x9F] for a 4-byte char). The BufRead won't refill until
+                        // these are consumed, so we move them to our small pending buffer, consume
+                        // them, and loop — the next fill_buf() will fetch fresh data that we can
+                        // combine with pending.
+                        let incomplete_len = available.len();
+                        debug_assert!(
+                            incomplete_len <= 3,
+                            "incomplete UTF-8 prefix should be at most 3 bytes, got {}",
+                            incomplete_len,
+                        );
+                        self.pending[..incomplete_len]
+                            .copy_from_slice(&available[..incomplete_len]);
+                        self.pending_len = incomplete_len as u8;
+                        self.inner.consume(incomplete_len);
+                        continue;
+                    }
+                }
+            }
         }
     }
 }
@@ -669,7 +753,7 @@ mod utf8_bytes_reader_tests {
 #[cfg(test)]
 mod utf8_validating_reader_tests {
     use super::*;
-    use std::io::{Cursor, Read};
+    use std::io::{BufReader, Cursor, Read};
 
     /// Helper reader that returns data in fixed-size chunks
     struct ChunkedReader<'a> {
@@ -815,7 +899,7 @@ mod utf8_validating_reader_tests {
             // £ is 0xC2 0xA3 in UTF-8
             let data = b"Hi\xC2\xA3";
 
-            let mut reader = Utf8ValidatingReader::new(ChunkedReader::new(data, 1));
+            let mut reader = Utf8ValidatingReader::new(BufReader::new(ChunkedReader::new(data, 1)));
             let mut result = Vec::new();
 
             loop {
@@ -835,7 +919,7 @@ mod utf8_validating_reader_tests {
             // 世 is 0xE4 0xB8 0x96 in UTF-8
             let data = "Hi世".as_bytes();
 
-            let mut reader = Utf8ValidatingReader::new(ChunkedReader::new(data, 1));
+            let mut reader = Utf8ValidatingReader::new(BufReader::new(ChunkedReader::new(data, 1)));
             let mut result = Vec::new();
 
             loop {
@@ -855,7 +939,7 @@ mod utf8_validating_reader_tests {
             // 😀 is 0xF0 0x9F 0x98 0x80 in UTF-8
             let data = "Hi😀".as_bytes();
 
-            let mut reader = Utf8ValidatingReader::new(ChunkedReader::new(data, 1));
+            let mut reader = Utf8ValidatingReader::new(BufReader::new(ChunkedReader::new(data, 1)));
             let mut result = Vec::new();
 
             loop {
@@ -909,7 +993,7 @@ mod utf8_validating_reader_tests {
             let data = "ab😀cd".as_bytes(); // a, b, [4-byte emoji], c, d
 
             // Read 3 bytes at a time - will split the 4-byte emoji
-            let mut reader = Utf8ValidatingReader::new(ChunkedReader::new(data, 3));
+            let mut reader = Utf8ValidatingReader::new(BufReader::new(ChunkedReader::new(data, 3)));
 
             let mut result = Vec::new();
             loop {
@@ -949,11 +1033,9 @@ mod utf8_validating_reader_tests {
             let data = "😀".as_bytes(); // 4 bytes
             let mut reader = Utf8ValidatingReader::new(&data[..]);
 
-            // Buffer smaller than character
+            // Buffer smaller than character — returns 0 (can't fit)
             let mut buf = [0u8; 2];
             let n1 = reader.read(&mut buf).unwrap();
-
-            // Should buffer the incomplete sequence
             assert_eq!(n1, 0);
 
             // Larger buffer should get the character
@@ -963,11 +1045,11 @@ mod utf8_validating_reader_tests {
         }
 
         #[test]
-        fn split_4byte_char_across_multiple_reads() {
-            // 😀 is 0xF0 0x9F 0x98 0x80
+        fn split_4byte_char_across_bufread_boundary() {
+            // 😀 is 0xF0 0x9F 0x98 0x80 — split across two BufRead fills
             let data = b"\xF0\x9F\x98\x80";
 
-            let mut reader = Utf8ValidatingReader::new(ChunkedReader::new(data, 2));
+            let mut reader = Utf8ValidatingReader::new(BufReader::new(ChunkedReader::new(data, 2)));
             let mut result = Vec::new();
 
             loop {
@@ -979,6 +1061,52 @@ mod utf8_validating_reader_tests {
                 result.extend_from_slice(&buf[..n]);
             }
 
+            assert_eq!(result, data);
+        }
+
+        #[test]
+        fn buf_truncates_at_char_boundary() {
+            // "a世b" = [0x61, 0xE4, 0xB8, 0x96, 0x62] = 5 bytes
+            // With buf.len() = 2, we can fit "a" (1 byte) but not "a" + 世
+            // (4 bytes). floor_char_boundary must truncate to 1.
+            let data = "a世b".as_bytes();
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+
+            let mut buf = [0u8; 2];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 1);
+            assert_eq!(&buf[..n], b"a");
+
+            // Next read with larger buffer gets the rest
+            let mut buf2 = [0u8; 10];
+            let n = reader.read(&mut buf2).unwrap();
+            assert_eq!(&buf2[..n], "世b".as_bytes());
+        }
+
+        #[test]
+        fn buf_truncates_between_multibyte_chars() {
+            // "世界" = [0xE4, 0xB8, 0x96, 0xE7, 0x95, 0x8C] = 6 bytes
+            // With buf.len() = 4, we can fit "世" (3 bytes) but not
+            // "世" + first byte of "界". Must return exactly 3.
+            let data = "世界".as_bytes();
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+
+            let mut buf = [0u8; 4];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 3);
+            assert_eq!(&buf[..n], "世".as_bytes());
+
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 3);
+            assert_eq!(&buf[..n], "界".as_bytes());
+        }
+
+        #[test]
+        fn read_to_end() {
+            let data = "Hello, 世界! 😀".as_bytes();
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut result = Vec::new();
+            reader.read_to_end(&mut result).unwrap();
             assert_eq!(result, data);
         }
     }
@@ -1028,16 +1156,15 @@ mod utf8_validating_reader_tests {
         }
 
         #[test]
-        fn invalid_with_valid_prefix() {
-            // Valid UTF-8 followed by invalid
+        fn valid_prefix_then_invalid() {
+            // First read returns the valid prefix, second read errors
             let data = b"OK\xFF";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
-
             let mut buf = [0u8; 10];
+
             let n = reader.read(&mut buf).unwrap();
             assert_eq!(&buf[..n], b"OK");
 
-            // Second read should error on invalid byte
             assert_utf8_error(
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
@@ -1045,18 +1172,15 @@ mod utf8_validating_reader_tests {
         }
 
         #[test]
-        fn mixed_valid_and_invalid() {
-            // Valid, invalid, valid - but we error on invalid so never see "More"
+        fn valid_then_invalid_then_valid() {
+            // Valid prefix returned first, then error; trailing data unreachable
             let data = b"OK\xFFMore";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
-
             let mut buf = [0u8; 20];
 
-            // First read gets "OK"
-            let n1 = reader.read(&mut buf).unwrap();
-            assert_eq!(&buf[..n1], b"OK");
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], b"OK");
 
-            // Second read should error on invalid byte (never reaches "More")
             assert_utf8_error(
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
@@ -1065,10 +1189,10 @@ mod utf8_validating_reader_tests {
 
         #[test]
         fn all_invalid_bytes() {
-            let data = b"\xFF\xFE\xFD";
+            // All continuation bytes — invalid UTF-8 but no BOM match
+            let data = b"\x80\x81\x82";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
-
             assert_utf8_error(
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
@@ -1077,13 +1201,12 @@ mod utf8_validating_reader_tests {
 
         #[test]
         fn incomplete_3byte_at_eof() {
-            // Incomplete 3-byte sequence
             let data = b"Hi\xE4\xB8"; // Missing third byte of 世
             let mut reader = Utf8ValidatingReader::new(&data[..]);
-
             let mut buf = [0u8; 10];
-            let n1 = reader.read(&mut buf).unwrap();
-            assert_eq!(&buf[..n1], b"Hi");
+
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], b"Hi");
 
             assert_utf8_error(
                 reader.read(&mut buf),
@@ -1093,13 +1216,12 @@ mod utf8_validating_reader_tests {
 
         #[test]
         fn incomplete_4byte_at_eof() {
-            // Incomplete 4-byte sequence
             let data = b"Hi\xF0\x9F\x98"; // Missing fourth byte of 😀
             let mut reader = Utf8ValidatingReader::new(&data[..]);
-
             let mut buf = [0u8; 10];
-            let n1 = reader.read(&mut buf).unwrap();
-            assert_eq!(&buf[..n1], b"Hi");
+
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], b"Hi");
 
             assert_utf8_error(
                 reader.read(&mut buf),
@@ -1109,13 +1231,10 @@ mod utf8_validating_reader_tests {
 
         #[test]
         fn overlong_encoding() {
-            // Overlong encoding of '/' (0x2F)
-            // Valid: 0x2F
-            // Overlong 2-byte: 0xC0 0xAF (invalid)
+            // Overlong encoding of '/' (0x2F): 0xC0 0xAF
             let data = b"\xC0\xAF";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
-
             assert_utf8_error(
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
@@ -1123,13 +1242,42 @@ mod utf8_validating_reader_tests {
         }
 
         #[test]
-        fn surrogate_pairs() {
-            // UTF-16 surrogate pairs are invalid in UTF-8
-            // 0xED 0xA0 0x80 (U+D800, invalid surrogate)
+        fn surrogate_half() {
+            // U+D800 encoded in UTF-8: 0xED 0xA0 0x80 (invalid)
             let data = b"\xED\xA0\x80";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
+        }
 
+        #[test]
+        fn incomplete_2byte_at_eof() {
+            let data = b"Hi\xC2"; // Missing second byte of £
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], b"Hi");
+
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::IncompleteSequence,
+            );
+        }
+
+        #[test]
+        fn invalid_continuation_in_pending_path() {
+            // \xC2 expects a continuation byte (0x80-0xBF). Deliver \xC2
+            // and \xFF in separate 1-byte BufRead fills so that \xC2 goes
+            // to the pending buffer, then \xFF triggers an error in the
+            // pending completion handler.
+            let data = b"\xC2\xFF";
+            let mut reader =
+                Utf8ValidatingReader::new(BufReader::with_capacity(1, ChunkedReader::new(data, 1)));
+            let mut buf = [0u8; 10];
             assert_utf8_error(
                 reader.read(&mut buf),
                 Utf8ValidationError::InvalidSequence { error_len: 1 },
@@ -1180,14 +1328,57 @@ mod utf8_validating_reader_tests {
         }
 
         #[test]
-        fn ascii_compatible_encoding_allowed() {
-            // ASCII-compatible XML declaration (no BOM)
+        fn utf16le_without_bom_rejected() {
+            // UTF-16 LE detected by XML declaration pattern (no BOM)
+            let data = b"<\x00?\x00";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::NonUtf8EncodingDetected(DetectedEncoding::Utf16LeLike),
+            );
+        }
+
+        #[test]
+        fn utf16be_without_bom_rejected() {
+            // UTF-16 BE detected by XML declaration pattern (no BOM)
+            let data = b"\x00<\x00?";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::NonUtf8EncodingDetected(DetectedEncoding::Utf16BeLike),
+            );
+        }
+
+        #[test]
+        fn ascii_compatible_xml_declaration() {
             let data = b"<?xml version=\"1.0\"?><root/>";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 50];
-
             let n = reader.read(&mut buf).unwrap();
             assert_eq!(&buf[..n], data);
+        }
+
+        #[test]
+        fn utf8_bom_only() {
+            // BOM with no content after it — should return 0 after stripping
+            let data = b"\xEF\xBB\xBF";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 0);
+        }
+
+        #[test]
+        fn short_data_no_pattern_match() {
+            // Short data that doesn't match any detection pattern — treated as UTF-8
+            let data = b"Hi";
+            let mut reader = Utf8ValidatingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 2);
+            assert_eq!(&buf[..n], b"Hi");
         }
     }
 }
