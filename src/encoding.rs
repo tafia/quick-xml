@@ -373,26 +373,27 @@ impl DetectedEncoding {
 #[derive(Debug)]
 pub struct Utf8BytesReader<R> {
     #[cfg(feature = "encoding")]
-    reader: io::BufReader<R>,
+    reader: DecodingReader<io::BufReader<R>>,
     #[cfg(not(feature = "encoding"))]
     reader: io::BufReader<Utf8ValidatingReader<io::BufReader<R>>>,
 }
 
 impl<R: io::Read> Utf8BytesReader<R> {
     /// Build a new reader which decodes a stream of bytes in an unknown encoding into UTF-8.
-    /// (TODO: well, not yet - right now it's just a dumb wrapper)
-    /// Note: The consumer is responsible for finding the correct character boundaries when
-    /// treating a given range of bytes as UTF-8.
+    ///
+    /// With the `encoding` feature, the encoding is auto-detected from BOM or XML
+    /// declaration patterns, and the stream is decoded into UTF-8 using `encoding_rs`.
+    ///
+    /// Without the `encoding` feature, the stream is validated as UTF-8 and non-UTF-8
+    /// encodings are rejected.
     #[cfg(feature = "encoding")]
     pub fn new(reader: R) -> Self {
         Self {
-            reader: io::BufReader::new(reader),
+            reader: DecodingReader::new(io::BufReader::new(reader)),
         }
     }
 
     /// Build a new reader which validates UTF-8.
-    /// Note: The consumer is responsible for finding the correct character boundaries when
-    /// treating a given range of bytes as UTF-8.
     #[cfg(not(feature = "encoding"))]
     pub fn new(reader: R) -> Self {
         Self {
@@ -450,6 +451,197 @@ fn floor_char_boundary(bytes: &[u8], index: usize) -> usize {
             i -= 1;
         }
         i
+    }
+}
+
+/// A reader wrapper that decodes a byte stream from any encoding into UTF-8.
+///
+/// This reader wraps a [`BufRead`] source and uses [`encoding_rs::Decoder`] to
+/// transcode the input into valid UTF-8. On first access, it detects the encoding
+/// from BOM or XML declaration byte patterns and configures the appropriate decoder.
+///
+/// For UTF-8 input, this acts as a validating passthrough. For UTF-16 or other
+/// encodings, the bytes are transcoded into UTF-8 in an internal buffer.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Read;
+/// use quick_xml::encoding::DecodingReader;
+///
+/// // UTF-8 input passes through:
+/// let data = b"Hello, World!";
+/// let mut reader = DecodingReader::new(&data[..]);
+/// let mut buf = [0u8; 20];
+/// let n = reader.read(&mut buf).unwrap();
+/// assert_eq!(&buf[..n], data);
+/// ```
+#[cfg(feature = "encoding")]
+pub struct DecodingReader<R> {
+    inner: R,
+    decoder: encoding_rs::Decoder,
+    /// Decoded UTF-8 output buffer
+    out_buf: Box<[u8]>,
+    /// Start of unconsumed data in out_buf
+    out_pos: usize,
+    /// End of valid data in out_buf
+    out_len: usize,
+    /// Whether the inner reader has reached EOF
+    inner_eof: bool,
+    /// Whether encoding detection has happened
+    encoding_detected: bool,
+}
+
+#[cfg(feature = "encoding")]
+impl<R: std::fmt::Debug> std::fmt::Debug for DecodingReader<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecodingReader")
+            .field("inner", &self.inner)
+            .field("encoding", &self.decoder.encoding())
+            .field("out_pos", &self.out_pos)
+            .field("out_len", &self.out_len)
+            .field("inner_eof", &self.inner_eof)
+            .field("encoding_detected", &self.encoding_detected)
+            .finish()
+    }
+}
+
+#[cfg(feature = "encoding")]
+impl<R> DecodingReader<R> {
+    /// Creates a new decoding reader.
+    ///
+    /// The encoding is auto-detected from BOM or XML declaration patterns on
+    /// first access. Defaults to UTF-8 if no pattern is recognized.
+    pub fn new(inner: R) -> Self {
+        Self {
+            inner,
+            decoder: encoding_rs::UTF_8.new_decoder_without_bom_handling(),
+            out_buf: vec![0u8; 8192].into_boxed_slice(),
+            out_pos: 0,
+            out_len: 0,
+            inner_eof: false,
+            encoding_detected: false,
+        }
+    }
+
+    /// Returns a reference to the underlying reader
+    pub fn get_ref(&self) -> &R {
+        &self.inner
+    }
+
+    /// Returns a mutable reference to the underlying reader
+    pub fn get_mut(&mut self) -> &mut R {
+        &mut self.inner
+    }
+
+    /// Consumes this reader and returns the underlying reader
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
+}
+
+#[cfg(feature = "encoding")]
+impl<R: BufRead> BufRead for DecodingReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        // Fast path: serve already-decoded data
+        if self.out_pos < self.out_len {
+            return Ok(&self.out_buf[self.out_pos..self.out_len]);
+        }
+
+        // Reset output buffer
+        self.out_pos = 0;
+        self.out_len = 0;
+
+        // Encoding detection on first access
+        if !self.encoding_detected {
+            self.encoding_detected = true;
+
+            let available = self.inner.fill_buf()?;
+            if let Some(detected) = detect_encoding(available) {
+                let bom_len = detected.bom_len();
+                if bom_len > 0 {
+                    self.inner.consume(bom_len);
+                }
+                let encoding = detected.encoding();
+                if encoding != encoding_rs::UTF_8 {
+                    self.decoder = encoding.new_decoder_without_bom_handling();
+                }
+            }
+        }
+
+        // Loop until we produce output, hit EOF, or get an error.
+        // The decoder may consume input into internal state (e.g., partial
+        // UTF-16 code unit) without producing output — we must keep feeding
+        // it more input rather than returning an empty slice (which signals EOF).
+        loop {
+            // EOF flush path: tell decoder this is the last chunk
+            if self.inner_eof {
+                let (result, _, written) = self.decoder.decode_to_utf8_without_replacement(
+                    b"",
+                    &mut self.out_buf[..],
+                    true,
+                );
+                self.out_len = written;
+                if let encoding_rs::DecoderResult::Malformed(_, _) = result {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        EncodingError::Other(self.decoder.encoding()),
+                    ));
+                }
+                return Ok(&self.out_buf[..self.out_len]);
+            }
+
+            // Main decode path: read from inner, decode into out_buf
+            let (result, read, written) = {
+                let src = self.inner.fill_buf()?;
+                if src.is_empty() {
+                    self.inner_eof = true;
+                    continue; // will hit EOF flush path on next iteration
+                }
+                self.decoder
+                    .decode_to_utf8_without_replacement(src, &mut self.out_buf[..], false)
+            };
+            self.inner.consume(read);
+            self.out_len = written;
+
+            if let encoding_rs::DecoderResult::Malformed(_, _) = result {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    EncodingError::Other(self.decoder.encoding()),
+                ));
+            }
+
+            if written > 0 {
+                return Ok(&self.out_buf[..self.out_len]);
+            }
+            // written == 0: decoder consumed input into internal state but produced
+            // no output yet (e.g., 1 byte of a 2-byte UTF-16 code unit). Loop to
+            // get more input.
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.out_pos += amt;
+    }
+}
+
+#[cfg(feature = "encoding")]
+impl<R: BufRead> Read for DecodingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let available = self.fill_buf()?;
+        if available.is_empty() {
+            return Ok(0);
+        }
+        // No need for floor_char_boundary here — the decoder always produces
+        // complete UTF-8 characters in out_buf, and Read::read() operates on
+        // raw bytes, so splitting a multi-byte character across reads is fine.
+        let len = available.len().min(buf.len());
+        buf[..len].copy_from_slice(&available[..len]);
+        self.consume(len);
+        Ok(len)
     }
 }
 
@@ -1379,6 +1571,411 @@ mod utf8_validating_reader_tests {
             let n = reader.read(&mut buf).unwrap();
             assert_eq!(n, 2);
             assert_eq!(&buf[..n], b"Hi");
+        }
+    }
+}
+
+#[cfg(all(test, feature = "encoding"))]
+mod decoding_reader_tests {
+    use super::*;
+    use std::io::{BufReader, Read};
+
+    /// Helper reader that returns data in fixed-size chunks
+    struct ChunkedReader<'a> {
+        data: &'a [u8],
+        pos: usize,
+        chunk_size: usize,
+    }
+
+    impl<'a> ChunkedReader<'a> {
+        fn new(data: &'a [u8], chunk_size: usize) -> Self {
+            Self {
+                data,
+                pos: 0,
+                chunk_size,
+            }
+        }
+    }
+
+    impl<'a> Read for ChunkedReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.pos >= self.data.len() {
+                return Ok(0);
+            }
+            let len = self
+                .chunk_size
+                .min(buf.len())
+                .min(self.data.len() - self.pos);
+            buf[..len].copy_from_slice(&self.data[self.pos..self.pos + len]);
+            self.pos += len;
+            Ok(len)
+        }
+    }
+
+    /// Encode a string as UTF-16 LE bytes with BOM
+    fn utf16le_with_bom(s: &str) -> Vec<u8> {
+        let mut out = vec![0xFF, 0xFE]; // UTF-16 LE BOM
+        for code_unit in s.encode_utf16() {
+            out.extend_from_slice(&code_unit.to_le_bytes());
+        }
+        out
+    }
+
+    /// Encode a string as UTF-16 BE bytes with BOM
+    fn utf16be_with_bom(s: &str) -> Vec<u8> {
+        let mut out = vec![0xFE, 0xFF]; // UTF-16 BE BOM
+        for code_unit in s.encode_utf16() {
+            out.extend_from_slice(&code_unit.to_be_bytes());
+        }
+        out
+    }
+
+    /// Encode a string as UTF-16 LE bytes without BOM
+    fn utf16le_no_bom(s: &str) -> Vec<u8> {
+        let mut out = Vec::new();
+        for code_unit in s.encode_utf16() {
+            out.extend_from_slice(&code_unit.to_le_bytes());
+        }
+        out
+    }
+
+    /// Encode a string as UTF-16 BE bytes without BOM
+    fn utf16be_no_bom(s: &str) -> Vec<u8> {
+        let mut out = Vec::new();
+        for code_unit in s.encode_utf16() {
+            out.extend_from_slice(&code_unit.to_be_bytes());
+        }
+        out
+    }
+
+    /// Read all bytes from a reader into a String
+    fn read_all(reader: &mut DecodingReader<impl BufRead>) -> io::Result<String> {
+        let mut result = Vec::new();
+        reader.read_to_end(&mut result)?;
+        Ok(String::from_utf8(result).expect("DecodingReader should produce valid UTF-8"))
+    }
+
+    mod utf8_passthrough {
+        use super::*;
+
+        #[test]
+        fn ascii() {
+            let data = b"Hello, World!";
+            let mut reader = DecodingReader::new(&data[..]);
+            let mut buf = [0u8; 20];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(&buf[..n], data);
+        }
+
+        #[test]
+        fn multibyte_characters() {
+            let data = "Hello, 世界! 😀".as_bytes();
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界! 😀");
+        }
+
+        #[test]
+        fn empty_input() {
+            let data = b"";
+            let mut reader = DecodingReader::new(&data[..]);
+            let mut buf = [0u8; 10];
+            let n = reader.read(&mut buf).unwrap();
+            assert_eq!(n, 0);
+        }
+
+        #[test]
+        fn read_to_end() {
+            let data = "Hello, 世界! 😀".as_bytes();
+            let mut reader = DecodingReader::new(&data[..]);
+            let mut result = Vec::new();
+            reader.read_to_end(&mut result).unwrap();
+            assert_eq!(result, data);
+        }
+    }
+
+    mod utf8_bom {
+        use super::*;
+
+        #[test]
+        fn bom_stripped() {
+            let data = b"\xEF\xBB\xBFHello";
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello");
+        }
+
+        #[test]
+        fn bom_only() {
+            let data = b"\xEF\xBB\xBF";
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "");
+        }
+    }
+
+    mod utf16le_decoding {
+        use super::*;
+
+        #[test]
+        fn with_bom() {
+            let data = utf16le_with_bom("Hello");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello");
+        }
+
+        #[test]
+        fn with_bom_multibyte() {
+            let data = utf16le_with_bom("Hello, 世界! 😀");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界! 😀");
+        }
+
+        #[test]
+        fn without_bom_xml_declaration() {
+            // UTF-16 LE without BOM is detected by the <?xml pattern
+            let data = utf16le_no_bom("<?xml version=\"1.0\"?><root/>");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(
+                read_all(&mut reader).unwrap(),
+                "<?xml version=\"1.0\"?><root/>"
+            );
+        }
+    }
+
+    mod utf16be_decoding {
+        use super::*;
+
+        #[test]
+        fn with_bom() {
+            let data = utf16be_with_bom("Hello");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello");
+        }
+
+        #[test]
+        fn with_bom_multibyte() {
+            let data = utf16be_with_bom("Hello, 世界! 😀");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界! 😀");
+        }
+
+        #[test]
+        fn without_bom_xml_declaration() {
+            let data = utf16be_no_bom("<?xml version=\"1.0\"?><root/>");
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(
+                read_all(&mut reader).unwrap(),
+                "<?xml version=\"1.0\"?><root/>"
+            );
+        }
+    }
+
+    mod chunked_input {
+        use super::*;
+
+        #[test]
+        fn utf8_one_byte_at_a_time() {
+            let data = "Hello, 世界!".as_bytes();
+            let mut reader = DecodingReader::new(BufReader::new(ChunkedReader::new(data, 1)));
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界!");
+        }
+
+        #[test]
+        fn utf16le_small_chunks() {
+            let data = utf16le_with_bom("Hello, 世界! 😀");
+            let mut reader = DecodingReader::new(BufReader::new(ChunkedReader::new(&data, 3)));
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界! 😀");
+        }
+
+        #[test]
+        fn utf16be_small_chunks() {
+            let data = utf16be_with_bom("Hello, 世界! 😀");
+            let mut reader = DecodingReader::new(BufReader::new(ChunkedReader::new(&data, 3)));
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界! 😀");
+        }
+    }
+
+    mod bufread_interface {
+        use super::*;
+        use std::io::BufRead;
+
+        #[test]
+        fn fill_buf_and_consume() {
+            let data = b"Hello, World!";
+            let mut reader = DecodingReader::new(&data[..]);
+
+            let buf = reader.fill_buf().unwrap();
+            assert!(!buf.is_empty());
+            let first = buf[0];
+            assert_eq!(first, b'H');
+
+            reader.consume(5);
+
+            let buf = reader.fill_buf().unwrap();
+            assert_eq!(buf[0], b',');
+        }
+
+        #[test]
+        fn utf16_fill_buf() {
+            let data = utf16le_with_bom("Hello");
+            let mut reader = DecodingReader::new(&data[..]);
+
+            let buf = reader.fill_buf().unwrap();
+            // Should be decoded UTF-8
+            assert_eq!(std::str::from_utf8(buf).unwrap(), "Hello");
+        }
+
+        #[test]
+        fn partial_consume_then_read_more() {
+            let data = b"Hello, World!";
+            let mut reader = DecodingReader::new(&data[..]);
+
+            // Read all into buffer
+            let buf = reader.fill_buf().unwrap();
+            assert_eq!(buf.len(), 13);
+
+            // Consume only 5 bytes ("Hello")
+            reader.consume(5);
+
+            // Next fill_buf should return the remainder
+            let buf = reader.fill_buf().unwrap();
+            assert_eq!(std::str::from_utf8(buf).unwrap(), ", World!");
+
+            // Consume the rest
+            reader.consume(8);
+
+            // Should be EOF
+            let buf = reader.fill_buf().unwrap();
+            assert!(buf.is_empty());
+        }
+    }
+
+    mod accessors {
+        use super::*;
+        use std::io::Cursor;
+
+        #[test]
+        fn get_ref() {
+            let data = b"Hello";
+            let cursor = Cursor::new(data.to_vec());
+            let reader = DecodingReader::new(cursor);
+            assert_eq!(reader.get_ref().get_ref(), data);
+        }
+
+        #[test]
+        fn get_mut() {
+            let data = b"Hello";
+            let cursor = Cursor::new(data.to_vec());
+            let mut reader = DecodingReader::new(cursor);
+            reader.get_mut().set_position(2);
+            assert_eq!(reader.get_ref().position(), 2);
+        }
+
+        #[test]
+        fn into_inner() {
+            let data = b"Hello";
+            let cursor = Cursor::new(data.to_vec());
+            let reader = DecodingReader::new(cursor);
+            let inner = reader.into_inner();
+            assert_eq!(inner.get_ref(), data);
+        }
+    }
+
+    mod large_input {
+        use super::*;
+
+        #[test]
+        fn utf8_larger_than_internal_buffer() {
+            // Create input larger than the 8192-byte internal buffer
+            let content: String = "abcdefghij".repeat(1000); // 10,000 bytes
+            let data = content.as_bytes();
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), content);
+        }
+
+        #[test]
+        fn utf16le_larger_than_internal_buffer() {
+            let content: String = "abcdefghij".repeat(1000);
+            let data = utf16le_with_bom(&content);
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), content);
+        }
+
+        #[test]
+        fn utf8_multibyte_larger_than_internal_buffer() {
+            // Mix of ASCII and multibyte characters exceeding internal buffer
+            let content: String = "Hello, 世界! 😀 ".repeat(500); // ~9500 bytes UTF-8
+            let data = content.as_bytes();
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), content);
+        }
+    }
+
+    mod edge_cases {
+        use super::*;
+
+        #[test]
+        fn no_detection_pattern() {
+            // Data that doesn't match any BOM or XML declaration pattern
+            let data = b"just plain text";
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "just plain text");
+        }
+
+        #[test]
+        fn utf16le_bom_only() {
+            let data = &[0xFF, 0xFE]; // UTF-16 LE BOM, no content
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "");
+        }
+
+        #[test]
+        fn utf16be_bom_only() {
+            let data = &[0xFE, 0xFF]; // UTF-16 BE BOM, no content
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), "");
+        }
+
+        #[test]
+        fn read_with_one_byte_buffer() {
+            // Exercises the partial-copy path in read()
+            let data = "Hello, 世界!".as_bytes();
+            let mut reader = DecodingReader::new(&data[..]);
+            let mut result = Vec::new();
+            let mut buf = [0u8; 1];
+            loop {
+                let n = reader.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                result.extend_from_slice(&buf[..n]);
+            }
+            assert_eq!(String::from_utf8(result).unwrap(), "Hello, 世界!");
+        }
+
+        #[test]
+        fn utf16_surrogate_pairs() {
+            // Characters above U+FFFF require surrogate pairs in UTF-16
+            // 𝄞 (U+1D11E, MUSICAL SYMBOL G CLEF) and 🎵 (U+1F3B5)
+            let content = "Music: 𝄞🎵";
+            let data = utf16le_with_bom(content);
+            let mut reader = DecodingReader::new(&data[..]);
+            assert_eq!(read_all(&mut reader).unwrap(), content);
+        }
+
+        #[test]
+        fn chunked_utf16_at_code_unit_boundary() {
+            // chunk_size=2 aligns exactly with UTF-16 code units
+            let data = utf16le_with_bom("Hello, 世界!");
+            let mut reader = DecodingReader::new(BufReader::new(ChunkedReader::new(&data, 2)));
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界!");
+        }
+
+        #[test]
+        fn chunked_utf16_misaligned_chunks() {
+            // chunk_size=5 misaligns with UTF-16's 2-byte code units,
+            // forcing splits within code units after the BOM
+            let data = utf16le_with_bom("Hello, 世界!");
+            let mut reader = DecodingReader::new(BufReader::new(ChunkedReader::new(&data, 5)));
+            assert_eq!(read_all(&mut reader).unwrap(), "Hello, 世界!");
         }
     }
 }
