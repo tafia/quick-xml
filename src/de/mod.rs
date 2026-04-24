@@ -1974,13 +1974,13 @@
 //! [`impl_deserialize_for_internally_tagged_enum!`]: crate::impl_deserialize_for_internally_tagged_enum
 
 macro_rules! forward_to_simple_type {
-    ($deserialize:ident, $($mut:tt)?) => {
+    ($deserialize:ident, $self:ident in $resolver:expr $(, $mut:tt)?) => {
         #[inline]
-        fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        fn $deserialize<V>($($mut)? $self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            SimpleTypeDeserializer::from_text(self.read_string()?).$deserialize(visitor)
+            SimpleTypeDeserializer::from_text($self.read_string()?, $resolver).$deserialize(visitor)
         }
     };
 }
@@ -1988,28 +1988,28 @@ macro_rules! forward_to_simple_type {
 /// Implement deserialization methods for scalar types, such as numbers, strings,
 /// byte arrays, booleans and identifiers.
 macro_rules! deserialize_primitives {
-    ($($mut:tt)?) => {
-        forward_to_simple_type!(deserialize_i8, $($mut)?);
-        forward_to_simple_type!(deserialize_i16, $($mut)?);
-        forward_to_simple_type!(deserialize_i32, $($mut)?);
-        forward_to_simple_type!(deserialize_i64, $($mut)?);
+    ($self:ident in $resolver:expr $(, $mut:tt)?) => {
+        forward_to_simple_type!(deserialize_i8, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_i16, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_i32, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_i64, $self in $resolver $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_u8, $($mut)?);
-        forward_to_simple_type!(deserialize_u16, $($mut)?);
-        forward_to_simple_type!(deserialize_u32, $($mut)?);
-        forward_to_simple_type!(deserialize_u64, $($mut)?);
+        forward_to_simple_type!(deserialize_u8, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_u16, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_u32, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_u64, $self in $resolver $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_i128, $($mut)?);
-        forward_to_simple_type!(deserialize_u128, $($mut)?);
+        forward_to_simple_type!(deserialize_i128, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_u128, $self in $resolver $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_f32, $($mut)?);
-        forward_to_simple_type!(deserialize_f64, $($mut)?);
+        forward_to_simple_type!(deserialize_f32, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_f64, $self in $resolver $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_bool, $($mut)?);
-        forward_to_simple_type!(deserialize_char, $($mut)?);
+        forward_to_simple_type!(deserialize_bool, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_char, $self in $resolver $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_str, $($mut)?);
-        forward_to_simple_type!(deserialize_string, $($mut)?);
+        forward_to_simple_type!(deserialize_str, $self in $resolver $(, $mut)?);
+        forward_to_simple_type!(deserialize_string, $self in $resolver $(, $mut)?);
 
         /// Forwards deserialization to the [`deserialize_any`](#method.deserialize_any).
         #[inline]
@@ -3195,7 +3195,7 @@ where
 {
     type Error = DeError;
 
-    deserialize_primitives!();
+    deserialize_primitives!(self in &self.reader.entity_resolver);
 
     fn deserialize_struct<V>(
         self,

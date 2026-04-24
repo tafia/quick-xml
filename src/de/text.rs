@@ -1,6 +1,7 @@
 use crate::{
     de::simple_type::SimpleTypeDeserializer,
     de::{Text, TEXT_KEY},
+    de::PredefinedEntityResolver,
     errors::serialize::DeError,
 };
 use serde::de::value::BorrowedStrDeserializer;
@@ -69,7 +70,9 @@ impl<'de> TextDeserializer<'de> {
 impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     type Error = DeError;
 
-    deserialize_primitives!();
+    // TODO consider adding entity_resolver member to this struct?
+    // is this feature desirable here?
+    deserialize_primitives!(self in &PredefinedEntityResolver);
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -116,7 +119,7 @@ impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0).deserialize_seq(visitor)
+        SimpleTypeDeserializer::from_text_content(self.0, &PredefinedEntityResolver).deserialize_seq(visitor)
     }
 
     #[inline]

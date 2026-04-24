@@ -97,7 +97,10 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.de.reader.entity_resolver,
+                )),
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
             }
@@ -113,7 +116,10 @@ where
         if self.is_text {
             match self.de.next()? {
                 DeEvent::Text(e) => {
-                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
+                    SimpleTypeDeserializer::from_text_content(
+                        e,
+                        &self.de.reader.entity_resolver
+                    ).deserialize_tuple(len, visitor)
                 }
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
@@ -134,7 +140,10 @@ where
         match self.de.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)),
             DeEvent::Text(e) => {
-                SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
+                SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.de.reader.entity_resolver,
+                ).deserialize_struct("", fields, visitor)
             }
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),

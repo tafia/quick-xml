@@ -347,6 +347,7 @@ where
                 value,
                 self.de.reader.reader.xml_version(),
                 self.start.decoder(),
+                &self.de.reader.entity_resolver,
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -357,7 +358,10 @@ where
             // is a `Text` event (the value deserializer will see that event)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
             ValueSource::Text => match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.de.reader.entity_resolver,
+                )),
                 // SAFETY: We set `Text` only when we seen `Text`
                 _ => unreachable!(),
             },
@@ -555,7 +559,7 @@ where
 {
     type Error = DeError;
 
-    deserialize_primitives!(mut);
+    deserialize_primitives!(self in &self.map.de.reader.entity_resolver, mut);
 
     #[inline]
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -659,9 +663,15 @@ where
                     let text = self.map.de.read_text(e.name())?;
                     if text.is_empty() {
                         // Map empty text (<field/>) to a special `$text` variant
-                        visitor.visit_enum(SimpleTypeDeserializer::from_text(TEXT_KEY.into()))
+                        visitor.visit_enum(SimpleTypeDeserializer::from_text(
+                            TEXT_KEY.into(),
+                            &self.map.de.reader.entity_resolver,
+                        ))
                     } else {
-                        visitor.visit_enum(SimpleTypeDeserializer::from_text(text))
+                        visitor.visit_enum(SimpleTypeDeserializer::from_text(
+                            text,
+                            &self.map.de.reader.entity_resolver,
+                        ))
                     }
                 }
                 // SAFETY: we use that deserializer with `fixed_name == true`
@@ -754,7 +764,10 @@ where
     {
         if self.is_text {
             match self.map.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.map.de.reader.entity_resolver,
+                )),
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
             }
@@ -775,7 +788,10 @@ where
         if self.is_text {
             match self.map.de.next()? {
                 DeEvent::Text(e) => {
-                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
+                    SimpleTypeDeserializer::from_text_content(
+                        e,
+                        &self.map.de.reader.entity_resolver,
+                    ).deserialize_tuple(len, visitor)
                 }
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
@@ -802,7 +818,10 @@ where
         match self.map.de.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)),
             DeEvent::Text(e) => {
-                SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
+                SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.map.de.reader.entity_resolver,
+                ).deserialize_struct("", fields, visitor)
             }
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),
@@ -951,6 +970,7 @@ where
 {
     type Error = DeError;
 
+    #[cfg_attr(not(feature = "overlapped-lists"), allow(clippy::never_loop))]
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
     where
         T: DeserializeSeed<'de>,
@@ -1083,7 +1103,7 @@ where
 {
     type Error = DeError;
 
-    deserialize_primitives!(mut);
+    deserialize_primitives!(self in &self.de.reader.entity_resolver, mut);
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -1131,7 +1151,10 @@ where
         V: Visitor<'de>,
     {
         let text = self.read_string()?;
-        SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
+        SimpleTypeDeserializer::from_text(
+            text,
+            &self.de.reader.entity_resolver,
+        ).deserialize_seq(visitor)
     }
 
     fn deserialize_struct<V>(

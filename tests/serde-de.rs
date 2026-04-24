@@ -1865,6 +1865,34 @@ mod resolve {
         }
     }
 
+    struct TestHostileEntityResolver {
+        capture_called: bool,
+    }
+
+    impl EntityResolver for TestHostileEntityResolver {
+        type Error = Infallible;
+
+        fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
+            self.capture_called = true;
+
+            assert_eq!(doctype.as_ref(), br#"dict[ <!ENTITY unc "unclassified"> ]"#);
+
+            Ok(())
+        }
+
+        fn resolve(&self, entity: &str) -> Option<&str> {
+            assert!(
+                self.capture_called,
+                "`EntityResolver::capture` should be called before `EntityResolver::resolve`"
+            );
+            match entity {
+                "go_fork_yourself" => Some("&go_fork_yourself;"),
+                "go_quote_yourself" => Some(r#"" aka Bobby Tables"#),
+                _ => None,
+            }
+        }
+    }
+
     #[test]
     fn resolve_custom_entity() {
         let resolver = TestEntityResolver {
@@ -1893,6 +1921,63 @@ mod resolve {
                 (String::from("entity_three"), String::from("non-entity")),
             ])
         );
+    }
+
+    #[test]
+    fn resolve_custom_entity_in_attr() {
+        let resolver = TestEntityResolver {
+            capture_called: false,
+        };
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE dict[ <!ENTITY unc "unclassified"> ]>
+
+            <root
+                entity_one="&t1;"
+                entity_two="czech_&t2;"
+                entity_three="non-entity"
+            />
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([
+                (String::from("@entity_one"), String::from("test_one")),
+                (String::from("@entity_two"), String::from("czech_test_two")),
+                (String::from("@entity_three"), String::from("non-entity")),
+            ])
+        );
+    }
+
+    #[test]
+    fn resolve_custom_entity_in_attr_but_reject_infinite_recursion() {
+        use quick_xml::errors::Error;
+        use quick_xml::escape::EscapeError;
+
+        let resolver = TestHostileEntityResolver {
+            capture_called: false,
+        };
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE dict[ <!ENTITY unc "unclassified"> ]>
+
+            <root entity_one="&go_fork_yourself;" />
+
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let e = BTreeMap::<String, String>::deserialize(&mut de).unwrap_err();
+        // TODO https://github.com/rust-lang/rust/issues/82775
+        assert!(matches!(
+            e,
+            DeError::InvalidXml(Error::Escape(EscapeError::TooManyNestedEntities))
+        ));
     }
 }
 

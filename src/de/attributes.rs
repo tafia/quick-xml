@@ -6,6 +6,7 @@ use serde::de::{DeserializeSeed, Deserializer, Error, MapAccess, Visitor};
 use serde::forward_to_deserialize_any;
 
 use crate::de::key::QNameDeserializer;
+use crate::de::{EntityResolver, PredefinedEntityResolver};
 use crate::de::SimpleTypeDeserializer;
 use crate::errors::serialize::DeError;
 use crate::events::attributes::Attributes;
@@ -25,6 +26,7 @@ impl<'i> Attributes<'i> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::BytesStart;
+    /// use quick_xml::de::PredefinedEntityResolver;
     /// use quick_xml::XmlVersion;
     /// use serde::Deserialize;
     ///
@@ -47,7 +49,7 @@ impl<'i> Attributes<'i> {
     ///     3
     /// );
     /// // Strip nothing from the field names
-    /// let de = tag.attributes().clone().into_map_access(XmlVersion::V1_0, "");
+    /// let de = tag.attributes().clone().into_map_access(XmlVersion::V1_0, "", &PredefinedEntityResolver);
     /// assert_eq!(
     ///     MyData::deserialize(de).unwrap(),
     ///     MyData {
@@ -57,7 +59,7 @@ impl<'i> Attributes<'i> {
     /// );
     ///
     /// // Strip "@" from the field name
-    /// let de = tag.attributes().into_map_access(XmlVersion::V1_0, "@");
+    /// let de = tag.attributes().into_map_access(XmlVersion::V1_0, "@", &PredefinedEntityResolver);
     /// assert_eq!(
     ///     MyDataPrefixed::deserialize(de).unwrap(),
     ///     MyDataPrefixed {
@@ -67,17 +69,19 @@ impl<'i> Attributes<'i> {
     /// );
     /// ```
     #[inline]
-    pub const fn into_map_access(
+    pub const fn into_map_access<E: EntityResolver>(
         self,
         version: XmlVersion,
         prefix: &'static str,
-    ) -> AttributesDeserializer<'i> {
+        entity_resolver: &'i E,
+    ) -> AttributesDeserializer<'i, E> {
         AttributesDeserializer {
             iter: self,
             value: None,
             prefix,
             key_buf: String::new(),
             version,
+            entity_resolver,
         }
     }
 }
@@ -96,7 +100,7 @@ impl<'i> Attributes<'i> {
 /// In particular, when reader was created from a string, this is lifetime of the
 /// string.
 #[derive(Debug, Clone)]
-pub struct AttributesDeserializer<'i> {
+pub struct AttributesDeserializer<'i, E: EntityResolver = PredefinedEntityResolver> {
     iter: Attributes<'i>,
     /// The value of the attribute, read in last call to `next_key_seed`.
     value: Option<Cow<'i, [u8]>>,
@@ -106,9 +110,10 @@ pub struct AttributesDeserializer<'i> {
     /// Kept in the deserializer to avoid many small allocations
     key_buf: String,
     version: XmlVersion,
+    entity_resolver: &'i E,
 }
 
-impl<'de> Deserializer<'de> for AttributesDeserializer<'de> {
+impl<'de, E: EntityResolver> Deserializer<'de> for AttributesDeserializer<'de, E> {
     type Error = DeError;
 
     #[inline]
@@ -126,7 +131,7 @@ impl<'de> Deserializer<'de> for AttributesDeserializer<'de> {
     }
 }
 
-impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
+impl<'de, E: EntityResolver> MapAccess<'de> for AttributesDeserializer<'de, E> {
     type Error = DeError;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
@@ -160,6 +165,7 @@ impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
                     0..value.len(),
                     self.version,
                     self.iter.decoder(),
+                    self.entity_resolver,
                 );
                 seed.deserialize(de)
             }
