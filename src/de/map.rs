@@ -787,12 +787,11 @@ where
     {
         if self.is_text {
             match self.map.de.next()? {
-                DeEvent::Text(e) => {
-                    SimpleTypeDeserializer::from_text_content(
-                        e,
-                        &self.map.de.reader.entity_resolver,
-                    ).deserialize_tuple(len, visitor)
-                }
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
+                    e,
+                    &self.map.de.reader.entity_resolver,
+                )
+                .deserialize_tuple(len, visitor),
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
             }
@@ -818,10 +817,8 @@ where
         match self.map.de.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)),
             DeEvent::Text(e) => {
-                SimpleTypeDeserializer::from_text_content(
-                    e,
-                    &self.map.de.reader.entity_resolver,
-                ).deserialize_struct("", fields, visitor)
+                SimpleTypeDeserializer::from_text_content(e, &self.map.de.reader.entity_resolver)
+                    .deserialize_struct("", fields, visitor)
             }
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),
@@ -1151,10 +1148,8 @@ where
         V: Visitor<'de>,
     {
         let text = self.read_string()?;
-        SimpleTypeDeserializer::from_text(
-            text,
-            &self.de.reader.entity_resolver,
-        ).deserialize_seq(visitor)
+        SimpleTypeDeserializer::from_text(text, &self.de.reader.entity_resolver)
+            .deserialize_seq(visitor)
     }
 
     fn deserialize_struct<V>(

@@ -1,7 +1,7 @@
 use crate::{
     de::simple_type::SimpleTypeDeserializer,
-    de::{Text, TEXT_KEY},
     de::PredefinedEntityResolver,
+    de::{Text, TEXT_KEY},
     errors::serialize::DeError,
 };
 use serde::de::value::BorrowedStrDeserializer;
@@ -119,7 +119,8 @@ impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0, &PredefinedEntityResolver).deserialize_seq(visitor)
+        SimpleTypeDeserializer::from_text_content(self.0, &PredefinedEntityResolver)
+            .deserialize_seq(visitor)
     }
 
     #[inline]

@@ -522,7 +522,13 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
-        Self::new(content, false, XmlVersion::V1_0, Decoder::utf8(), entity_resolver)
+        Self::new(
+            content,
+            false,
+            XmlVersion::V1_0,
+            Decoder::utf8(),
+            entity_resolver,
+        )
     }
     /// Creates a deserializer from an XML text node, that possible borrowed from input.
     ///
@@ -592,9 +598,9 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
     fn content<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
         let content = self.decode()?;
         if self.is_attr {
-            let value =
-                self.version
-                    .normalize_attribute_value(&content, 128, |x| self.entity_resolver.resolve(x))?;
+            let value = self
+                .version
+                .normalize_attribute_value(&content, 128, |x| self.entity_resolver.resolve(x))?;
             return Ok(match value {
                 Cow::Borrowed(_) => content,
                 Cow::Owned(value) => CowRef::Owned(value),
@@ -761,7 +767,9 @@ impl<'de, 'a, E: EntityResolver> EnumAccess<'de> for SimpleTypeDeserializer<'de,
     }
 }
 
-impl<'de, 'a, E: EntityResolver> IntoDeserializer<'de, DeError> for SimpleTypeDeserializer<'de, 'a, E> {
+impl<'de, 'a, E: EntityResolver> IntoDeserializer<'de, DeError>
+    for SimpleTypeDeserializer<'de, 'a, E>
+{
     type Deserializer = Self;
 
     #[inline]

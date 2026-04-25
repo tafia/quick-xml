@@ -6,8 +6,8 @@ use serde::de::{DeserializeSeed, Deserializer, Error, MapAccess, Visitor};
 use serde::forward_to_deserialize_any;
 
 use crate::de::key::QNameDeserializer;
-use crate::de::{EntityResolver, PredefinedEntityResolver};
 use crate::de::SimpleTypeDeserializer;
+use crate::de::{EntityResolver, PredefinedEntityResolver};
 use crate::errors::serialize::DeError;
 use crate::events::attributes::Attributes;
 use crate::XmlVersion;
