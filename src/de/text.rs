@@ -70,9 +70,7 @@ impl<'de> TextDeserializer<'de> {
 impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     type Error = DeError;
 
-    // TODO consider adding entity_resolver member to this struct?
-    // is this feature desirable here?
-    deserialize_primitives!(self in &PredefinedEntityResolver);
+    deserialize_primitives!();
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -119,7 +117,7 @@ impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0, &PredefinedEntityResolver)
+        SimpleTypeDeserializer::from_text_content(self.0)
             .deserialize_seq(visitor)
     }
 

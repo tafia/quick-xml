@@ -49,7 +49,7 @@ impl<'i> Attributes<'i> {
     ///     3
     /// );
     /// // Strip nothing from the field names
-    /// let de = tag.attributes().clone().into_map_access(XmlVersion::V1_0, "", &PredefinedEntityResolver);
+    /// let de = tag.attributes().clone().into_map_access(XmlVersion::V1_0, "");
     /// assert_eq!(
     ///     MyData::deserialize(de).unwrap(),
     ///     MyData {
@@ -59,7 +59,7 @@ impl<'i> Attributes<'i> {
     /// );
     ///
     /// // Strip "@" from the field name
-    /// let de = tag.attributes().into_map_access(XmlVersion::V1_0, "@", &PredefinedEntityResolver);
+    /// let de = tag.attributes().into_map_access(XmlVersion::V1_0, "@");
     /// assert_eq!(
     ///     MyDataPrefixed::deserialize(de).unwrap(),
     ///     MyDataPrefixed {
@@ -69,19 +69,18 @@ impl<'i> Attributes<'i> {
     /// );
     /// ```
     #[inline]
-    pub const fn into_map_access<E: EntityResolver>(
+    pub const fn into_map_access(
         self,
         version: XmlVersion,
         prefix: &'static str,
-        entity_resolver: &'i E,
-    ) -> AttributesDeserializer<'i, E> {
+    ) -> AttributesDeserializer<'i, PredefinedEntityResolver> {
         AttributesDeserializer {
             iter: self,
             value: None,
             prefix,
             key_buf: String::new(),
             version,
-            entity_resolver,
+            resolver: &PredefinedEntityResolver,
         }
     }
 }
@@ -110,7 +109,33 @@ pub struct AttributesDeserializer<'i, E: EntityResolver = PredefinedEntityResolv
     /// Kept in the deserializer to avoid many small allocations
     key_buf: String,
     version: XmlVersion,
-    entity_resolver: &'i E,
+    resolver: &'i E,
+}
+
+impl<'i, OldE: EntityResolver> AttributesDeserializer<'i, OldE> {
+    /// Produce a copy of this deserializer with its
+    /// [`EntityResolver`] replaced by the one given.
+    pub fn with_resolver<NewE: EntityResolver>(
+        self,
+        resolver: &'i NewE,
+    ) -> AttributesDeserializer<'i, NewE> {
+        let AttributesDeserializer {
+            iter,
+            value,
+            prefix,
+            key_buf,
+            version,
+            resolver: _,
+        } = self;
+        AttributesDeserializer {
+            iter,
+            value,
+            prefix,
+            key_buf,
+            version,
+            resolver,
+        }
+    }
 }
 
 impl<'de, E: EntityResolver> Deserializer<'de> for AttributesDeserializer<'de, E> {
@@ -165,7 +190,7 @@ impl<'de, E: EntityResolver> MapAccess<'de> for AttributesDeserializer<'de, E> {
                     0..value.len(),
                     self.version,
                     self.iter.decoder(),
-                    self.entity_resolver,
+                    self.resolver.clone(),
                 );
                 seed.deserialize(de)
             }

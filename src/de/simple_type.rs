@@ -510,14 +510,14 @@ pub struct SimpleTypeDeserializer<'de, 'a, E: EntityResolver = PredefinedEntityR
     /// to return an [`EscapeError::UnrecognizedEntity`] error.
     ///
     /// [`EscapeError::UnrecognizedEntity`]: crate::escape::EscapeError::UnrecognizedEntity
-    entity_resolver: &'a E,
+    entity_resolver: E,
 }
 
-impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
+impl<'de, 'a> SimpleTypeDeserializer<'de, 'a, PredefinedEntityResolver> {
     /// Creates a deserializer from a value, that possible borrowed from input.
     ///
     /// It is assumed that `text` does not have entities.
-    pub fn from_text(text: Cow<'de, str>, entity_resolver: &'a E) -> Self {
+    pub fn from_text(text: Cow<'de, str>) -> Self {
         let content = match text {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
@@ -527,7 +527,7 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
             false,
             XmlVersion::V1_0,
             Decoder::utf8(),
-            entity_resolver,
+            PredefinedEntityResolver,
         )
     }
     /// Creates a deserializer from an XML text node, that possible borrowed from input.
@@ -535,10 +535,12 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
     /// It is assumed that `text` does not have entities.
     ///
     /// This constructor used internally to deserialize from text nodes.
-    pub fn from_text_content(value: Text<'de>, entity_resolver: &'a E) -> Self {
-        Self::from_text(value.text, entity_resolver)
+    pub fn from_text_content(value: Text<'de>) -> Self {
+        Self::from_text(value.text)
     }
+}
 
+impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
     /// Creates a deserializer from a part of value at specified range.
     ///
     /// This constructor used internally to deserialize from attribute values.
@@ -548,7 +550,7 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
         range: Range<usize>,
         version: XmlVersion,
         decoder: Decoder,
-        entity_resolver: &'a E,
+        entity_resolver: E,
     ) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
@@ -564,7 +566,7 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
         is_attr: bool,
         version: XmlVersion,
         decoder: Decoder,
-        entity_resolver: &'a E,
+        entity_resolver: E,
     ) -> Self {
         Self {
             content,
@@ -600,7 +602,9 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
         if self.is_attr {
             let value = self
                 .version
-                .normalize_attribute_value(&content, 128, |x| self.entity_resolver.resolve(x))?;
+                .normalize_attribute_value(&content, 128, |x| {
+                    self.entity_resolver.resolve(x)
+                })?;
             return Ok(match value {
                 Cow::Borrowed(_) => content,
                 Cow::Owned(value) => CowRef::Owned(value),
@@ -801,7 +805,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
-                    &PredefinedEntityResolver,
+                    PredefinedEntityResolver,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -821,7 +825,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
-                    &PredefinedEntityResolver,
+                    PredefinedEntityResolver,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -852,7 +856,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
-                    &PredefinedEntityResolver,
+                    PredefinedEntityResolver,
                 );
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
