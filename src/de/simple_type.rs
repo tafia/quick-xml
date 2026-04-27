@@ -602,9 +602,7 @@ impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
         if self.is_attr {
             let value = self
                 .version
-                .normalize_attribute_value(&content, 128, |x| {
-                    self.entity_resolver.resolve(x)
-                })?;
+                .normalize_attribute_value(&content, 128, |x| self.entity_resolver.resolve(x))?;
             return Ok(match value {
                 Cow::Borrowed(_) => content,
                 Cow::Owned(value) => CowRef::Owned(value),

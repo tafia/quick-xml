@@ -1832,14 +1832,18 @@ mod resolve {
     use super::*;
     use pretty_assertions::assert_eq;
     use quick_xml::de::EntityResolver;
+    use quick_xml::escape::resolve_xml_entity;
     use quick_xml::events::BytesText;
     use std::collections::BTreeMap;
     use std::convert::Infallible;
     use std::iter::FromIterator;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct TestEntityResolver {
         capture_called: bool,
+        rxe_called: Arc<AtomicUsize>,
     }
 
     impl EntityResolver for TestEntityResolver {
@@ -1862,12 +1866,16 @@ mod resolve {
                 "t1" => Some("test_one"),
                 "t2" => Some("test_two"),
                 "myAmp" => Some("&"),
-                _ => None,
+                _ => {
+                    self.rxe_called
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    resolve_xml_entity(entity)
+                }
             }
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct TestHostileEntityResolver {
         capture_called: bool,
     }
@@ -1898,9 +1906,7 @@ mod resolve {
 
     #[test]
     fn resolve_custom_entity() {
-        let resolver = TestEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestEntityResolver::default();
         let mut de = Deserializer::with_resolver(
             br#"
             <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
@@ -1939,9 +1945,7 @@ mod resolve {
 
     #[test]
     fn resolve_custom_entities_in_text_only_once() {
-        let resolver = TestEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestEntityResolver::default();
         let mut de = Deserializer::with_resolver(
             br#"
             <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
@@ -1967,12 +1971,10 @@ mod resolve {
 
     #[test]
     fn resolve_custom_entities_in_attr_only_once() {
-        use quick_xml::Error;
         use quick_xml::escape::EscapeError;
+        use quick_xml::Error;
 
-        let resolver = TestEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestEntityResolver::default();
         let mut de = Deserializer::with_resolver(
             br#"
             <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
@@ -2007,18 +2009,17 @@ mod resolve {
 
     #[test]
     fn resolve_custom_entity_in_attr() {
-        let resolver = TestEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestEntityResolver::default();
+        let rxe_called = resolver.rxe_called.clone();
         let mut de = Deserializer::with_resolver(
             br#"
             <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
 
             <root
                 entity_one="&t1;"
-                entity_two="czech_&t2;"
+                entity_two="czech_&t2;&gt;"
                 entity_three="non-entity"
-            />
+            >&lt;</root>
             "#
             .as_ref(),
             resolver,
@@ -2029,17 +2030,22 @@ mod resolve {
             data,
             BTreeMap::from_iter([
                 (String::from("@entity_one"), String::from("test_one")),
-                (String::from("@entity_two"), String::from("czech_test_two")),
+                (String::from("@entity_two"), String::from("czech_test_two>")),
                 (String::from("@entity_three"), String::from("non-entity")),
+                (String::from("$text"), String::from("<")),
             ])
+        );
+
+        assert_eq!(
+            rxe_called.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "`EntityResolver::resolve` should be consulted first for both attributes and text contents"
         );
     }
 
     #[test]
     fn resolve_custom_entity_in_text_but_reject_infinite_recursion() {
-        let resolver = TestHostileEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestHostileEntityResolver::default();
         let mut de = Deserializer::with_resolver(
             br#"
             <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>

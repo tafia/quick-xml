@@ -117,8 +117,7 @@ impl<'de> Deserializer<'de> for TextDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0)
-            .deserialize_seq(visitor)
+        SimpleTypeDeserializer::from_text_content(self.0).deserialize_seq(visitor)
     }
 
     #[inline]
