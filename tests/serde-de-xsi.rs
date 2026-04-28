@@ -239,6 +239,43 @@ mod top_level_option {
             }
         }
     }
+
+    /// Namespace binding from nested element must not leak into the parent element
+    mod nested_nil {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn unit() {
+            assert_eq!(
+                from_str::<Option<()>>(
+                    "\
+                    <value xsi:nil='true'>\
+                        <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                    </value>\
+                    "
+                )
+                .unwrap(),
+                Some(())
+            );
+        }
+
+        #[test]
+        fn string() {
+            assert!(matches!(
+                from_str::<Option<String>>(
+                    "\
+                    <value xsi:nil='true'>\
+                        <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                        text\
+                    </value>\
+                    "
+                )
+                .unwrap_err(),
+                DeError::MixedContent(x) if x == "any"
+            ));
+        }
+    }
 }
 
 mod as_field {
@@ -696,6 +733,176 @@ mod as_field {
                             attr: None,
                             elem: Some("Foo".into()),
                         },
+                    }
+                );
+            }
+        }
+    }
+
+    /// Namespace binding from nested element must not leak into the parent element
+    mod nested_nil {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        mod field {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Xml {
+                value: Option<()>,
+            }
+
+            #[test]
+            fn nil_on_parent() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName xsi:nil='true'>\
+                            <value xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml { value: Some(()) }
+                );
+            }
+
+            #[test]
+            fn nil_on_self() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName>\
+                            <value xsi:nil='true'>\
+                                <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                            </value>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml { value: Some(()) }
+                );
+            }
+        }
+
+        #[test]
+        fn text() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Xml {
+                #[serde(rename = "$text")]
+                value: Option<&'static str>,
+            }
+            assert_eq!(
+                from_str::<Xml>(
+                    "\
+                    <AnyName xsi:nil='true'>\
+                        <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                        text\
+                    </AnyName>\
+                    "
+                )
+                .unwrap(),
+                Xml {
+                    value: Some("text"),
+                }
+            );
+        }
+
+        mod value {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Xml {
+                #[serde(rename = "$value")]
+                value: Option<()>,
+            }
+
+            #[test]
+            fn nil_on_parent() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName xsi:nil='true'>\
+                            <value xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml { value: Some(()) }
+                );
+            }
+
+            #[test]
+            fn nil_on_self() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName>\
+                            <value xsi:nil='true'>\
+                                <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                            </value>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml { value: Some(()) }
+                );
+            }
+        }
+
+        /// Namespace binding from the previous element or its child must not leak into the next element
+        ///
+        /// Reaches `Deserializer::read_to_end`, because it is used to skip subtree that was mapped
+        /// to unit struct.
+        mod unit {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Xml {
+                unit: (),
+                some: Option<()>,
+            }
+
+            #[test]
+            fn nil_on_parent() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName xsi:nil='true'>\
+                            <unit xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                            <some xsi:nil='true'/>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml {
+                        unit: (),
+                        some: Some(()),
+                    }
+                );
+            }
+
+            #[test]
+            fn nil_on_self() {
+                assert_eq!(
+                    from_str::<Xml>(
+                        "\
+                        <AnyName>\
+                            <unit xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>\
+                                <unit/>\
+                                <any xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'/>\
+                            </unit>\
+                            <some xsi:nil='true'/>\
+                        </AnyName>\
+                        "
+                    )
+                    .unwrap(),
+                    Xml {
+                        unit: (),
+                        some: Some(()),
                     }
                 );
             }

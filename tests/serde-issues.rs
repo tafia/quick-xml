@@ -931,6 +931,59 @@ fn issue928() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/953.
+mod issue953 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Root {
+        vec: Vec<()>,
+        opt: Option<Value>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Value {
+        field: (),
+    }
+
+    #[test]
+    fn open_close() {
+        let input = r#"
+        <Root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <vec> </vec>
+          <opt xsi:nil="true"/>
+        </Root>
+        "#;
+        let value: Root = from_str(&input).unwrap();
+        assert_eq!(
+            value,
+            Root {
+                vec: vec![()],
+                opt: None,
+            }
+        );
+    }
+
+    #[test]
+    fn self_closed() {
+        let input = r#"
+        <Root xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <vec/>
+          <opt xsi:nil="true"/>
+        </Root>
+        "#;
+        let value: Root = from_str(&input).unwrap();
+        assert_eq!(
+            value,
+            Root {
+                vec: vec![()],
+                opt: None,
+            }
+        );
+    }
+}
+
 /// Regression tests for https://github.com/tafia/quick-xml/issues/978.
 ///
 /// Deeply nested XML should produce `DeError::TooDeeplyNested` instead of
