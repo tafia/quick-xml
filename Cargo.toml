@@ -219,11 +219,6 @@ required-features = ["async-tokio"]
 path = "tests/async-tokio.rs"
 
 [[test]]
-name = "encodings"
-required-features = ["encoding"]
-path = "tests/encodings.rs"
-
-[[test]]
 name = "html"
 required-features = ["escape-html"]
 path = "tests/html.rs"

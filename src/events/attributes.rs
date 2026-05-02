@@ -151,10 +151,10 @@ impl<'a> Attribute<'a> {
         use std::str::from_utf8;
 
         let decoded = match &self.value {
-            Cow::Borrowed(bytes) => Cow::Borrowed(from_utf8(bytes).map_err(EncodingError::Utf8)?),
+            Cow::Borrowed(bytes) => Cow::Borrowed(from_utf8(bytes).map_err(EncodingError::from)?),
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
             Cow::Owned(bytes) => {
-                Cow::Owned(from_utf8(bytes).map_err(EncodingError::Utf8)?.to_owned())
+                Cow::Owned(from_utf8(bytes).map_err(EncodingError::from)?.to_owned())
             }
         };
 

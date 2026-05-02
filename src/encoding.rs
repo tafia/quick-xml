@@ -17,6 +17,52 @@ pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
+/// An error type representing UTF-8 validation failure.
+///
+/// Unlike [`std::str::Utf8Error`], instances can be created directly for custom error scenarios.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Utf8ValidationError {
+    /// Error from standard library UTF-8 validation
+    Utf8(Utf8Error),
+    /// Invalid UTF-8 sequence found in the input
+    InvalidSequence {
+        /// Length of the invalid UTF-8 sequence in bytes
+        error_len: usize,
+    },
+    /// Incomplete UTF-8 sequence at end of stream
+    IncompleteSequence,
+}
+
+impl From<Utf8Error> for Utf8ValidationError {
+    #[inline]
+    fn from(e: Utf8Error) -> Self {
+        Self::Utf8(e)
+    }
+}
+
+impl std::fmt::Display for Utf8ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Utf8(e) => write!(f, "{}", e),
+            Self::InvalidSequence { error_len } => {
+                write!(f, "invalid UTF-8 sequence of {} bytes", error_len)
+            }
+            Self::IncompleteSequence => {
+                write!(f, "incomplete UTF-8 sequence at end of stream")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Utf8ValidationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Utf8(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 /// An error when decoding or encoding
 ///
 /// If feature [`encoding`] is disabled, the [`EncodingError`] is always [`EncodingError::Utf8`]
@@ -26,7 +72,7 @@ pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 #[non_exhaustive]
 pub enum EncodingError {
     /// Input was not valid UTF-8
-    Utf8(Utf8Error),
+    Utf8(Utf8ValidationError),
     /// Input did not adhere to the given encoding
     #[cfg(feature = "encoding")]
     Other(&'static encoding_rs::Encoding),
@@ -35,6 +81,13 @@ pub enum EncodingError {
 impl From<Utf8Error> for EncodingError {
     #[inline]
     fn from(e: Utf8Error) -> Self {
+        Self::Utf8(e.into())
+    }
+}
+
+impl From<Utf8ValidationError> for EncodingError {
+    #[inline]
+    fn from(e: Utf8ValidationError) -> Self {
         Self::Utf8(e)
     }
 }
@@ -446,7 +499,9 @@ impl<R: Read> Read for Utf8ValidatingReader<R> {
                             if valid_up_to == 0 {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
-                                    format!("invalid UTF-8 sequence of {} bytes", error_len),
+                                    EncodingError::Utf8(Utf8ValidationError::InvalidSequence {
+                                        error_len,
+                                    }),
                                 ));
                             }
                             // Write valid portion before the error
@@ -489,7 +544,7 @@ impl<R: Read> Read for Utf8ValidatingReader<R> {
                     // EOF with incomplete UTF-8 sequence
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        "incomplete UTF-8 sequence at end of stream",
+                        EncodingError::Utf8(Utf8ValidationError::IncompleteSequence),
                     ));
                 }
             }
@@ -588,6 +643,22 @@ mod utf8_validating_reader_tests {
             self.pos += len;
             Ok(len)
         }
+    }
+
+    /// Assert that a read result is an error wrapping the expected Utf8ValidationError.
+    fn assert_utf8_error(result: io::Result<usize>, expected: Utf8ValidationError) {
+        let err = result.expect_err("expected an error");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        let encoding_err = err
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<EncodingError>()
+            .expect("error should downcast to EncodingError");
+        assert_eq!(
+            *encoding_err,
+            EncodingError::Utf8(expected),
+            "unexpected error variant"
+        );
     }
 
     mod basic_access {
@@ -868,10 +939,10 @@ mod utf8_validating_reader_tests {
             assert_eq!(&buf[..n1], b"Hi");
 
             // Second read should fail because incomplete sequence at EOF
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::IncompleteSequence,
+            );
         }
 
         #[test]
@@ -880,10 +951,10 @@ mod utf8_validating_reader_tests {
             let data = b"\xFF";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -892,10 +963,10 @@ mod utf8_validating_reader_tests {
             let data = b"\xC2\x00";
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -909,10 +980,10 @@ mod utf8_validating_reader_tests {
             assert_eq!(&buf[..n], b"OK");
 
             // Second read should error on invalid byte
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -928,10 +999,10 @@ mod utf8_validating_reader_tests {
             assert_eq!(&buf[..n1], b"OK");
 
             // Second read should error on invalid byte (never reaches "More")
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -940,10 +1011,10 @@ mod utf8_validating_reader_tests {
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
 
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -956,10 +1027,10 @@ mod utf8_validating_reader_tests {
             let n1 = reader.read(&mut buf).unwrap();
             assert_eq!(&buf[..n1], b"Hi");
 
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::IncompleteSequence,
+            );
         }
 
         #[test]
@@ -972,10 +1043,10 @@ mod utf8_validating_reader_tests {
             let n1 = reader.read(&mut buf).unwrap();
             assert_eq!(&buf[..n1], b"Hi");
 
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::IncompleteSequence,
+            );
         }
 
         #[test]
@@ -987,10 +1058,10 @@ mod utf8_validating_reader_tests {
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
 
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
 
         #[test]
@@ -1001,10 +1072,10 @@ mod utf8_validating_reader_tests {
             let mut reader = Utf8ValidatingReader::new(&data[..]);
             let mut buf = [0u8; 10];
 
-            let result = reader.read(&mut buf);
-            assert!(result.is_err());
-            let err = result.unwrap_err();
-            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert_utf8_error(
+                reader.read(&mut buf),
+                Utf8ValidationError::InvalidSequence { error_len: 1 },
+            );
         }
     }
 }
