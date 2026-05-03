@@ -84,12 +84,21 @@ pub use crate::writer::{ElementWriter, Writer};
 /// Version of XML standard
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum XmlVersion {
-    /// [Version 1.0], which is the default version of XML document if XML declaration
-    /// is missed. Most documents in the world are still XML 1.0 documents.
+    /// XML declaration was missed in the entity (root document or referenced
+    /// external DTD), so according to the specification, [version 1.0] is assumed.
+    /// Most documents in the world are still XML 1.0 documents.
     ///
-    /// [Version 1.0]: https://www.w3.org/TR/xml/
+    /// [version 1.0]: https://www.w3.org/TR/xml/
     Implicit1_0,
-    /// [Version 1.1](https://www.w3.org/TR/xml11/)
+    /// XML version was specified as [`1.0`] in the entity (root document or referenced
+    /// external DTD).
+    ///
+    /// [`1.0`]: https://www.w3.org/TR/xml/
+    Explicit1_0,
+    /// XML version was specified as [`1.1`] in the entity (root document or referenced
+    /// external DTD).
+    ///
+    /// [`1.1`]: https://www.w3.org/TR/xml11/
     Explicit1_1,
 }
 
@@ -105,8 +114,8 @@ impl XmlVersion {
         F: FnMut(&str) -> Option<&'entity str>,
     {
         match self {
-            Self::Implicit1_0 => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
             Self::Explicit1_1 => escape::normalize_xml11_attribute_value(value, depth, resolve_entity),
+            _ => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
         }
     }
 }

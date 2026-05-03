@@ -1280,6 +1280,13 @@ mod xml {
             assert!(matches!(value, Cow::Borrowed(_)));
 
             let value = attr
+                .decoded_and_normalized_value(Explicit1_0, Decoder::utf8())
+                .unwrap();
+            assert_eq!(value, "");
+            // assert_eq! does not check if value is borrowed, but this is important
+            assert!(matches!(value, Cow::Borrowed(_)));
+
+            let value = attr
                 .decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "");
@@ -1295,6 +1302,13 @@ mod xml {
 
             let value = attr
                 .decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
+                .unwrap();
+            assert_eq!(value, "foobar123");
+            // assert_eq! does not check if value is borrowed, but this is important
+            assert!(matches!(value, Cow::Borrowed(_)));
+
+            let value = attr
+                .decoded_and_normalized_value(Explicit1_0, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "foobar123");
             // assert_eq! does not check if value is borrowed, but this is important
@@ -1321,6 +1335,11 @@ mod xml {
                 " foo\u{85}\u{2028} bar baz  delta  \u{85}"
             );
             assert_eq!(
+                attr.decoded_and_normalized_value(Explicit1_0, Decoder::utf8())
+                    .unwrap(),
+                " foo\u{85}\u{2028} bar baz  delta  \u{85}"
+            );
+            assert_eq!(
                 attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                     .unwrap(),
                 " foo   bar baz  delta  "
@@ -1338,6 +1357,11 @@ mod xml {
                 x => panic!("Expected Err(Escape(_)), got {:?}", x),
             }
 
+            match attr.decoded_and_normalized_value(Explicit1_0, Decoder::utf8()) {
+                Err(Error::Escape(err)) => assert_eq!(err, UnterminatedEntity(3..11)),
+                x => panic!("Expected Err(Escape(_)), got {:?}", x),
+            }
+
             match attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8()) {
                 Err(Error::Escape(err)) => assert_eq!(err, UnterminatedEntity(3..11)),
                 x => panic!("Expected Err(Escape(_)), got {:?}", x),
@@ -1351,6 +1375,14 @@ mod xml {
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
             match attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8()) {
+                // TODO: is this divergence between range behavior of UnterminatedEntity
+                // and UnrecognizedEntity appropriate? existing unescape code behaves the same.  (see: start index)
+                Err(Error::Escape(err)) => {
+                    assert_eq!(err, UnrecognizedEntity(4..8, "unkn".to_owned()))
+                }
+                x => panic!("Expected Err(Escape(err)), got {:?}", x),
+            }
+            match attr.decoded_and_normalized_value(Explicit1_0, Decoder::utf8()) {
                 // TODO: is this divergence between range behavior of UnterminatedEntity
                 // and UnrecognizedEntity appropriate? existing unescape code behaves the same.  (see: start index)
                 Err(Error::Escape(err)) => {
@@ -1388,6 +1420,11 @@ mod xml {
                 "\r\rA\n \nB\r\n"
             );
             assert_eq!(
+                attr.decoded_and_normalized_value_with(Explicit1_0, Decoder::utf8(), 5, &custom_resolver)
+                    .unwrap(),
+                "\r\rA\n \nB\r\n"
+            );
+            assert_eq!(
                 attr.decoded_and_normalized_value_with(Explicit1_1, Decoder::utf8(), 5, &custom_resolver)
                     .unwrap(),
                 "\r\rA\n \nB\r\n"
@@ -1402,6 +1439,11 @@ mod xml {
 
             assert_eq!(
                 attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
+                    .unwrap(),
+                "\r\rA\n\nB\r\n"
+            );
+            assert_eq!(
+                attr.decoded_and_normalized_value(Explicit1_0, Decoder::utf8())
                     .unwrap(),
                 "\r\rA\n\nB\r\n"
             );

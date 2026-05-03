@@ -658,12 +658,19 @@ impl<'a> BytesText<'a> {
         self.decoder.content(&self.content, normalize_xml11_eols)
     }
 
-    /// Alias for [`xml11_content()`](Self::xml11_content).
+    /// Decodes the content of the XML event according to the specified version.
+    ///
+    /// When this event produced by the reader, it uses the encoding information
+    /// associated with that reader to interpret the raw bytes contained within
+    /// this text event.
+    ///
+    /// This will allocate if the value is encoded in non-UTF-8 encoding, or EOL normalization
+    /// is required.
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::Implicit1_0 => self.xml10_content(),
             XmlVersion::Explicit1_1 => self.xml11_content(),
+            _ => self.xml10_content(),
         }
     }
 
@@ -969,12 +976,20 @@ impl<'a> BytesCData<'a> {
         self.decoder.content(&self.content, normalize_xml11_eols)
     }
 
-    /// Alias for [`xml11_content()`](Self::xml11_content).
+    /// Decodes the raw input byte content of the CDATA section of the XML event
+    /// into a string according to the specified version.
+    ///
+    /// When this event produced by the reader, it uses the encoding information
+    /// associated with that reader to interpret the raw bytes contained within
+    /// this CDATA event.
+    ///
+    /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
+    /// is required.
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::Implicit1_0 => self.xml10_content(),
             XmlVersion::Explicit1_1 => self.xml11_content(),
+            _ => self.xml10_content(),
         }
     }
 
@@ -1463,7 +1478,7 @@ impl<'a> BytesDecl<'a> {
     ///
     /// // <?xml version='1.0' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::Implicit1_0);
+    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::Explicit1_0);
     ///
     /// // <?xml version='1.2'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.2'", 0));
@@ -1498,7 +1513,7 @@ impl<'a> BytesDecl<'a> {
     pub fn xml_version(&self) -> Result<XmlVersion, Error> {
         let v = self.version()?;
         match v.as_ref() {
-            b"1.0" => Ok(XmlVersion::Implicit1_0),
+            b"1.0" => Ok(XmlVersion::Explicit1_0),
             b"1.1" => Ok(XmlVersion::Explicit1_1),
             _ => Err(Error::IllFormed(IllFormedError::UnknownVersion)),
         }
@@ -1685,11 +1700,20 @@ impl<'a> BytesRef<'a> {
     }
 
     /// Alias for [`xml11_content()`](Self::xml11_content).
+
+    /// Decodes the content of the XML event according to the specified version.
+    ///
+    /// When this event produced by the reader, it uses the encoding information
+    /// associated with that reader to interpret the raw bytes contained within
+    /// this general reference event.
+    ///
+    /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
+    /// is required.
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::Implicit1_0 => self.xml10_content(),
             XmlVersion::Explicit1_1 => self.xml11_content(),
+            _ => self.xml10_content(),
         }
     }
 
