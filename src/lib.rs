@@ -88,9 +88,9 @@ pub enum XmlVersion {
     /// is missed. Most documents in the world are still XML 1.0 documents.
     ///
     /// [Version 1.0]: https://www.w3.org/TR/xml/
-    V1_0,
+    Implicit1_0,
     /// [Version 1.1](https://www.w3.org/TR/xml11/)
-    V1_1,
+    Explicit1_1,
 }
 
 impl XmlVersion {
@@ -105,8 +105,8 @@ impl XmlVersion {
         F: FnMut(&str) -> Option<&'entity str>,
     {
         match self {
-            Self::V1_0 => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
-            Self::V1_1 => escape::normalize_xml11_attribute_value(value, depth, resolve_entity),
+            Self::Implicit1_0 => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
+            Self::Explicit1_1 => escape::normalize_xml11_attribute_value(value, depth, resolve_entity),
         }
     }
 }
@@ -114,6 +114,6 @@ impl XmlVersion {
 impl Default for XmlVersion {
     #[inline]
     fn default() -> Self {
-        Self::V1_0
+        Self::Implicit1_0
     }
 }

@@ -47,7 +47,7 @@ impl<'i> Attributes<'i> {
     ///     3
     /// );
     /// // Strip nothing from the field names
-    /// let de = tag.attributes().clone().into_map_access(XmlVersion::V1_0, "");
+    /// let de = tag.attributes().clone().into_map_access(XmlVersion::Implicit1_0, "");
     /// assert_eq!(
     ///     MyData::deserialize(de).unwrap(),
     ///     MyData {
@@ -57,7 +57,7 @@ impl<'i> Attributes<'i> {
     /// );
     ///
     /// // Strip "@" from the field name
-    /// let de = tag.attributes().into_map_access(XmlVersion::V1_0, "@");
+    /// let de = tag.attributes().into_map_access(XmlVersion::Implicit1_0, "@");
     /// assert_eq!(
     ///     MyDataPrefixed::deserialize(de).unwrap(),
     ///     MyDataPrefixed {

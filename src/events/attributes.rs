@@ -300,7 +300,7 @@ impl<'a> Attribute<'a> {
     #[deprecated = "use `Self::normalized_value()`"]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         // resolve_predefined_entity returns only non-recursive replacements, so depth=1 is enough
-        self.normalized_value_with(XmlVersion::V1_0, 1, resolve_predefined_entity)
+        self.normalized_value_with(XmlVersion::Implicit1_0, 1, resolve_predefined_entity)
     }
 
     /// Decodes using UTF-8 then unescapes the value, using custom entities.
@@ -333,7 +333,7 @@ impl<'a> Attribute<'a> {
         &self,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
-        self.normalized_value_with(XmlVersion::V1_0, 128, resolve_entity)
+        self.normalized_value_with(XmlVersion::Implicit1_0, 128, resolve_entity)
     }
 
     /// Decodes then unescapes the value.
@@ -344,7 +344,7 @@ impl<'a> Attribute<'a> {
     pub fn decode_and_unescape_value(&self, decoder: Decoder) -> XmlResult<Cow<'a, str>> {
         // resolve_predefined_entity returns only non-recursive replacements, so depth=1 is enough
         self.decoded_and_normalized_value_with(
-            XmlVersion::V1_0,
+            XmlVersion::Implicit1_0,
             decoder,
             1,
             resolve_predefined_entity,
@@ -361,7 +361,7 @@ impl<'a> Attribute<'a> {
         decoder: Decoder,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
-        self.decoded_and_normalized_value_with(XmlVersion::V1_0, decoder, 128, resolve_entity)
+        self.decoded_and_normalized_value_with(XmlVersion::Implicit1_0, decoder, 128, resolve_entity)
     }
 
     /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
@@ -1273,14 +1273,14 @@ mod xml {
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
             let value = attr
-                .decoded_and_normalized_value(V1_0, Decoder::utf8())
+                .decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "");
             // assert_eq! does not check if value is borrowed, but this is important
             assert!(matches!(value, Cow::Borrowed(_)));
 
             let value = attr
-                .decoded_and_normalized_value(V1_1, Decoder::utf8())
+                .decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "");
             // assert_eq! does not check if value is borrowed, but this is important
@@ -1294,14 +1294,14 @@ mod xml {
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
             let value = attr
-                .decoded_and_normalized_value(V1_0, Decoder::utf8())
+                .decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "foobar123");
             // assert_eq! does not check if value is borrowed, but this is important
             assert!(matches!(value, Cow::Borrowed(_)));
 
             let value = attr
-                .decoded_and_normalized_value(V1_1, Decoder::utf8())
+                .decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                 .unwrap();
             assert_eq!(value, "foobar123");
             // assert_eq! does not check if value is borrowed, but this is important
@@ -1316,12 +1316,12 @@ mod xml {
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
             assert_eq!(
-                attr.decoded_and_normalized_value(V1_0, Decoder::utf8())
+                attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
                     .unwrap(),
                 " foo\u{85}\u{2028} bar baz  delta  \u{85}"
             );
             assert_eq!(
-                attr.decoded_and_normalized_value(V1_1, Decoder::utf8())
+                attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                     .unwrap(),
                 " foo   bar baz  delta  "
             );
@@ -1333,12 +1333,12 @@ mod xml {
             let raw_value = "abc&quotdef".as_bytes();
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
-            match attr.decoded_and_normalized_value(V1_0, Decoder::utf8()) {
+            match attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8()) {
                 Err(Error::Escape(err)) => assert_eq!(err, UnterminatedEntity(3..11)),
                 x => panic!("Expected Err(Escape(_)), got {:?}", x),
             }
 
-            match attr.decoded_and_normalized_value(V1_1, Decoder::utf8()) {
+            match attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8()) {
                 Err(Error::Escape(err)) => assert_eq!(err, UnterminatedEntity(3..11)),
                 x => panic!("Expected Err(Escape(_)), got {:?}", x),
             }
@@ -1350,7 +1350,7 @@ mod xml {
             let raw_value = "abc&unkn;def".as_bytes();
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
-            match attr.decoded_and_normalized_value(V1_0, Decoder::utf8()) {
+            match attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8()) {
                 // TODO: is this divergence between range behavior of UnterminatedEntity
                 // and UnrecognizedEntity appropriate? existing unescape code behaves the same.  (see: start index)
                 Err(Error::Escape(err)) => {
@@ -1358,7 +1358,7 @@ mod xml {
                 }
                 x => panic!("Expected Err(Escape(err)), got {:?}", x),
             }
-            match attr.decoded_and_normalized_value(V1_1, Decoder::utf8()) {
+            match attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8()) {
                 // TODO: is this divergence between range behavior of UnterminatedEntity
                 // and UnrecognizedEntity appropriate? existing unescape code behaves the same.  (see: start index)
                 Err(Error::Escape(err)) => {
@@ -1383,12 +1383,12 @@ mod xml {
             }
 
             assert_eq!(
-                attr.decoded_and_normalized_value_with(V1_0, Decoder::utf8(), 5, &custom_resolver)
+                attr.decoded_and_normalized_value_with(Implicit1_0, Decoder::utf8(), 5, &custom_resolver)
                     .unwrap(),
                 "\r\rA\n \nB\r\n"
             );
             assert_eq!(
-                attr.decoded_and_normalized_value_with(V1_1, Decoder::utf8(), 5, &custom_resolver)
+                attr.decoded_and_normalized_value_with(Explicit1_1, Decoder::utf8(), 5, &custom_resolver)
                     .unwrap(),
                 "\r\rA\n \nB\r\n"
             );
@@ -1401,12 +1401,12 @@ mod xml {
             let attr = Attribute::from(("foo".as_bytes(), raw_value));
 
             assert_eq!(
-                attr.decoded_and_normalized_value(V1_0, Decoder::utf8())
+                attr.decoded_and_normalized_value(Implicit1_0, Decoder::utf8())
                     .unwrap(),
                 "\r\rA\n\nB\r\n"
             );
             assert_eq!(
-                attr.decoded_and_normalized_value(V1_1, Decoder::utf8())
+                attr.decoded_and_normalized_value(Explicit1_1, Decoder::utf8())
                     .unwrap(),
                 "\r\rA\n\nB\r\n"
             );

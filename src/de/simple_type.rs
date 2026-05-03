@@ -516,7 +516,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
-        Self::new(content, false, XmlVersion::V1_0, Decoder::utf8())
+        Self::new(content, false, XmlVersion::Implicit1_0, Decoder::utf8())
     }
     /// Creates a deserializer from an XML text node, that possible borrowed from input.
     ///
@@ -782,7 +782,7 @@ mod tests {
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
-                    XmlVersion::V1_0,
+                    XmlVersion::Implicit1_0,
                     decoder,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
@@ -801,7 +801,7 @@ mod tests {
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
-                    XmlVersion::V1_0,
+                    XmlVersion::Implicit1_0,
                     decoder,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
@@ -831,7 +831,7 @@ mod tests {
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
-                    XmlVersion::V1_0,
+                    XmlVersion::Implicit1_0,
                     decoder,
                 );
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();

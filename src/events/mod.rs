@@ -662,8 +662,8 @@ impl<'a> BytesText<'a> {
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::V1_0 => self.xml10_content(),
-            XmlVersion::V1_1 => self.xml11_content(),
+            XmlVersion::Implicit1_0 => self.xml10_content(),
+            XmlVersion::Explicit1_1 => self.xml11_content(),
         }
     }
 
@@ -973,8 +973,8 @@ impl<'a> BytesCData<'a> {
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::V1_0 => self.xml10_content(),
-            XmlVersion::V1_1 => self.xml11_content(),
+            XmlVersion::Implicit1_0 => self.xml10_content(),
+            XmlVersion::Explicit1_1 => self.xml11_content(),
         }
     }
 
@@ -1459,11 +1459,11 @@ impl<'a> BytesDecl<'a> {
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::V1_1);
+    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::Explicit1_1);
     ///
     /// // <?xml version='1.0' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::V1_0);
+    /// assert_eq!(decl.xml_version().unwrap(), XmlVersion::Implicit1_0);
     ///
     /// // <?xml version='1.2'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.2'", 0));
@@ -1498,8 +1498,8 @@ impl<'a> BytesDecl<'a> {
     pub fn xml_version(&self) -> Result<XmlVersion, Error> {
         let v = self.version()?;
         match v.as_ref() {
-            b"1.0" => Ok(XmlVersion::V1_0),
-            b"1.1" => Ok(XmlVersion::V1_1),
+            b"1.0" => Ok(XmlVersion::Implicit1_0),
+            b"1.1" => Ok(XmlVersion::Explicit1_1),
             _ => Err(Error::IllFormed(IllFormedError::UnknownVersion)),
         }
     }
@@ -1688,8 +1688,8 @@ impl<'a> BytesRef<'a> {
     #[inline]
     pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
         match version {
-            XmlVersion::V1_0 => self.xml10_content(),
-            XmlVersion::V1_1 => self.xml11_content(),
+            XmlVersion::Implicit1_0 => self.xml10_content(),
+            XmlVersion::Explicit1_1 => self.xml11_content(),
         }
     }
 

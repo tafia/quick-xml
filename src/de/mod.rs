@@ -3078,7 +3078,7 @@ where
         Self::new(
             SliceReader {
                 reader,
-                version: XmlVersion::V1_0,
+                version: XmlVersion::Implicit1_0,
             },
             entity_resolver,
         )
@@ -3161,7 +3161,7 @@ where
             IoReader {
                 reader,
                 buf: Vec::new(),
-                version: XmlVersion::V1_0,
+                version: XmlVersion::Implicit1_0,
             },
             entity_resolver,
         )
@@ -3181,7 +3181,7 @@ where
             IoReader {
                 reader,
                 buf: Vec::new(),
-                version: XmlVersion::V1_0,
+                version: XmlVersion::Implicit1_0,
             },
             entity_resolver,
         )
@@ -4161,11 +4161,11 @@ mod tests {
         let mut reader1 = IoReader {
             reader: NsReader::from_reader(s.as_bytes()),
             buf: Vec::new(),
-            version: XmlVersion::V1_0,
+            version: XmlVersion::Implicit1_0,
         };
         let mut reader2 = SliceReader {
             reader: NsReader::from_str(s),
-            version: XmlVersion::V1_0,
+            version: XmlVersion::Implicit1_0,
         };
 
         loop {
@@ -4191,7 +4191,7 @@ mod tests {
 
         let mut reader = SliceReader {
             reader: NsReader::from_str(s),
-            version: XmlVersion::V1_0,
+            version: XmlVersion::Implicit1_0,
         };
 
         let config = reader.reader.config_mut();

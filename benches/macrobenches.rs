@@ -50,7 +50,7 @@ static INPUTS: &[(&str, &str)] = &[
 
 fn parse_document_from_str(doc: &str) -> XmlResult<()> {
     let mut r = Reader::from_str(doc);
-    let mut version = XmlVersion::V1_0;
+    let mut version = XmlVersion::Implicit1_0;
     loop {
         match black_box(r.read_event()?) {
             Event::Decl(e) => {
@@ -77,7 +77,7 @@ fn parse_document_from_str(doc: &str) -> XmlResult<()> {
 
 fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
     let mut r = Reader::from_reader(doc);
-    let mut version = XmlVersion::V1_0;
+    let mut version = XmlVersion::Implicit1_0;
     let mut buf = Vec::new();
     loop {
         match black_box(r.read_event_into(&mut buf)?) {
@@ -106,7 +106,7 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
 
 fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
     let mut r = NsReader::from_str(doc);
-    let mut version = XmlVersion::V1_0;
+    let mut version = XmlVersion::Implicit1_0;
     loop {
         match black_box(r.read_resolved_event()?) {
             (_, Event::Decl(e)) => {
@@ -136,7 +136,7 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
 
 fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
     let mut r = NsReader::from_reader(doc);
-    let mut version = XmlVersion::V1_0;
+    let mut version = XmlVersion::Implicit1_0;
     let mut buf = Vec::new();
     loop {
         match black_box(r.read_resolved_event_into(&mut buf)?) {

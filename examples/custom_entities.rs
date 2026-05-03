@@ -157,7 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(label.key, QName(b"label"));
         assert_eq!(
             label.decoded_and_normalized_value_with(
-                XmlVersion::V1_0,
+                XmlVersion::Implicit1_0,
                 reader.decoder(),
                 9,
                 |e| reader.get_entity(e)
@@ -192,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let attr = attrs.next().unwrap()?;
         assert_eq!(attr.key, QName(b"attr"));
         assert_eq!(
-            attr.decoded_and_normalized_value_with(XmlVersion::V1_0, reader.decoder(), 9, |e| {
+            attr.decoded_and_normalized_value_with(XmlVersion::Implicit1_0, reader.decoder(), 9, |e| {
                 reader.get_entity(e)
             })?,
             "Message: hello world"

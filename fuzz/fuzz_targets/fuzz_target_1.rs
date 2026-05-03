@@ -15,7 +15,7 @@ fn round_trip<R>(reader: &mut Reader<R>) -> ()
 where
     R: std::io::BufRead,
 {
-    let mut version = XmlVersion::V1_0;
+    let mut version = XmlVersion::Implicit1_0;
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = vec![];
     let config = reader.config_mut();

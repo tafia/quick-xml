@@ -32,7 +32,7 @@ fn fuzz_101() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| {
-                        a.decoded_and_normalized_value(XmlVersion::V1_0, reader.decoder())
+                        a.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                             .is_err()
                     }) {
                         break;
