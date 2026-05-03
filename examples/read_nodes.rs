@@ -79,10 +79,12 @@ impl Translation {
             let a = attr_result?;
             match a.key.as_ref() {
                 b"Language" => {
-                    lang = a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
+                    lang =
+                        a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
                 }
                 b"Tag" => {
-                    tag = a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
+                    tag =
+                        a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
                 }
                 _ => (),
             }

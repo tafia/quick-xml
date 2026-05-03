@@ -114,7 +114,9 @@ impl XmlVersion {
         F: FnMut(&str) -> Option<&'entity str>,
     {
         match self {
-            Self::Explicit1_1 => escape::normalize_xml11_attribute_value(value, depth, resolve_entity),
+            Self::Explicit1_1 => {
+                escape::normalize_xml11_attribute_value(value, depth, resolve_entity)
+            }
             _ => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
         }
     }

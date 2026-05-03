@@ -192,9 +192,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let attr = attrs.next().unwrap()?;
         assert_eq!(attr.key, QName(b"attr"));
         assert_eq!(
-            attr.decoded_and_normalized_value_with(XmlVersion::Implicit1_0, reader.decoder(), 9, |e| {
-                reader.get_entity(e)
-            })?,
+            attr.decoded_and_normalized_value_with(
+                XmlVersion::Implicit1_0,
+                reader.decoder(),
+                9,
+                |e| { reader.get_entity(e) }
+            )?,
             "Message: hello world"
         );
 

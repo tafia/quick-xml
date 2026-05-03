@@ -361,7 +361,12 @@ impl<'a> Attribute<'a> {
         decoder: Decoder,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
-        self.decoded_and_normalized_value_with(XmlVersion::Implicit1_0, decoder, 128, resolve_entity)
+        self.decoded_and_normalized_value_with(
+            XmlVersion::Implicit1_0,
+            decoder,
+            128,
+            resolve_entity,
+        )
     }
 
     /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
@@ -1415,18 +1420,33 @@ mod xml {
             }
 
             assert_eq!(
-                attr.decoded_and_normalized_value_with(Implicit1_0, Decoder::utf8(), 5, &custom_resolver)
-                    .unwrap(),
+                attr.decoded_and_normalized_value_with(
+                    Implicit1_0,
+                    Decoder::utf8(),
+                    5,
+                    &custom_resolver
+                )
+                .unwrap(),
                 "\r\rA\n \nB\r\n"
             );
             assert_eq!(
-                attr.decoded_and_normalized_value_with(Explicit1_0, Decoder::utf8(), 5, &custom_resolver)
-                    .unwrap(),
+                attr.decoded_and_normalized_value_with(
+                    Explicit1_0,
+                    Decoder::utf8(),
+                    5,
+                    &custom_resolver
+                )
+                .unwrap(),
                 "\r\rA\n \nB\r\n"
             );
             assert_eq!(
-                attr.decoded_and_normalized_value_with(Explicit1_1, Decoder::utf8(), 5, &custom_resolver)
-                    .unwrap(),
+                attr.decoded_and_normalized_value_with(
+                    Explicit1_1,
+                    Decoder::utf8(),
+                    5,
+                    &custom_resolver
+                )
+                .unwrap(),
                 "\r\rA\n \nB\r\n"
             );
         }
