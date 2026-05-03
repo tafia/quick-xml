@@ -18,8 +18,7 @@ impl<'i> Attributes<'i> {
     /// # Parameters
     /// - `prefix`: a prefix of the field names in structs that should be stripped
     ///   to get the local attribute name. The [`crate::de::Deserializer`] uses `"@"`
-    ///   as a prefix, but [`Self::into_deserializer()`] uses empty string, which mean
-    ///   that we do not strip anything.
+    ///   as a prefix.
     ///
     /// # Example
     /// ```
@@ -85,8 +84,7 @@ impl<'i> Attributes<'i> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A deserializer used to make possible to pack all attributes into a struct.
-/// It is created by [`Attributes::into_map_access`] or [`Attributes::into_deserializer`]
-/// methods.
+/// It is created by [`Attributes::into_map_access`] method.
 ///
 /// This deserializer always call [`Visitor::visit_map`] with self as [`MapAccess`].
 ///
