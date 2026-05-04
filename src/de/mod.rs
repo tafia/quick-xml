@@ -1974,7 +1974,7 @@
 //! [`impl_deserialize_for_internally_tagged_enum!`]: crate::impl_deserialize_for_internally_tagged_enum
 
 macro_rules! forward_to_simple_type {
-    ($deserialize:ident, $($mut:tt)?) => {
+    ($deserialize:ident $(, $mut:tt)?) => {
         #[inline]
         fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1989,27 +1989,27 @@ macro_rules! forward_to_simple_type {
 /// byte arrays, booleans and identifiers.
 macro_rules! deserialize_primitives {
     ($($mut:tt)?) => {
-        forward_to_simple_type!(deserialize_i8, $($mut)?);
-        forward_to_simple_type!(deserialize_i16, $($mut)?);
-        forward_to_simple_type!(deserialize_i32, $($mut)?);
-        forward_to_simple_type!(deserialize_i64, $($mut)?);
+        forward_to_simple_type!(deserialize_i8 $(, $mut)?);
+        forward_to_simple_type!(deserialize_i16 $(, $mut)?);
+        forward_to_simple_type!(deserialize_i32 $(, $mut)?);
+        forward_to_simple_type!(deserialize_i64 $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_u8, $($mut)?);
-        forward_to_simple_type!(deserialize_u16, $($mut)?);
-        forward_to_simple_type!(deserialize_u32, $($mut)?);
-        forward_to_simple_type!(deserialize_u64, $($mut)?);
+        forward_to_simple_type!(deserialize_u8 $(, $mut)?);
+        forward_to_simple_type!(deserialize_u16 $(, $mut)?);
+        forward_to_simple_type!(deserialize_u32 $(, $mut)?);
+        forward_to_simple_type!(deserialize_u64 $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_i128, $($mut)?);
-        forward_to_simple_type!(deserialize_u128, $($mut)?);
+        forward_to_simple_type!(deserialize_i128 $(, $mut)?);
+        forward_to_simple_type!(deserialize_u128 $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_f32, $($mut)?);
-        forward_to_simple_type!(deserialize_f64, $($mut)?);
+        forward_to_simple_type!(deserialize_f32 $(, $mut)?);
+        forward_to_simple_type!(deserialize_f64 $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_bool, $($mut)?);
-        forward_to_simple_type!(deserialize_char, $($mut)?);
+        forward_to_simple_type!(deserialize_bool $(, $mut)?);
+        forward_to_simple_type!(deserialize_char $(, $mut)?);
 
-        forward_to_simple_type!(deserialize_str, $($mut)?);
-        forward_to_simple_type!(deserialize_string, $($mut)?);
+        forward_to_simple_type!(deserialize_str $(, $mut)?);
+        forward_to_simple_type!(deserialize_string $(, $mut)?);
 
         /// Forwards deserialization to the [`deserialize_any`](#method.deserialize_any).
         #[inline]

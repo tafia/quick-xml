@@ -1,5 +1,6 @@
 use crate::{
     de::simple_type::SimpleTypeDeserializer,
+    de::PredefinedEntityResolver,
     de::{Text, TEXT_KEY},
     errors::serialize::DeError,
 };

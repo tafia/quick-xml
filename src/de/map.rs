@@ -347,6 +347,7 @@ where
                 value,
                 self.de.reader.reader.xml_version(),
                 self.start.decoder(),
+                self.de.reader.entity_resolver.clone(),
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -951,6 +952,7 @@ where
 {
     type Error = DeError;
 
+    #[cfg_attr(not(feature = "overlapped-lists"), allow(clippy::never_loop))]
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
     where
         T: DeserializeSeed<'de>,

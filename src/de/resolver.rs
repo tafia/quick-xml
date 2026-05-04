@@ -68,7 +68,7 @@ use crate::events::BytesText;
 ///
 /// assert_eq!(data.get("entity_one"), Some(&"entity 1".to_string()));
 /// ```
-pub trait EntityResolver {
+pub trait EntityResolver: Clone {
     /// The error type that represents DTD parse error
     type Error: Error;
 

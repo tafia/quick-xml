@@ -1832,13 +1832,18 @@ mod resolve {
     use super::*;
     use pretty_assertions::assert_eq;
     use quick_xml::de::EntityResolver;
+    use quick_xml::escape::resolve_xml_entity;
     use quick_xml::events::BytesText;
     use std::collections::BTreeMap;
     use std::convert::Infallible;
     use std::iter::FromIterator;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
 
+    #[derive(Clone, Default)]
     struct TestEntityResolver {
         capture_called: bool,
+        rxe_called: Arc<AtomicUsize>,
     }
 
     impl EntityResolver for TestEntityResolver {
@@ -1847,7 +1852,7 @@ mod resolve {
         fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
             self.capture_called = true;
 
-            assert_eq!(doctype.as_ref(), br#"dict[ <!ENTITY unc "unclassified"> ]"#);
+            assert_eq!(doctype.as_ref(), br#"root[ <!ENTITY unc "unclassified"> ]"#);
 
             Ok(())
         }
@@ -1860,6 +1865,40 @@ mod resolve {
             match entity {
                 "t1" => Some("test_one"),
                 "t2" => Some("test_two"),
+                "myAmp" => Some("&"),
+                _ => {
+                    self.rxe_called
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    resolve_xml_entity(entity)
+                }
+            }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct TestHostileEntityResolver {
+        capture_called: bool,
+    }
+
+    impl EntityResolver for TestHostileEntityResolver {
+        type Error = Infallible;
+
+        fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
+            self.capture_called = true;
+
+            assert_eq!(doctype.as_ref(), br#"root[ <!ENTITY unc "unclassified"> ]"#);
+
+            Ok(())
+        }
+
+        fn resolve(&self, entity: &str) -> Option<&str> {
+            assert!(
+                self.capture_called,
+                "`EntityResolver::capture` should be called before `EntityResolver::resolve`"
+            );
+            match entity {
+                "go_fork_yourself" => Some("&go_fork_yourself;"),
+                "go_quote_yourself" => Some(r#"" aka Bobby Tables"#),
                 _ => None,
             }
         }
@@ -1867,12 +1906,10 @@ mod resolve {
 
     #[test]
     fn resolve_custom_entity() {
-        let resolver = TestEntityResolver {
-            capture_called: false,
-        };
+        let resolver = TestEntityResolver::default();
         let mut de = Deserializer::with_resolver(
             br#"
-            <!DOCTYPE dict[ <!ENTITY unc "unclassified"> ]>
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
 
             <root>
                 <entity_one>&t1;</entity_one>
@@ -1893,6 +1930,169 @@ mod resolve {
                 (String::from("entity_three"), String::from("non-entity")),
             ])
         );
+    }
+
+    #[test]
+    fn resolve_predefined_entities_only_once() {
+        let value: String = from_str("<root>&amp;lt;</root>").unwrap();
+        assert_eq!(value, "&lt;");
+        let value: BTreeMap<String, String> = from_str(r#"<root attr="&amp;lt;" />"#).unwrap();
+        assert_eq!(
+            value,
+            BTreeMap::from_iter([(String::from("@attr"), String::from("&lt;"))])
+        );
+    }
+
+    #[test]
+    fn resolve_custom_entities_in_text_only_once() {
+        let resolver = TestEntityResolver::default();
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
+
+            <root>
+                <entity_two>&myAmp;lt; 10</entity_two>
+                <entity_three>non-entity</entity_three>
+            </root>
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([
+                (String::from("entity_two"), String::from("&lt; 10")),
+                (String::from("entity_three"), String::from("non-entity")),
+            ])
+        );
+    }
+
+    #[test]
+    fn resolve_custom_entities_in_attr_only_once() {
+        use quick_xml::escape::EscapeError;
+        use quick_xml::Error;
+
+        let resolver = TestEntityResolver::default();
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
+
+            <root entity_one="&myAmp;lt; 3">
+                <entity_two>&myAmp;lt; 10</entity_two>
+                <entity_three>non-entity</entity_three>
+            </root>
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let e = BTreeMap::<String, String>::deserialize(&mut de).unwrap_err();
+        // TODO https://github.com/rust-lang/rust/issues/82775
+        assert!(matches!(
+            e,
+            DeError::InvalidXml(Error::Escape(EscapeError::UnterminatedEntity(range))) if range == (0..1)
+        ));
+
+        // // naive expectation:
+        // let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        // assert_eq!(
+        //     data,
+        //     BTreeMap::from_iter([
+        //         (String::from("@entity_one"), String::from("&lt; 3")),
+        //         (String::from("entity_two"), String::from("&lt; 10")),
+        //         (String::from("entity_three"), String::from("non-entity")),
+        //     ])
+        // );
+    }
+
+    #[test]
+    fn resolve_custom_entity_in_attr() {
+        let resolver = TestEntityResolver::default();
+        let rxe_called = resolver.rxe_called.clone();
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
+
+            <root
+                entity_one="&t1;"
+                entity_two="czech_&t2;&gt;"
+                entity_three="non-entity"
+            >&lt;</root>
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([
+                (String::from("@entity_one"), String::from("test_one")),
+                (String::from("@entity_two"), String::from("czech_test_two>")),
+                (String::from("@entity_three"), String::from("non-entity")),
+                (String::from("$text"), String::from("<")),
+            ])
+        );
+
+        assert_eq!(
+            rxe_called.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "`EntityResolver::resolve` should be consulted first for both attributes and text contents"
+        );
+    }
+
+    #[test]
+    fn resolve_custom_entity_in_text_but_reject_infinite_recursion() {
+        let resolver = TestHostileEntityResolver::default();
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
+
+            <root>
+                <entity_one>&go_fork_yourself;</entity_one>
+            </root>
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([(
+                String::from("entity_one"),
+                String::from("&go_fork_yourself;")
+            ),])
+        );
+    }
+
+    #[test]
+    fn resolve_custom_entity_in_attr_but_reject_infinite_recursion() {
+        use quick_xml::errors::Error;
+        use quick_xml::escape::EscapeError;
+
+        let resolver = TestHostileEntityResolver {
+            capture_called: false,
+        };
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE root[ <!ENTITY unc "unclassified"> ]>
+
+            <root entity_one="&go_fork_yourself;" />
+
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let e = BTreeMap::<String, String>::deserialize(&mut de).unwrap_err();
+        // TODO https://github.com/rust-lang/rust/issues/82775
+        assert!(matches!(
+            e,
+            DeError::InvalidXml(Error::Escape(EscapeError::TooManyNestedEntities))
+        ));
     }
 }
 

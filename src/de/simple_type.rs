@@ -4,9 +4,9 @@
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
 use crate::de::Text;
+use crate::de::{EntityResolver, PredefinedEntityResolver};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
-use crate::escape::resolve_predefined_entity;
 use crate::utils::{trim_xml_spaces, CowRef};
 use crate::XmlVersion;
 use memchr::memchr;
@@ -495,7 +495,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 /// [`FromStr`]: std::str::FromStr
 /// [specification]: https://www.w3.org/TR/xmlschema11-2/#boolean
-pub struct SimpleTypeDeserializer<'de, 'a> {
+pub struct SimpleTypeDeserializer<'de, 'a, E: EntityResolver = PredefinedEntityResolver> {
     /// - In case of attribute contains escaped attribute value
     /// - In case of text contains unescaped text value
     content: CowRef<'de, 'a, [u8]>,
@@ -505,9 +505,15 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
     /// Not used for deserializing raw byte buffers
     decoder: Decoder,
     version: XmlVersion,
+
+    /// Used to resolve unknown entities that would otherwise cause the parser
+    /// to return an [`EscapeError::UnrecognizedEntity`] error.
+    ///
+    /// [`EscapeError::UnrecognizedEntity`]: crate::escape::EscapeError::UnrecognizedEntity
+    entity_resolver: E,
 }
 
-impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
+impl<'de, 'a> SimpleTypeDeserializer<'de, 'a, PredefinedEntityResolver> {
     /// Creates a deserializer from a value, that possible borrowed from input.
     ///
     /// It is assumed that `text` does not have entities.
@@ -516,7 +522,13 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
-        Self::new(content, false, XmlVersion::V1_0, Decoder::utf8())
+        Self::new(
+            content,
+            false,
+            XmlVersion::V1_0,
+            Decoder::utf8(),
+            PredefinedEntityResolver,
+        )
     }
     /// Creates a deserializer from an XML text node, that possible borrowed from input.
     ///
@@ -526,7 +538,9 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     pub fn from_text_content(value: Text<'de>) -> Self {
         Self::from_text(value.text)
     }
+}
 
+impl<'de, 'a, E: EntityResolver> SimpleTypeDeserializer<'de, 'a, E> {
     /// Creates a deserializer from a part of value at specified range.
     ///
     /// This constructor used internally to deserialize from attribute values.
@@ -536,12 +550,13 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         range: Range<usize>,
         version: XmlVersion,
         decoder: Decoder,
+        entity_resolver: E,
     ) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
             Cow::Owned(slice) => CowRef::Slice(&slice[range]),
         };
-        Self::new(content, true, version, decoder)
+        Self::new(content, true, version, decoder, entity_resolver)
     }
 
     /// Constructor for tests
@@ -551,12 +566,14 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         is_attr: bool,
         version: XmlVersion,
         decoder: Decoder,
+        entity_resolver: E,
     ) -> Self {
         Self {
             content,
             is_attr,
             decoder,
             version,
+            entity_resolver,
         }
     }
 
@@ -583,9 +600,9 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     fn content<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
         let content = self.decode()?;
         if self.is_attr {
-            let value =
-                self.version
-                    .normalize_attribute_value(&content, 128, resolve_predefined_entity)?;
+            let value = self
+                .version
+                .normalize_attribute_value(&content, 128, |x| self.entity_resolver.resolve(x))?;
             return Ok(match value {
                 Cow::Borrowed(_) => content,
                 Cow::Owned(value) => CowRef::Owned(value),
@@ -595,7 +612,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     }
 }
 
-impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
+impl<'de, 'a, E: EntityResolver> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a, E> {
     type Error = DeError;
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
@@ -739,7 +756,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 }
 
-impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
+impl<'de, 'a, E: EntityResolver> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a, E> {
     type Error = DeError;
     type Variant = UnitOnly;
 
@@ -752,7 +769,9 @@ impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 }
 
-impl<'de, 'a> IntoDeserializer<'de, DeError> for SimpleTypeDeserializer<'de, 'a> {
+impl<'de, 'a, E: EntityResolver> IntoDeserializer<'de, DeError>
+    for SimpleTypeDeserializer<'de, 'a, E>
+{
     type Deserializer = Self;
 
     #[inline]
@@ -784,6 +803,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
+                    PredefinedEntityResolver,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -803,6 +823,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
+                    PredefinedEntityResolver,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -833,6 +854,7 @@ mod tests {
                     true,
                     XmlVersion::V1_0,
                     decoder,
+                    PredefinedEntityResolver,
                 );
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
