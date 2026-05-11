@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::str::from_utf8;
 
 #[cfg(feature = "encoding")]
 use encoding_rs::UTF_8;
@@ -60,7 +61,7 @@ impl ReaderState {
     ///
     /// # Parameters
     /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
-    pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> BytesText<'b> {
+    pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> Result<BytesText<'b>> {
         let mut content = bytes;
 
         if self.config.trim_text_end {
@@ -71,7 +72,8 @@ impl ReaderState {
                 .map_or(0, |p| p + 1);
             content = &bytes[..len];
         }
-        BytesText::wrap(content, self.decoder())
+        from_utf8(content)?;
+        Ok(BytesText::wrap(content, self.decoder()))
     }
 
     /// Returns `Comment`, `CData` or `DocType` event.
@@ -92,6 +94,8 @@ impl ReaderState {
             "CDATA, comment or DOCTYPE must end with '>':\n{:?}",
             crate::utils::Bytes(buf)
         );
+
+        from_utf8(buf)?;
 
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
@@ -202,6 +206,8 @@ impl ReaderState {
             crate::utils::Bytes(buf)
         );
 
+        from_utf8(buf)?;
+
         // Strip the `</` and `>` characters. `content` contains data between `</` and `>`
         let content = &buf[2..buf.len() - 1];
         // XML standard permits whitespaces after the markup name in closing tags.
@@ -269,6 +275,8 @@ impl ReaderState {
             crate::utils::Bytes(buf)
         );
 
+        from_utf8(buf)?;
+
         let len = buf.len();
         // We accept at least <??>
         //                    ~~~~ - len = 4
@@ -309,7 +317,7 @@ impl ReaderState {
     ///
     /// # Parameters
     /// - `content`: Content of a tag between `<` and `>`
-    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Event<'b> {
+    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
         debug_assert!(
             content.starts_with(b"<"),
             "start or empty tag must start from '<':\n{:?}",
@@ -321,6 +329,8 @@ impl ReaderState {
             crate::utils::Bytes(content)
         );
 
+        from_utf8(content)?;
+
         // strip `<`
         let content = &content[1..];
         if let Some(content) = content.strip_suffix(b"/>") {
@@ -331,9 +341,9 @@ impl ReaderState {
                 self.state = ParseState::InsideEmpty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(event.name().as_ref());
-                Event::Start(event)
+                Ok(Event::Start(event))
             } else {
-                Event::Empty(event)
+                Ok(Event::Empty(event))
             }
         } else {
             // strip `>`
@@ -345,7 +355,7 @@ impl ReaderState {
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
             self.opened_buffer.extend(event.name().as_ref());
-            Event::Start(event)
+            Ok(Event::Start(event))
         }
     }
 

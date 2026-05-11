@@ -260,69 +260,34 @@ mod detect {
         ($test:ident, $enc:ident, $file:literal) => {
             #[test]
             fn $test() {
+                use quick_xml::errors::Error;
+
                 let mut r = Reader::from_reader(
                     include_bytes!(concat!("documents/encoding/", $file, ".xml")).as_ref(),
                 );
                 assert_eq!(r.decoder().encoding(), UTF_8);
 
                 let mut buf = Vec::new();
-                // XML declaration with encoding
+                // XML declaration with encoding (pure ASCII)
                 assert_matches!(1: r.read_event_into(&mut buf).unwrap(), Decl(_));
                 assert_eq!(r.decoder().encoding(), $enc);
                 assert_matches!(2: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
                 buf.clear();
 
-                // Comment with information that this is generated file
+                // Comment with information that this is generated file (pure ASCII)
                 assert_matches!(3: r.read_event_into(&mut buf).unwrap(), Comment(_));
                 assert_eq!(r.decoder().encoding(), $enc);
                 assert_matches!(4: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
                 buf.clear();
 
-                // Open root element tag. Contains 3 attributes:
-                // - attribute1 - double-quoted. Value - all possible characters in that encoding
-                // - attribute2 - single-quoted. Value - all possible characters in that encoding
-                // - unquoted. Name and value - all possible characters in that encoding
-                assert_matches!(5: r.read_event_into(&mut buf).unwrap(), Start(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                assert_matches!(6: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
-                buf.clear();
-
-                // Processing instruction with all possible characters in that encoding
-                assert_matches!(7: r.read_event_into(&mut buf).unwrap(), PI(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                assert_matches!(8: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
-                buf.clear();
-
-                // Comment with all possible characters in that encoding
-                assert_matches!(9: r.read_event_into(&mut buf).unwrap(), Comment(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                buf.clear();
-
-                // Text with all possible characters in that encoding except some
-                assert_matches!(10: r.read_event_into(&mut buf).unwrap(), Text(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                buf.clear();
-
-                // Empty tag with name from all possible characters in that encoding except some
-                assert_matches!(11: r.read_event_into(&mut buf).unwrap(), Empty(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                assert_matches!(12: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
-                buf.clear();
-
-                // CDATA section with all possible characters in that encoding
-                assert_matches!(13: r.read_event_into(&mut buf).unwrap(), CData(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                assert_matches!(14: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
-                buf.clear();
-
-                // Close root element tag
-                assert_matches!(15: r.read_event_into(&mut buf).unwrap(), End(_));
-                assert_eq!(r.decoder().encoding(), $enc);
-                buf.clear();
-
-                // Document should end
-                assert_matches!(16: r.read_event_into(&mut buf).unwrap(), Eof);
-                assert_eq!(r.decoder().encoding(), $enc);
+                // The start tag contains non-UTF-8 attribute values.
+                // Without DecodingReader, reading non-UTF-8 content must produce an encoding error.
+                let err = r.read_event_into(&mut buf).unwrap_err();
+                assert!(
+                    matches!(err, Error::Encoding(_)),
+                    "Expected Error::Encoding, got: {:?}",
+                    err,
+                );
             }
         };
     }

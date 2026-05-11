@@ -255,6 +255,13 @@ impl From<EncodingError> for Error {
     }
 }
 
+impl From<std::str::Utf8Error> for Error {
+    #[inline]
+    fn from(error: std::str::Utf8Error) -> Error {
+        Self::Encoding(EncodingError::Utf8(error))
+    }
+}
+
 impl From<EscapeError> for Error {
     /// Creates a new `Error::EscapeError` from the given error
     #[inline]
