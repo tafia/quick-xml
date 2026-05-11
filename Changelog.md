@@ -78,6 +78,14 @@
 
 ### Misc Changes
 
+### Breaking Changes
+
+- [#963]: Reader now validates that input is valid UTF-8 when constructing events.
+  Non-UTF-8 input passed to `Reader::from_reader()` without `DecodingReader` will now
+  produce `Error::Encoding` instead of silently passing through invalid bytes.
+  Use `DecodingReader` to transcode non-UTF-8 sources.
+
+[#963]: https://github.com/tafia/quick-xml/pull/963
 
 ## 0.40.0 -- 2026-05-11
 

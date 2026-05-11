@@ -293,7 +293,7 @@ macro_rules! read_event_impl {
                         // Go to Done state
                         ReadRefResult::UpToEof(bytes) if $self.state.config.allow_dangling_amp => {
                             $self.state.state = ParseState::Done;
-                            Ok(Event::Text($self.state.emit_text(bytes)))
+                            Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadRefResult::UpToEof(_) => {
                             $self.state.state = ParseState::Done;
@@ -302,7 +302,7 @@ macro_rules! read_event_impl {
                         }
                         // Do not change state, stay in InsideRef
                         ReadRefResult::UpToRef(bytes) if $self.state.config.allow_dangling_amp => {
-                            Ok(Event::Text($self.state.emit_text(bytes)))
+                            Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadRefResult::UpToRef(_) => {
                             $self.state.last_error_offset = start;
@@ -311,7 +311,7 @@ macro_rules! read_event_impl {
                         // Go to InsideMarkup state
                         ReadRefResult::UpToMarkup(bytes) if $self.state.config.allow_dangling_amp => {
                             $self.state.state = ParseState::InsideMarkup;
-                            Ok(Event::Text($self.state.emit_text(bytes)))
+                            Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadRefResult::UpToMarkup(_) => {
                             $self.state.state = ParseState::InsideMarkup;
@@ -345,17 +345,17 @@ macro_rules! read_event_impl {
                             // - event contains only spaces
                             // - trim_text_start = false
                             // - trim_text_end = true
-                            Ok(Event::Text($self.state.emit_text(bytes)))
+                            Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadTextResult::UpToRef(bytes) => {
                             $self.state.state = ParseState::InsideRef;
                             // Return Text event with `bytes` content or Eof if bytes is empty
-                            Ok(Event::Text($self.state.emit_text(bytes)))
+                            Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadTextResult::UpToEof(bytes) => {
                             $self.state.state = ParseState::Done;
                             // Trim bytes from end if required
-                            let event = $self.state.emit_text(bytes);
+                            let event = $self.state.emit_text(bytes)?;
                             if event.is_empty() {
                                 Ok(Event::Eof)
                             } else {
@@ -462,7 +462,7 @@ macro_rules! read_until_close {
                 .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(bytes) => Ok($self.state.emit_start(bytes)),
+                Ok(bytes) => $self.state.emit_start(bytes),
                 Err(e) => {
                     // We want to report error at `<`
                     $self.state.last_error_offset = start;
@@ -711,12 +711,16 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A low level encoding-agnostic XML event reader.
+/// A low level XML event reader that expects UTF-8 input.
 ///
 /// Consumes bytes and streams XML [`Event`]s.
 ///
 /// This reader does not manage namespace declarations and not able to resolve
 /// prefixes. If you want these features, use the [`NsReader`].
+///
+/// If you need to decode a document which may not be UTF-8, enable the `encoding` feature
+/// and wrap the input in `DecodingReader`. This is a `BufRead` adapter that auto-detects
+/// encoding from BOM or XML declaration and transcodes to UTF-8.
 ///
 /// # Examples
 ///
