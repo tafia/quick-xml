@@ -146,7 +146,7 @@ fn one_event(c: &mut Criterion) {
             config.trim_text(true);
             config.check_end_names = false;
             match r.read_event() {
-                Ok(Event::Comment(e)) => nbtxt += e.xml10_content().unwrap().len(),
+                Ok(Event::Comment(e)) => nbtxt += e.xml10_content().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 

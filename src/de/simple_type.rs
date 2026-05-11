@@ -551,16 +551,12 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
 
     /// Returns content as a string reference.
     #[inline]
-    fn decode<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
-        Ok(match self.content {
+    fn content<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
+        let content = match self.content {
             CowRef::Input(content) => CowRef::Input(content),
             CowRef::Slice(content) => CowRef::Slice(content),
-            CowRef::Owned(ref content) => CowRef::Slice(content),
-        })
-    }
-
-    fn content<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
-        let content = self.decode()?;
+            CowRef::Owned(ref content) => CowRef::Slice(content.as_str()),
+        };
         if self.is_attr {
             let value =
                 self.version

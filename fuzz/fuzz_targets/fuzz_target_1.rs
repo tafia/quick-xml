@@ -44,10 +44,6 @@ where
             }
             Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e)) | Ok(Event::DocType(ref e)) => {
                 debug_format!(e);
-                if let Err(err) = e.decode() {
-                    debug_format!(err);
-                    break;
-                }
             }
             Ok(Event::CData(e)) => {
                 if let Err(err) = e.escape() {

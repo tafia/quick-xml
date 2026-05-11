@@ -172,14 +172,7 @@ fn test_escaped_content() {
                 "content unexpected: expecting 'test', got '{:?}'",
                 e.as_ref()
             );
-            match e.xml10_content() {
-                Ok(c) => assert_eq!(c, "test"),
-                Err(e) => panic!(
-                    "cannot escape content at position {}: {:?}",
-                    r.error_position(),
-                    e
-                ),
-            }
+            assert_eq!(e.xml10_content(), "test");
         }
         Ok(e) => panic!("Expecting text event, got {:?}", e),
         Err(e) => panic!(
