@@ -28,7 +28,7 @@ mod borrowed {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -60,7 +60,7 @@ mod borrowed {
             Event::DocType(BytesText::new("dtd"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -87,7 +87,7 @@ mod borrowed {
         );
         assert_eq!(reader.read_event().unwrap(), Event::PI(BytesPI::new("pi")));
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -117,7 +117,7 @@ mod borrowed {
             Event::Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -148,7 +148,7 @@ mod borrowed {
             Event::Start(BytesStart::new("tag")),
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -180,7 +180,7 @@ mod borrowed {
             Event::End(BytesEnd::new("tag")),
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -210,7 +210,7 @@ mod borrowed {
             Event::Empty(BytesStart::new("tag")),
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -240,7 +240,7 @@ mod borrowed {
             Event::Text(BytesText::new("text"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -270,7 +270,7 @@ mod borrowed {
             Event::CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -301,7 +301,7 @@ mod borrowed {
             Event::Text(BytesText::from_escaped("&"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -339,7 +339,7 @@ mod buffered {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -372,7 +372,7 @@ mod buffered {
             Event::DocType(BytesText::new("dtd"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -403,7 +403,7 @@ mod buffered {
             Event::PI(BytesPI::new("pi"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -434,7 +434,7 @@ mod buffered {
             Event::Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -466,7 +466,7 @@ mod buffered {
             Event::Start(BytesStart::new("tag")),
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -499,7 +499,7 @@ mod buffered {
             Event::End(BytesEnd::new("tag")),
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -530,7 +530,7 @@ mod buffered {
             Event::Empty(BytesStart::new("tag")),
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -561,7 +561,7 @@ mod buffered {
             Event::Text(BytesText::new("text"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -592,7 +592,7 @@ mod buffered {
             Event::CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -624,7 +624,7 @@ mod buffered {
             Event::Text(BytesText::from_escaped("&"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(

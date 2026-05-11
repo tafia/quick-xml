@@ -26,18 +26,18 @@ fn namespace() {
     assert_eq!(it1.size_hint(), (0, Some(1)));
     assert_eq!(
         it1.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 
     assert_eq!(it2.size_hint(), (0, Some(1)));
     assert_eq!(
         it2.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 
     // <b>
     match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -47,7 +47,7 @@ fn namespace() {
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 
     // "in namespace!"
@@ -59,12 +59,12 @@ fn namespace() {
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 
     // </b>
     match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -74,7 +74,7 @@ fn namespace() {
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 
     // </a>
@@ -86,7 +86,7 @@ fn namespace() {
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+        vec![(PrefixDeclaration::Named("myns"), Namespace("www1"))]
     );
 }
 
@@ -100,7 +100,7 @@ mod default_namespace {
 
         let e = match r.read_resolved_event() {
             Ok((ns, Empty(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"ns")));
+                assert_eq!(ns, Bound(Namespace("ns")));
                 e
             }
             e => panic!("Expecting Empty event, got {:?}", e),
@@ -117,7 +117,7 @@ mod default_namespace {
             });
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &b"attr"[..], Cow::Borrowed(&b"val"[..])))
+            Some((Unbound, "attr", Cow::Borrowed(&b"val"[..])))
         );
         assert_eq!(attrs.next(), None);
 
@@ -125,7 +125,7 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"ns"))]
+            vec![(PrefixDeclaration::Default, Namespace("ns"))]
         );
     }
 
@@ -147,7 +147,7 @@ mod default_namespace {
 
         // <b>
         match r.read_resolved_event() {
-            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
             e => panic!(
                 "expecting inner start element with to resolve to 'www1', got {:?}",
                 e
@@ -157,12 +157,12 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+            vec![(PrefixDeclaration::Default, Namespace("www1"))]
         );
 
         // </b>
         match r.read_resolved_event() {
-            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
             e => panic!(
                 "expecting inner end element with to resolve to 'www1', got {:?}",
                 e
@@ -172,7 +172,7 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+            vec![(PrefixDeclaration::Default, Namespace("www1"))]
         );
 
         // </a> very important: a should not be in any namespace. The default namespace only applies to
@@ -192,7 +192,7 @@ mod default_namespace {
 
         // <a>
         match r.read_resolved_event() {
-            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
             e => panic!(
                 "expecting outer start element with to resolve to 'www1', got {:?}",
                 e
@@ -202,7 +202,7 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+            vec![(PrefixDeclaration::Default, Namespace("www1"))]
         );
 
         // <b>
@@ -228,7 +228,7 @@ mod default_namespace {
 
         // </a>
         match r.read_resolved_event() {
-            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
             e => panic!(
                 "expecting outer end element with to resolve to 'www1', got {:?}",
                 e
@@ -238,7 +238,7 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+            vec![(PrefixDeclaration::Default, Namespace("www1"))]
         );
     }
 
@@ -252,8 +252,8 @@ mod default_namespace {
         {
             match r.read_resolved_event() {
                 Ok((ns, Start(e))) => {
-                    assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                    assert_eq!(e.name(), QName(b"e"));
+                    assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                    assert_eq!(e.name(), QName("e"));
                 }
                 e => panic!("Expected Start event (<outer>), got {:?}", e),
             }
@@ -262,7 +262,7 @@ mod default_namespace {
             assert_eq!(it.size_hint(), (0, Some(1)));
             assert_eq!(
                 it.collect::<Vec<_>>(),
-                vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+                vec![(PrefixDeclaration::Default, Namespace("urn:example:o"))]
             );
         }
 
@@ -270,8 +270,8 @@ mod default_namespace {
         {
             let e = match r.read_resolved_event() {
                 Ok((ns, Empty(e))) => {
-                    assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                    assert_eq!(e.name(), QName(b"e"));
+                    assert_eq!(ns, Bound(Namespace("urn:example:i")));
+                    assert_eq!(e.name(), QName("e"));
                     e
                 }
                 e => panic!("Expecting Empty event, got {:?}", e),
@@ -290,7 +290,7 @@ mod default_namespace {
             // apply to attributes.
             assert_eq!(
                 attrs.next(),
-                Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+                Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
             );
             assert_eq!(attrs.next(), None);
 
@@ -298,15 +298,15 @@ mod default_namespace {
             assert_eq!(it.size_hint(), (0, Some(2)));
             assert_eq!(
                 it.collect::<Vec<_>>(),
-                vec![(PrefixDeclaration::Default, Namespace(b"urn:example:i")),]
+                vec![(PrefixDeclaration::Default, Namespace("urn:example:i")),]
             );
         }
 
         // </outer>
         match r.read_resolved_event() {
             Ok((ns, End(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                assert_eq!(e.name(), QName("e"));
             }
             e => panic!("Expected End event (<outer>), got {:?}", e),
         }
@@ -314,7 +314,7 @@ mod default_namespace {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+            vec![(PrefixDeclaration::Default, Namespace("urn:example:o"))]
         );
     }
 
@@ -329,8 +329,8 @@ mod default_namespace {
         {
             match r.read_resolved_event() {
                 Ok((ns, Start(e))) => {
-                    assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                    assert_eq!(e.name(), QName(b"e"));
+                    assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                    assert_eq!(e.name(), QName("e"));
                 }
                 e => panic!("Expected Start event (<outer>), got {:?}", e),
             }
@@ -340,8 +340,8 @@ mod default_namespace {
         {
             let e = match r.read_resolved_event() {
                 Ok((ns, Start(e))) => {
-                    assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                    assert_eq!(e.name(), QName(b"e"));
+                    assert_eq!(ns, Bound(Namespace("urn:example:i")));
+                    assert_eq!(e.name(), QName("e"));
                     e
                 }
                 e => panic!("Expecting Start event (<inner>), got {:?}", e),
@@ -359,7 +359,7 @@ mod default_namespace {
             // apply to attributes.
             assert_eq!(
                 attrs.next(),
-                Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+                Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
             );
             assert_eq!(attrs.next(), None);
         }
@@ -367,16 +367,16 @@ mod default_namespace {
         // virtual </inner>
         match r.read_resolved_event() {
             Ok((ns, End(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:i")));
+                assert_eq!(e.name(), QName("e"));
             }
             e => panic!("Expected End event (</inner>), got {:?}", e),
         }
         // </outer>
         match r.read_resolved_event() {
             Ok((ns, End(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                assert_eq!(e.name(), QName("e"));
             }
             e => panic!("Expected End event (</outer>), got {:?}", e),
         }
@@ -408,13 +408,13 @@ fn attributes_empty_ns() {
         });
     assert_eq!(
         attrs.next(),
-        Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
     );
     assert_eq!(
         attrs.next(),
         Some((
-            Bound(Namespace(b"urn:example:r")),
-            &b"att2"[..],
+            Bound(Namespace("urn:example:r")),
+            "att2",
             Cow::Borrowed(&b"b"[..])
         ))
     );
@@ -424,7 +424,7 @@ fn attributes_empty_ns() {
     assert_eq!(it.size_hint(), (0, Some(1)));
     assert_eq!(
         it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Named(b"r"), Namespace(b"urn:example:r"))]
+        vec![(PrefixDeclaration::Named("r"), Namespace("urn:example:r"))]
     );
 }
 
@@ -454,13 +454,13 @@ fn attributes_empty_ns_expanded() {
             });
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(
             attrs.next(),
             Some((
-                Bound(Namespace(b"urn:example:r")),
-                &b"att2"[..],
+                Bound(Namespace("urn:example:r")),
+                "att2",
                 Cow::Borrowed(&b"b"[..])
             ))
         );
@@ -470,12 +470,12 @@ fn attributes_empty_ns_expanded() {
         assert_eq!(it.size_hint(), (0, Some(1)));
         assert_eq!(
             it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Named(b"r"), Namespace(b"urn:example:r"))]
+            vec![(PrefixDeclaration::Named("r"), Namespace("urn:example:r"))]
         );
     }
 
     match r.read_resolved_event() {
-        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
+        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName("a")),
         e => panic!("Expecting End event, got {:?}", e),
     }
 }
@@ -495,7 +495,7 @@ fn reserved_name() {
 
     // <a />
     match r.read_resolved_event() {
-        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "Expected empty element bound to namespace 'www1', got {:?}",
             e
@@ -523,7 +523,7 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -532,7 +532,7 @@ mod read_to_end {
             Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             45..65 // <root/><root></root>
         );
         assert_eq!(
@@ -558,13 +558,13 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), DocType(BytesText::new("dtd")));
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             38..58 // <root/><root></root>
         );
         assert_eq!(
@@ -588,13 +588,13 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), PI(BytesPI::new("pi")));
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -618,7 +618,7 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -627,7 +627,7 @@ mod read_to_end {
             Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             38..58 // <root/><root></root>
         );
         assert_eq!(
@@ -652,26 +652,23 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Start(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Start(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             29..49 // <root/><root></root>
         );
         // NOTE: due to unbalanced XML namespace still not closed
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Empty(BytesStart::new("element"))
             )
         );
@@ -694,16 +691,16 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+            (Bound(Namespace("namespace")), End(BytesEnd::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -727,19 +724,16 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Empty(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Empty(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -763,13 +757,13 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), Text(BytesText::new("text")));
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             28..48 // <root/><root></root>
         );
         assert_eq!(
@@ -793,7 +787,7 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -802,7 +796,7 @@ mod read_to_end {
             CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             41..61 // <root/><root></root>
         );
         assert_eq!(
@@ -826,7 +820,7 @@ mod read_to_end {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -835,7 +829,7 @@ mod read_to_end {
             GeneralRef(BytesRef::new("entity"))
         );
         assert_eq!(
-            reader.read_to_end(QName(b"root")).unwrap(),
+            reader.read_to_end(QName("root")).unwrap(),
             32..52 // <root/><root></root>
         );
         assert_eq!(
@@ -867,7 +861,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -876,7 +870,7 @@ mod read_to_end_into {
             Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             45..65 // <root/><root></root>
         );
         assert_eq!(
@@ -903,7 +897,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -912,7 +906,7 @@ mod read_to_end_into {
             DocType(BytesText::new("dtd"))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             38..58 // <root/><root></root>
         );
         assert_eq!(
@@ -937,13 +931,13 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event_into(buf).unwrap(), PI(BytesPI::new("pi")));
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -968,7 +962,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -977,7 +971,7 @@ mod read_to_end_into {
             Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             38..58 // <root/><root></root>
         );
         assert_eq!(
@@ -1003,26 +997,23 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Start(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Start(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             29..49 // <root/><root></root><root></root>
         );
         // NOTE: due to unbalanced XML namespace still not closed
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Empty(BytesStart::new("element"))
             )
         );
@@ -1046,16 +1037,16 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
-            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+            (Bound(Namespace("namespace")), End(BytesEnd::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -1080,19 +1071,16 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Empty(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Empty(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             30..50 // <root/><root></root>
         );
         assert_eq!(
@@ -1117,7 +1105,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1126,7 +1114,7 @@ mod read_to_end_into {
             Text(BytesText::new("text"))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             28..48 // <root/><root></root>
         );
         assert_eq!(
@@ -1151,7 +1139,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1160,7 +1148,7 @@ mod read_to_end_into {
             CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             41..61 // <root/><root></root>
         );
         assert_eq!(
@@ -1185,7 +1173,7 @@ mod read_to_end_into {
         assert_eq!(
             reader.read_resolved_event_into(buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1194,7 +1182,7 @@ mod read_to_end_into {
             GeneralRef(BytesRef::new("entity"))
         );
         assert_eq!(
-            reader.read_to_end_into(QName(b"root"), buf).unwrap(),
+            reader.read_to_end_into(QName("root"), buf).unwrap(),
             32..52 // <root/><root></root>
         );
         assert_eq!(
@@ -1225,7 +1213,7 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1234,7 +1222,7 @@ mod read_text {
             Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1260,13 +1248,13 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), DocType(BytesText::new("dtd")));
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1290,13 +1278,13 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), PI(BytesPI::new("pi")));
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1320,7 +1308,7 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1329,7 +1317,7 @@ mod read_text {
             Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1354,26 +1342,23 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Start(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Start(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         // NOTE: due to unbalanced XML namespace still not closed
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Empty(BytesStart::new("element"))
             )
         );
@@ -1396,16 +1381,16 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+            (Bound(Namespace("namespace")), End(BytesEnd::new("tag")),)
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1429,19 +1414,16 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event().unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Empty(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Empty(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1465,13 +1447,13 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(reader.read_event().unwrap(), Text(BytesText::new("text")));
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1495,7 +1477,7 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1504,7 +1486,7 @@ mod read_text {
             CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1528,7 +1510,7 @@ mod read_text {
         assert_eq!(
             reader.read_resolved_event().unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1537,7 +1519,7 @@ mod read_text {
             GeneralRef(BytesRef::new("entity"))
         );
         assert_eq!(
-            reader.read_text(QName(b"root")).unwrap(),
+            reader.read_text(QName("root")).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1569,7 +1551,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1578,7 +1560,7 @@ mod read_text_into {
             Decl(BytesDecl::new("1.0", None, None))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1605,7 +1587,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1614,7 +1596,7 @@ mod read_text_into {
             DocType(BytesText::new("dtd"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1639,7 +1621,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1648,7 +1630,7 @@ mod read_text_into {
             PI(BytesPI::new("pi"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1673,7 +1655,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1682,7 +1664,7 @@ mod read_text_into {
             Comment(BytesText::new("comment"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1708,26 +1690,23 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Start(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Start(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         // NOTE: due to unbalanced XML namespace still not closed
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Empty(BytesStart::new("element"))
             )
         );
@@ -1751,16 +1730,16 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
-            (Bound(Namespace(b"namespace")), End(BytesEnd::new("tag")),)
+            (Bound(Namespace("namespace")), End(BytesEnd::new("tag")),)
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1785,19 +1764,16 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
-            (
-                Bound(Namespace(b"namespace")),
-                Empty(BytesStart::new("tag")),
-            )
+            (Bound(Namespace("namespace")), Empty(BytesStart::new("tag")),)
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1822,7 +1798,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1831,7 +1807,7 @@ mod read_text_into {
             Text(BytesText::new("text"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1856,7 +1832,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1865,7 +1841,7 @@ mod read_text_into {
             CData(BytesCData::new("cdata"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(
@@ -1890,7 +1866,7 @@ mod read_text_into {
         assert_eq!(
             reader.read_resolved_event_into(&mut buf).unwrap(),
             (
-                Bound(Namespace(b"namespace")),
+                Bound(Namespace("namespace")),
                 Start(BytesStart::from_content("root xmlns='namespace'", 4)),
             )
         );
@@ -1899,7 +1875,7 @@ mod read_text_into {
             GeneralRef(BytesRef::new("entity"))
         );
         assert_eq!(
-            reader.read_text_into(QName(b"root"), &mut buf).unwrap(),
+            reader.read_text_into(QName("root"), &mut buf).unwrap(),
             BytesText::from_escaped("<root/><root></root>")
         );
         assert_eq!(

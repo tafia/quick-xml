@@ -84,6 +84,10 @@
   Non-UTF-8 input passed to `Reader::from_reader()` without `DecodingReader` will now
   produce `Error::Encoding` instead of silently passing through invalid bytes.
   Use `DecodingReader` to transcode non-UTF-8 sources.
+- [#963]: Name types (`QName`, `LocalName`, `Prefix`, `Namespace`, `PrefixDeclaration`)
+  now wrap `&str` instead of `&[u8]`. `into_inner()` returns `&str`, and `AsRef<str>`
+  is implemented (`AsRef<[u8]>` has been removed). `ResolveResult::Unknown` now contains `String`
+  instead of `Vec<u8>`, and `NamespaceError` variants contain `String` instead of `Vec<u8>`.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 

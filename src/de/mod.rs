@@ -2797,16 +2797,16 @@ where
         self.skip_event(event)?;
         // Skip all subtree, if we skip a start event
         if let Some(DeEvent::Start(e)) = self.write.back() {
-            let end = e.name().as_ref().to_owned();
+            let end = e.name().as_ref().as_bytes().to_owned();
             let mut depth = 0;
             loop {
                 let event = self.next()?;
                 match event {
-                    DeEvent::Start(ref e) if e.name().as_ref() == end => {
+                    DeEvent::Start(ref e) if e.name().as_ref().as_bytes() == end.as_slice() => {
                         self.skip_event(event)?;
                         depth += 1;
                     }
-                    DeEvent::End(ref e) if e.name().as_ref() == end => {
+                    DeEvent::End(ref e) if e.name().as_ref().as_bytes() == end.as_slice() => {
                         self.skip_event(event)?;
                         if depth == 0 {
                             break;
@@ -2907,7 +2907,9 @@ where
             // Reached by trivial::{...}::{field, field_nested, field_tag_after, field_tag_before, nested, tag_after, tag_before, wrapped}
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             // TODO: not reached by any tests
-            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(
+                e.name().as_ref().as_bytes().to_owned(),
+            )),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -2930,7 +2932,9 @@ where
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
                 // Reached by trivial::{...}::{field_tag_after, tag_after}
-                DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+                DeEvent::Start(e) => Err(DeError::UnexpectedStart(
+                    e.name().as_ref().as_bytes().to_owned(),
+                )),
                 // Reached by struct_::non_closed::elements_child
                 DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
@@ -2940,7 +2944,9 @@ where
             // Reached by {...}::xs_list::empty
             DeEvent::End(_) => Ok("".into()),
             // Reached by trivial::{...}::{field_nested, field_tag_before, nested, tag_before}
-            DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
+            DeEvent::Start(s) => Err(DeError::UnexpectedStart(
+                s.name().as_ref().as_bytes().to_owned(),
+            )),
             // Reached by struct_::non_closed::elements_child
             DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
         }
@@ -3798,7 +3804,7 @@ mod tests {
             //   </skip>
             // </root>
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
-            de.read_to_end(QName(b"target")).unwrap();
+            de.read_to_end(QName("target")).unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -3835,7 +3841,7 @@ mod tests {
             assert_eq!(de.write, vec![]);
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("skip")));
-            de.read_to_end(QName(b"skip")).unwrap();
+            de.read_to_end(QName("skip")).unwrap();
 
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
             assert_eq!(de.next().unwrap(), Eof);
@@ -4112,7 +4118,7 @@ mod tests {
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="1""#, 3))
             );
-            assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
+            assert_eq!(de.read_to_end(QName("tag")).unwrap(), ());
 
             assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(
@@ -4124,7 +4130,7 @@ mod tests {
 
             assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
-            assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
+            assert_eq!(de.read_to_end(QName("self-closed")).unwrap(), ());
 
             assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
@@ -4139,7 +4145,7 @@ mod tests {
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
 
-            match de.read_to_end(QName(b"tag")) {
+            match de.read_to_end(QName("tag")) {
                 Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                     assert_eq!(cause, IllFormedError::MissingEndTag("tag".into()))
                 }
@@ -4158,7 +4164,7 @@ mod tests {
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
             assert_eq!(de.peek().unwrap(), &Text("".into()));
 
-            match de.read_to_end(QName(b"tag")) {
+            match de.read_to_end(QName("tag")) {
                 Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                     assert_eq!(cause, IllFormedError::MissingEndTag("tag".into()))
                 }

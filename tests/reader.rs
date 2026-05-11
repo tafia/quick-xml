@@ -285,7 +285,7 @@ mod read_to_end {
             r.config_mut().trim_text(true);
 
             assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
-            assert_eq!(r.read_to_end(QName(b"tag")).unwrap(), 5..11);
+            assert_eq!(r.read_to_end(QName("tag")).unwrap(), 5..11);
             assert_eq!(r.read_event().unwrap(), Eof);
         }
 
@@ -296,7 +296,7 @@ mod read_to_end {
             r.config_mut().trim_text(true);
 
             assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
-            assert_eq!(r.read_to_end(QName(b"tag")).unwrap(), 5..16);
+            assert_eq!(r.read_to_end(QName("tag")).unwrap(), 5..16);
             assert_eq!(r.read_event().unwrap(), Eof);
         }
     }
@@ -316,7 +316,7 @@ mod read_to_end {
                 r.read_event_into(&mut buf).unwrap(),
                 Start(BytesStart::new("tag"))
             );
-            assert_eq!(r.read_to_end_into(QName(b"tag"), &mut buf).unwrap(), 5..11);
+            assert_eq!(r.read_to_end_into(QName("tag"), &mut buf).unwrap(), 5..11);
             assert_eq!(r.read_event_into(&mut buf).unwrap(), Eof);
         }
 
@@ -331,7 +331,7 @@ mod read_to_end {
                 r.read_event_into(&mut buf).unwrap(),
                 Start(BytesStart::new("tag"))
             );
-            assert_eq!(r.read_to_end_into(QName(b"tag"), &mut buf).unwrap(), 5..16);
+            assert_eq!(r.read_to_end_into(QName("tag"), &mut buf).unwrap(), 5..16);
             assert_eq!(r.read_event_into(&mut buf).unwrap(), Eof);
         }
     }
@@ -350,7 +350,7 @@ mod read_text {
 
         assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
         assert_eq!(
-            r.read_text(QName(b"tag")).unwrap(),
+            r.read_text(QName("tag")).unwrap(),
             BytesText::from_escaped(" text ")
         );
         assert_eq!(r.read_event().unwrap(), Eof);
@@ -363,7 +363,7 @@ mod read_text {
 
         assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
         assert_eq!(
-            r.read_text(QName(b"tag")).unwrap(),
+            r.read_text(QName("tag")).unwrap(),
             BytesText::from_escaped(" <nested/> ")
         );
         assert_eq!(r.read_event().unwrap(), Eof);

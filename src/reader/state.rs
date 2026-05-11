@@ -340,7 +340,7 @@ impl ReaderState {
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(event.name().as_ref());
+                self.opened_buffer.extend(event.name().as_ref().as_bytes());
                 Ok(Event::Start(event))
             } else {
                 Ok(Event::Empty(event))
@@ -354,7 +354,7 @@ impl ReaderState {
             // because checks can be temporary disabled and when they would be
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.extend(event.name().as_ref());
+            self.opened_buffer.extend(event.name().as_ref().as_bytes());
             Ok(Event::Start(event))
         }
     }

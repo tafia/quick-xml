@@ -146,14 +146,18 @@ impl<'a> Attribute<'a> {
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
         use crate::encoding::EncodingError;
-        use std::str::from_utf8;
 
         let decoded = match &self.value {
-            Cow::Borrowed(bytes) => Cow::Borrowed(from_utf8(bytes).map_err(EncodingError::Utf8)?),
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => {
-                Cow::Owned(from_utf8(bytes).map_err(EncodingError::Utf8)?.to_owned())
+            Cow::Borrowed(bytes) => {
+                Cow::Borrowed(std::str::from_utf8(bytes).map_err(EncodingError::Utf8)?)
+                // temporary-#963
             }
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Cow::Owned(
+                std::str::from_utf8(bytes) // temporary-#963
+                    .map_err(EncodingError::Utf8)?
+                    .to_owned(),
+            ),
         };
 
         match version.normalize_attribute_value(&decoded, depth, resolve_entity)? {
@@ -407,7 +411,7 @@ impl<'a> Attribute<'a> {
 impl<'a> Debug for Attribute<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("Attribute")
-            .field("key", &Bytes(self.key.as_ref()))
+            .field("key", &self.key)
             .field("value", &Bytes(&self.value))
             .finish()
     }
@@ -428,7 +432,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// ```
     fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
         Attribute {
-            key: QName(val.0),
+            key: QName(std::str::from_utf8(val.0).expect("attribute keys are valid UTF-8")), // temporary-#963
             value: Cow::from(val.1),
         }
     }
@@ -449,7 +453,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// ```
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
         Attribute {
-            key: QName(val.0.as_bytes()),
+            key: QName(val.0),
             value: match escape(val.1) {
                 Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
                 Cow::Owned(s) => Cow::Owned(s.into_bytes()),
@@ -474,7 +478,7 @@ impl<'a> From<(&'a str, Cow<'a, str>)> for Attribute<'a> {
     /// ```
     fn from(val: (&'a str, Cow<'a, str>)) -> Attribute<'a> {
         Attribute {
-            key: QName(val.0.as_bytes()),
+            key: QName(val.0),
             value: match escape(val.1) {
                 Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
                 Cow::Owned(s) => Cow::Owned(s.into_bytes()),
@@ -619,7 +623,7 @@ impl<'a> Attributes<'a> {
     ///         };
     ///         assert_eq!(
     ///             (event.name(), event.attributes().has_nil($reader.resolver())),
-    ///             (QName($name.as_bytes()), $value),
+    ///             (QName($name), $value),
     ///         );
     ///     };
     /// }
@@ -652,8 +656,8 @@ impl<'a> Attributes<'a> {
             if let Ok(attr) = attr {
                 match resolver.resolve_attribute(attr.key) {
                     (
-                        Bound(Namespace(b"http://www.w3.org/2001/XMLSchema-instance")),
-                        LocalName(b"nil"),
+                        Bound(Namespace("http://www.w3.org/2001/XMLSchema-instance")),
+                        LocalName("nil"),
                     ) => attr.as_bool().unwrap_or_default(),
                     _ => false,
                 }
@@ -881,14 +885,17 @@ impl<T> Attr<T> {
 
 impl<'a> Attr<&'a [u8]> {
     /// Returns the key value
+    // TODO: restore const
     #[inline]
-    pub const fn key(&self) -> QName<'a> {
-        QName(match self {
-            Attr::DoubleQ(key, _) => key,
-            Attr::SingleQ(key, _) => key,
-            Attr::Empty(key) => key,
-            Attr::Unquoted(key, _) => key,
-        })
+    pub fn key(&self) -> QName<'a> {
+        let bytes = match self {
+            Attr::DoubleQ(key, _) => *key,
+            Attr::SingleQ(key, _) => *key,
+            Attr::Empty(key) => *key,
+            Attr::Unquoted(key, _) => *key,
+        };
+        QName(std::str::from_utf8(bytes).expect("attribute keys are valid UTF-8"))
+        // temporary-#963
     }
     /// Returns the attribute value. For [`Self::Empty`] variant an empty slice
     /// is returned according to the [HTML specification].
@@ -1593,7 +1600,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1609,7 +1616,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1649,7 +1656,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1667,7 +1674,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1700,14 +1707,14 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1723,14 +1730,14 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1749,7 +1756,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1768,7 +1775,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1786,14 +1793,14 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1811,14 +1818,14 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -1895,7 +1902,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1911,7 +1918,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1951,7 +1958,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -1969,7 +1976,7 @@ mod xml {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2007,7 +2014,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2015,7 +2022,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2032,7 +2039,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2040,7 +2047,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2057,7 +2064,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2065,7 +2072,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2082,7 +2089,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2090,7 +2097,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2147,21 +2154,21 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"dup"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2178,21 +2185,21 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"dup"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2210,7 +2217,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2218,7 +2225,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2236,7 +2243,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2244,7 +2251,7 @@ mod xml {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2261,28 +2268,28 @@ mod xml {
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"a"),
+                key: QName("a"),
                 value: Cow::Borrowed(b"a"),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"b"),
+                key: QName("b"),
                 value: Cow::Borrowed(b"b"),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"c"),
+                key: QName("c"),
                 value: Cow::Borrowed(br#"cc"cc"#),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"d"),
+                key: QName("d"),
                 value: Cow::Borrowed(b"dd'dd"),
             }))
         );
@@ -2314,7 +2321,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2330,7 +2337,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2346,7 +2353,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2362,7 +2369,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2380,7 +2387,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2398,7 +2405,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2431,14 +2438,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2454,14 +2461,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2477,14 +2484,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2500,14 +2507,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2525,14 +2532,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2550,14 +2557,14 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"regular"),
+                    key: QName("regular"),
                     value: Cow::Borrowed(b"attribute"),
                 }))
             );
@@ -2575,7 +2582,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"regular='attribute'"),
                 }))
             );
@@ -2591,7 +2598,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"regular="),
                 }))
             );
@@ -2600,7 +2607,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'attribute'"),
+                    key: QName("'attribute'"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2616,7 +2623,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"regular"),
                 }))
             );
@@ -2625,7 +2632,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"='attribute'"),
+                    key: QName("='attribute'"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2642,7 +2649,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"regular"),
                 }))
             );
@@ -2651,7 +2658,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"="),
+                    key: QName("="),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2660,7 +2667,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'attribute'"),
+                    key: QName("'attribute'"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2682,7 +2689,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2698,7 +2705,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2714,7 +2721,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2730,7 +2737,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key"),
+                    key: QName("key"),
                     value: Cow::Borrowed(&[]),
                 }))
             );
@@ -2748,7 +2755,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"'key'"),
+                    key: QName("'key'"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2766,7 +2773,7 @@ mod html {
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"key&jey"),
+                    key: QName("key&jey"),
                     value: Cow::Borrowed(b"value"),
                 }))
             );
@@ -2804,7 +2811,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2812,7 +2819,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2829,7 +2836,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2837,7 +2844,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2854,7 +2861,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2862,7 +2869,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2879,7 +2886,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
@@ -2887,7 +2894,7 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2910,21 +2917,21 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"dup"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2941,21 +2948,21 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"dup"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -2972,21 +2979,21 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"dup"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -3003,21 +3010,21 @@ mod html {
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(b"value"),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"key"),
+                        key: QName("key"),
                         value: Cow::Borrowed(&[]),
                     }))
                 );
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
-                        key: QName(b"another"),
+                        key: QName("another"),
                         value: Cow::Borrowed(b""),
                     }))
                 );
@@ -3034,28 +3041,28 @@ mod html {
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"a"),
+                key: QName("a"),
                 value: Cow::Borrowed(b"a"),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"b"),
+                key: QName("b"),
                 value: Cow::Borrowed(b"b"),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"c"),
+                key: QName("c"),
                 value: Cow::Borrowed(br#"cc"cc"#),
             }))
         );
         assert_eq!(
             iter.next(),
             Some(Ok(Attribute {
-                key: QName(b"d"),
+                key: QName("d"),
                 value: Cow::Borrowed(b"dd'dd"),
             }))
         );

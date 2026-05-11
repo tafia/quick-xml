@@ -751,10 +751,10 @@ where
 ///
 ///         Ok(Event::Start(e)) => {
 ///             match e.name().as_ref() {
-///                 b"tag1" => println!("attributes values: {:?}",
+///                 "tag1" => println!("attributes values: {:?}",
 ///                                     e.attributes().map(|a| a.unwrap().value)
 ///                                     .collect::<Vec<_>>()),
-///                 b"tag2" => count += 1,
+///                 "tag2" => count += 1,
 ///                 _ => (),
 ///             }
 ///         }
@@ -841,9 +841,9 @@ impl<R> Reader<R> {
     /// loop {
     ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => match e.name().as_ref() {
-    ///             b"tag1" | b"tag2" => (),
+    ///             "tag1" | "tag2" => (),
     ///             tag => {
-    ///                 assert_eq!(b"tag3", tag);
+    ///                 assert_eq!("tag3", tag);
     ///                 assert_eq!((3, 22), into_line_and_column(reader));
     ///                 break;
     ///             }

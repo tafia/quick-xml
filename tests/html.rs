@@ -117,12 +117,11 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     }
 }
 
-fn namespace_name(n: ResolveResult, name: QName, decoder: Decoder) -> String {
-    let name = decoder.decode(name.as_ref()).unwrap();
+fn namespace_name(n: ResolveResult, name: QName, _decoder: Decoder) -> String {
     match n {
         // Produces string '{namespace}prefixed_name'
-        ResolveResult::Bound(n) => format!("{{{}}}{}", decoder.decode(n.as_ref()).unwrap(), name),
-        _ => name.to_string(),
+        ResolveResult::Bound(n) => format!("{{{}}}{}", n.as_ref(), name.as_ref()),
+        _ => name.as_ref().to_string(),
     }
 }
 
@@ -132,7 +131,7 @@ fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String,
         match a {
             Ok(a) => {
                 if a.key.as_namespace_binding().is_none() {
-                    let key = decoder.decode(a.key.as_ref()).unwrap();
+                    let key = a.key.as_ref();
                     let value = decoder.decode(a.value.as_ref()).unwrap();
                     let unescaped_value = unescape(&value).unwrap();
                     atts.push(format!(

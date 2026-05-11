@@ -267,8 +267,11 @@ where
             self.de.key_buf.clear();
             self.de.key_buf.push('@');
 
-            let de =
-                QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
+            let de = QNameDeserializer::from_attr(
+                QName(std::str::from_utf8(&slice[key]).expect("attribute keys are valid UTF-8")), // temporary-#963
+                decoder,
+                &mut self.de.key_buf,
+            )?;
             seed.deserialize(de).map(Some)
         } else {
             self.skip_whitespaces()?;
@@ -817,9 +820,9 @@ where
 ///
 /// Returns `true`, if `start` is not in the `fields` list and `false` otherwise.
 fn not_in(fields: &'static [&'static str], start: &BytesStart) -> Result<bool, DeError> {
-    let tag = start.decoder().decode(start.local_name().into_inner())?;
+    let tag = start.local_name().into_inner();
 
-    Ok(fields.iter().all(|&field| field != tag.as_ref()))
+    Ok(fields.iter().all(|&field| field != tag))
 }
 
 /// A filter that determines, what tags should form a sequence.

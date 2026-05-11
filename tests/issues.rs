@@ -35,7 +35,7 @@ fn issue94() {
 fn issue115() {
     let mut r = Reader::from_str("<tag1 attr1='line 1\nline 2'></tag1>");
     match r.read_event() {
-        Ok(Event::Start(e)) if e.name() == QName(b"tag1") => {
+        Ok(Event::Start(e)) if e.name() == QName("tag1") => {
             let v = e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>();
             assert_eq!(v[0].clone().into_owned(), b"line 1\nline 2");
         }
@@ -59,16 +59,16 @@ fn issue299() -> Result<(), Error> {
         match reader.read_event()? {
             Event::Start(e) | Event::Empty(e) => {
                 let attr_count = match e.name().as_ref() {
-                    b"MICEX_DOC" => 1,
-                    b"SECURITY" => 4,
-                    b"RECORDS" => 26,
+                    "MICEX_DOC" => 1,
+                    "SECURITY" => 4,
+                    "RECORDS" => 26,
                     _ => unreachable!(),
                 };
                 assert_eq!(
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
-                    "mismatch att count on '{:?}'",
-                    reader.decoder().decode(e.name().as_ref())
+                    "mismatch att count on '{}'",
+                    e.name().as_ref()
                 );
             }
             Event::Eof => break,
@@ -214,17 +214,17 @@ fn issue597() {
     let objects_ns = loop {
         let (ns, ev) = reader.read_resolved_event().unwrap();
         match ev {
-            Event::Start(v) if v.local_name().as_ref() == b"xmlfilecontent_test" => {
+            Event::Start(v) if v.local_name().as_ref() == "xmlfilecontent_test" => {
                 reader.read_to_end(v.name()).unwrap();
             }
-            Event::Empty(v) if v.local_name().as_ref() == b"objects" => break ns,
+            Event::Empty(v) if v.local_name().as_ref() == "objects" => break ns,
             _ => (),
         }
     };
     assert_eq!(
         objects_ns,
         ResolveResult::Bound(Namespace(
-            b"http://oval.mitre.org/XMLSchema/oval-definitions-5"
+            "http://oval.mitre.org/XMLSchema/oval-definitions-5"
         ))
     );
 }
@@ -454,7 +454,7 @@ fn issue751() {
                 starts += 1;
                 assert_eq!(
                     e.name(),
-                    QName(b"content"),
+                    QName("content"),
                     "starts: {starts}, ends: {ends}, texts: {texts}"
                 );
             }
@@ -462,7 +462,7 @@ fn issue751() {
                 ends += 1;
                 assert_eq!(
                     e.name(),
-                    QName(b"content"),
+                    QName("content"),
                     "starts: {starts}, ends: {ends}, texts: {texts}"
                 );
             }

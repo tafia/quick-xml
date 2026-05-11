@@ -16,14 +16,14 @@ fn single_gt() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"2"),
                 }))
             );
@@ -43,14 +43,14 @@ fn single_gt_quot() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(br#"">""#),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(br#""2""#),
                 }))
             );
@@ -70,14 +70,14 @@ fn double_gt() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"2"),
                 }))
             );
@@ -97,14 +97,14 @@ fn double_gt_apos() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b"'>'"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"'2'"),
                 }))
             );
@@ -124,14 +124,14 @@ fn empty_tag() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
+                    key: QName("att1"),
                     value: Cow::Borrowed(b"a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att2"),
+                    key: QName("att2"),
                     value: Cow::Borrowed(b"b"),
                 }))
             );
@@ -150,7 +150,7 @@ fn equal_sign_in_value() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
+                    key: QName("att1"),
                     value: Cow::Borrowed(b"a=b"),
                 }))
             );

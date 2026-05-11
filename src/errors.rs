@@ -209,11 +209,8 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn missed_end(name: QName, decoder: Decoder) -> Self {
-        match decoder.decode(name.as_ref()) {
-            Ok(name) => IllFormedError::MissingEndTag(name.into()).into(),
-            Err(err) => err.into(),
-        }
+    pub(crate) fn missed_end(name: QName, _decoder: Decoder) -> Self {
+        IllFormedError::MissingEndTag(name.as_ref().to_string()).into()
     }
 }
 
