@@ -255,7 +255,7 @@ where
 
         // FIXME: There error positions counted from the start of tag name - need global position
         let slice = &self.start.buf;
-        if let Some(a) = self.iter.next(slice).transpose()? {
+        if let Some(a) = self.iter.next(slice.as_bytes()).transpose()? {
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
@@ -265,10 +265,7 @@ where
             self.de.key_buf.clear();
             self.de.key_buf.push('@');
 
-            let de = QNameDeserializer::from_attr(
-                QName(std::str::from_utf8(&slice[key]).expect("attribute keys are valid UTF-8")), // temporary-#963
-                &mut self.de.key_buf,
-            )?;
+            let de = QNameDeserializer::from_attr(QName(&slice[key]), &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
         } else {
             self.skip_whitespaces()?;

@@ -99,7 +99,7 @@ impl<'i> MyReader<'i> {
             Cow::Borrowed(doctype) => doctype,
             Cow::Owned(_) => unreachable!("We are sure that event will be borrowed"),
         };
-        for cap in self.entity_re.captures_iter(doctype) {
+        for cap in self.entity_re.captures_iter(doctype.as_bytes()) {
             self.entities.insert(
                 cap.get(1).unwrap().as_bytes(),
                 cap.get(2).unwrap().as_bytes(),

@@ -102,16 +102,8 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an element
     pub fn from_elem(start: &'d BytesStart<'i>) -> Result<Self, DeError> {
         let local = match start.buf {
-            Cow::Borrowed(b) => {
-                let name_str = std::str::from_utf8(&b[..start.name_len]) // temporary-#963
-                    .expect("element names are valid UTF-8");
-                CowRef::Input(local_name_str(QName(name_str)))
-            }
-            Cow::Owned(ref o) => {
-                let name_str = std::str::from_utf8(&o[..start.name_len]) // temporary-#963
-                    .expect("element names are valid UTF-8");
-                CowRef::Slice(local_name_str(QName(name_str)))
-            }
+            Cow::Borrowed(b) => CowRef::Input(local_name_str(QName(&b[..start.name_len]))),
+            Cow::Owned(ref o) => CowRef::Slice(local_name_str(QName(&o[..start.name_len]))),
         };
 
         Ok(Self { name: local })
