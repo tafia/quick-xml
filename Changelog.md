@@ -88,6 +88,10 @@
   now wrap `&str` instead of `&[u8]`. `into_inner()` returns `&str`, and `AsRef<str>`
   is implemented (`AsRef<[u8]>` has been removed). `ResolveResult::Unknown` now contains `String`
   instead of `Vec<u8>`, and `NamespaceError` variants contain `String` instead of `Vec<u8>`.
+- [#963]: Removed the `decoder: Decoder` field from event types (`BytesStart`, `BytesText`,
+  `BytesCData`, `BytesRef`) and `Attributes`. The `decoder()` method is no longer available
+  on these types. Decode methods on events now always assume UTF-8 input.
+  `Error::missed_end()` no longer takes a `Decoder` parameter.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 

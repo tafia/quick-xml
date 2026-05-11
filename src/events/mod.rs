@@ -95,18 +95,15 @@ pub struct BytesStart<'a> {
     pub(crate) buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
     pub(crate) name_len: usize,
-    /// Encoding used for `buf`
-    decoder: Decoder,
 }
 
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], name_len: usize, decoder: Decoder) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
-            decoder,
         }
     }
 
@@ -121,7 +118,6 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             name_len: buf.len(),
             buf,
-            decoder: Decoder::utf8(),
         }
     }
 
@@ -137,7 +133,6 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: str_cow_to_bytes(content),
             name_len,
-            decoder: Decoder::utf8(),
         }
     }
 
@@ -146,7 +141,6 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Owned(self.buf.into_owned()),
             name_len: self.name_len,
-            decoder: self.decoder,
         }
     }
 
@@ -155,7 +149,6 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Owned(self.buf.clone().into_owned()),
             name_len: self.name_len,
-            decoder: self.decoder,
         }
     }
 
@@ -188,7 +181,6 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Borrowed(&self.buf),
             name_len: self.name_len,
-            decoder: self.decoder,
         }
     }
 
@@ -196,20 +188,6 @@ impl<'a> BytesStart<'a> {
     #[inline]
     pub fn to_end(&self) -> BytesEnd<'_> {
         BytesEnd::from(self.name())
-    }
-
-    /// Get the decoder, used to decode bytes, read by the reader which produces
-    /// this event, to the strings.
-    ///
-    /// When event was created manually, encoding is UTF-8.
-    ///
-    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
-    /// defaults to UTF-8.
-    ///
-    /// [`encoding`]: ../index.html#encoding
-    #[inline]
-    pub const fn decoder(&self) -> Decoder {
-        self.decoder
     }
 
     /// Gets the undecoded raw tag name, as present in the input stream.
@@ -285,12 +263,12 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes<'_> {
-        Attributes::wrap(&self.buf, self.name_len, false, self.decoder)
+        Attributes::wrap(&self.buf, self.name_len, false)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes<'_> {
-        Attributes::wrap(&self.buf, self.name_len, true, self.decoder)
+        Attributes::wrap(&self.buf, self.name_len, true)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
@@ -529,18 +507,15 @@ pub struct BytesText<'a> {
     /// document encoding when event comes from the reader and should be in the
     /// document encoding when event passed to the writer
     content: Cow<'a, [u8]>,
-    /// Encoding in which the `content` is stored inside the event
-    decoder: Decoder,
 }
 
 impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from a raw byte sequence as it appeared in th XML
     /// source in the specified encoding.
     #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
         Self {
             content: content.into(),
-            decoder,
         }
     }
 
@@ -557,7 +532,7 @@ impl<'a> BytesText<'a> {
     /// [`xml_content()`]: Self::xml_content
     #[inline]
     pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
+        Self::wrap(str_cow_to_bytes(content))
     }
 
     /// Creates a new `BytesText` from a string.
@@ -587,7 +562,6 @@ impl<'a> BytesText<'a> {
     pub fn into_owned(self) -> BytesText<'static> {
         BytesText {
             content: self.content.into_owned().into(),
-            decoder: self.decoder,
         }
     }
 
@@ -602,7 +576,6 @@ impl<'a> BytesText<'a> {
     pub fn borrow(&self) -> BytesText<'_> {
         BytesText {
             content: Cow::Borrowed(&self.content),
-            decoder: self.decoder,
         }
     }
 
@@ -615,7 +588,7 @@ impl<'a> BytesText<'a> {
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.decode_cow(&self.content)
+        Decoder::utf8().decode_cow(&self.content)
     }
 
     /// Decodes the content of the XML 1.0 or HTML event.
@@ -635,7 +608,7 @@ impl<'a> BytesText<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml10_eols)
+        Decoder::utf8().content(&self.content, normalize_xml10_eols)
     }
 
     /// Decodes the content of the XML 1.1 event.
@@ -655,7 +628,7 @@ impl<'a> BytesText<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml11_eols)
+        Decoder::utf8().content(&self.content, normalize_xml11_eols)
     }
 
     /// Decodes the content of the XML event according to the specified version.
@@ -758,17 +731,14 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesCData<'a> {
     content: Cow<'a, [u8]>,
-    /// Encoding in which the `content` is stored inside the event
-    decoder: Decoder,
 }
 
 impl<'a> BytesCData<'a> {
     /// Creates a new `BytesCData` from a byte sequence in the specified encoding.
     #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
         Self {
             content: content.into(),
-            decoder,
         }
     }
 
@@ -780,7 +750,7 @@ impl<'a> BytesCData<'a> {
     /// [`BytesCData::escaped`] to escape the content instead.
     #[inline]
     pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
+        Self::wrap(str_cow_to_bytes(content))
     }
 
     /// Creates an iterator of `BytesCData` from a string.
@@ -828,7 +798,6 @@ impl<'a> BytesCData<'a> {
     pub fn into_owned(self) -> BytesCData<'static> {
         BytesCData {
             content: self.content.into_owned().into(),
-            decoder: self.decoder,
         }
     }
 
@@ -843,7 +812,6 @@ impl<'a> BytesCData<'a> {
     pub fn borrow(&self) -> BytesCData<'_> {
         BytesCData {
             content: Cow::Borrowed(&self.content),
-            decoder: self.decoder,
         }
     }
 
@@ -861,13 +829,10 @@ impl<'a> BytesCData<'a> {
     /// | `"`       | `&quot;`
     pub fn escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match escape(decoded) {
-                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
+        Ok(BytesText::wrap(match escape(decoded) {
+            Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+        }))
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -885,13 +850,10 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     pub fn partial_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match partial_escape(decoded) {
-                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
+        Ok(BytesText::wrap(match partial_escape(decoded) {
+            Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+        }))
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -908,13 +870,10 @@ impl<'a> BytesCData<'a> {
     /// [specification]: https://www.w3.org/TR/xml11/#syntax
     pub fn minimal_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match minimal_escape(decoded) {
-                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
+        Ok(BytesText::wrap(match minimal_escape(decoded) {
+            Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+        }))
     }
 
     /// Decodes the raw input byte content of the CDATA section into a string,
@@ -929,7 +888,7 @@ impl<'a> BytesCData<'a> {
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.decode_cow(&self.content)
+        Decoder::utf8().decode_cow(&self.content)
     }
 
     /// Decodes the raw input byte content of the CDATA section of the XML 1.0 or
@@ -951,7 +910,7 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml10_eols)
+        Decoder::utf8().content(&self.content, normalize_xml10_eols)
     }
 
     /// Decodes the raw input byte content of the CDATA section of the XML 1.1 event
@@ -973,7 +932,7 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml11_eols)
+        Decoder::utf8().content(&self.content, normalize_xml11_eols)
     }
 
     /// Decodes the raw input byte content of the CDATA section of the XML event
@@ -1040,7 +999,7 @@ impl<'a> Iterator for CDataIterator<'a> {
     fn next(&mut self) -> Option<BytesCData<'a>> {
         self.inner
             .next()
-            .map(|slice| BytesCData::wrap(slice.as_bytes(), Decoder::utf8()))
+            .map(|slice| BytesCData::wrap(slice.as_bytes()))
     }
 }
 
@@ -1079,9 +1038,9 @@ pub struct BytesPI<'a> {
 impl<'a> BytesPI<'a> {
     /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], target_len: usize, decoder: Decoder) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], target_len: usize) -> Self {
         Self {
-            content: BytesStart::wrap(content, target_len, decoder),
+            content: BytesStart::wrap(content, target_len),
         }
     }
 
@@ -1095,11 +1054,7 @@ impl<'a> BytesPI<'a> {
         let buf = str_cow_to_bytes(content);
         let name_len = name_len(&buf);
         Self {
-            content: BytesStart {
-                buf,
-                name_len,
-                decoder: Decoder::utf8(),
-            },
+            content: BytesStart { buf, name_len },
         }
     }
 
@@ -1593,17 +1548,14 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesRef<'a> {
     content: Cow<'a, [u8]>,
-    /// Encoding in which the `content` is stored inside the event.
-    decoder: Decoder,
 }
 
 impl<'a> BytesRef<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], decoder: Decoder) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8]) -> Self {
         Self {
             content: Cow::Borrowed(content),
-            decoder,
         }
     }
 
@@ -1616,7 +1568,6 @@ impl<'a> BytesRef<'a> {
     pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
         Self {
             content: str_cow_to_bytes(name),
-            decoder: Decoder::utf8(),
         }
     }
 
@@ -1624,7 +1575,6 @@ impl<'a> BytesRef<'a> {
     pub fn into_owned(self) -> BytesRef<'static> {
         BytesRef {
             content: Cow::Owned(self.content.into_owned()),
-            decoder: self.decoder,
         }
     }
 
@@ -1639,7 +1589,6 @@ impl<'a> BytesRef<'a> {
     pub fn borrow(&self) -> BytesRef<'_> {
         BytesRef {
             content: Cow::Borrowed(&self.content),
-            decoder: self.decoder,
         }
     }
 
@@ -1652,7 +1601,7 @@ impl<'a> BytesRef<'a> {
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.decode_cow(&self.content)
+        Decoder::utf8().decode_cow(&self.content)
     }
 
     /// Decodes the content of the XML 1.0 or HTML event.
@@ -1673,7 +1622,7 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml10_eols)
+        Decoder::utf8().content(&self.content, normalize_xml10_eols)
     }
 
     /// Decodes the content of the XML 1.1 event.
@@ -1694,7 +1643,7 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        self.decoder.content(&self.content, normalize_xml11_eols)
+        Decoder::utf8().content(&self.content, normalize_xml11_eols)
     }
 
     /// Decodes the content of the XML event according to the specified version.

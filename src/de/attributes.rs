@@ -139,8 +139,7 @@ impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
                 self.value = Some(attr.value);
                 self.key_buf.clear();
                 self.key_buf.push_str(self.prefix);
-                let de =
-                    QNameDeserializer::from_attr(attr.key, self.iter.decoder(), &mut self.key_buf)?;
+                let de = QNameDeserializer::from_attr(attr.key, &mut self.key_buf)?;
                 seed.deserialize(de).map(Some)
             }
             Some(Err(err)) => Err(Error::custom(err)),
@@ -153,12 +152,7 @@ impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
     {
         match self.value.take() {
             Some(value) => {
-                let de = SimpleTypeDeserializer::from_attr(
-                    &value,
-                    0..value.len(),
-                    self.version,
-                    self.iter.decoder(),
-                );
+                let de = SimpleTypeDeserializer::from_attr(&value, 0..value.len(), self.version);
                 seed.deserialize(de)
             }
             None => Err(DeError::KeyNotRead),

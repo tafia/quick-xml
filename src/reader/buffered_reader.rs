@@ -565,7 +565,7 @@ impl<R: BufRead> Reader<R> {
         // usize (because otherwise we panic at appending to the buffer before that point)
         let end = start + len as usize;
 
-        Ok(BytesText::wrap(&buf[start..end], self.decoder()))
+        Ok(BytesText::wrap(&buf[start..end]))
     }
 }
 
