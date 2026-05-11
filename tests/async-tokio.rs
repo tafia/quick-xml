@@ -138,12 +138,12 @@ async fn issue623() {
 /// Actually, that error was not found in async reader, but we would to test it as well.
 #[tokio::test]
 async fn issue751() {
-    let mut text = Vec::new();
+    let mut text = String::new();
     let mut chunk = Vec::new();
     chunk.extend_from_slice(b"<content>");
-    for data in iter::repeat(b"some text inside").take(1000) {
-        chunk.extend_from_slice(data);
-        text.extend_from_slice(data);
+    for data in iter::repeat("some text inside").take(1000) {
+        chunk.extend_from_slice(data.as_bytes());
+        text.push_str(data);
     }
     chunk.extend_from_slice(b"</content>");
 

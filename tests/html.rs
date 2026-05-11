@@ -62,9 +62,9 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
                 format!("StartDocument({}, {})", version, encoding)
             }
             Ok((_, Event::PI(e))) => {
-                format!("ProcessingInstruction(PI={})", decoder.decode(&e).unwrap())
+                format!("ProcessingInstruction(PI={})", e.as_ref())
             }
-            Ok((_, Event::DocType(e))) => format!("DocType({})", decoder.decode(&e).unwrap()),
+            Ok((_, Event::DocType(e))) => format!("DocType({})", e.as_ref()),
             Ok((n, Event::Start(e))) => {
                 let name = namespace_name(n, e.name(), decoder);
                 match make_attrs(&e, decoder) {
@@ -85,13 +85,13 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
                 let name = namespace_name(n, e.name(), decoder);
                 format!("EndElement({})", name)
             }
-            Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
-            Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
-            Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
+            Ok((_, Event::Comment(e))) => format!("Comment({})", e.as_ref()),
+            Ok((_, Event::CData(e))) => format!("CData({})", e.as_ref()),
+            Ok((_, Event::Text(e))) => match unescape(e.as_ref()) {
                 Ok(c) => format!("Characters({})", &c),
                 Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
             },
-            Ok((_, Event::GeneralRef(e))) => match unescape(&decoder.decode(&e).unwrap()) {
+            Ok((_, Event::GeneralRef(e))) => match unescape(e.as_ref()) {
                 Ok(c) => format!("Reference({})", &c),
                 Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
             },

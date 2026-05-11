@@ -167,10 +167,10 @@ fn test_escaped_content() {
     match r.read_event() {
         Ok(Text(e)) => {
             assert_eq!(
-                &*e,
-                b"test",
+                e.as_ref(),
+                "test",
                 "content unexpected: expecting 'test', got '{:?}'",
-                from_utf8(&e)
+                e.as_ref()
             );
             match e.xml10_content() {
                 Ok(c) => assert_eq!(c, "test"),

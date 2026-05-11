@@ -262,7 +262,7 @@ impl<W: Write> Writer<W> {
         let mut next_should_line_break = true;
         let result = match event.into() {
             Event::Start(e) => {
-                let result = self.write_wrapped(b"<", &e, b">");
+                let result = self.write_wrapped(b"<", e.as_bytes(), b">");
                 if let Some(i) = self.indent.as_mut() {
                     i.grow();
                 }
@@ -272,11 +272,11 @@ impl<W: Write> Writer<W> {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
-                self.write_wrapped(b"</", &e, b">")
+                self.write_wrapped(b"</", e.as_bytes(), b">")
             }
             Event::Empty(e) => self.write_wrapped(
                 b"<",
-                &e,
+                e.as_bytes(),
                 if self.config.add_space_before_slash_in_empty_elements {
                     b" />"
                 } else {
@@ -285,19 +285,19 @@ impl<W: Write> Writer<W> {
             ),
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write(&e)
+                self.write(e.as_bytes())
             }
-            Event::Comment(e) => self.write_wrapped(b"<!--", &e, b"-->"),
+            Event::Comment(e) => self.write_wrapped(b"<!--", e.as_bytes(), b"-->"),
             Event::CData(e) => {
                 next_should_line_break = false;
                 self.write(b"<![CDATA[")?;
-                self.write(&e)?;
+                self.write(e.as_bytes())?;
                 self.write(b"]]>")
             }
-            Event::Decl(e) => self.write_wrapped(b"<?", &e, b"?>"),
-            Event::PI(e) => self.write_wrapped(b"<?", &e, b"?>"),
-            Event::DocType(e) => self.write_wrapped(b"<!DOCTYPE ", &e, b">"),
-            Event::GeneralRef(e) => self.write_wrapped(b"&", &e, b";"),
+            Event::Decl(e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
+            Event::PI(e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
+            Event::DocType(e) => self.write_wrapped(b"<!DOCTYPE ", e.as_bytes(), b">"),
+            Event::GeneralRef(e) => self.write_wrapped(b"&", e.as_bytes(), b";"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {

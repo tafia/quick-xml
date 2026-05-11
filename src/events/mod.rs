@@ -62,7 +62,7 @@ use attributes::{AttrError, Attribute, Attributes};
 /// The name can be accessed using the [`name`] or [`local_name`] methods.
 /// An iterator over the attributes is returned by the [`attributes`] method.
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `<` and `>` or `/>`:
 ///
 /// ```
@@ -80,10 +80,8 @@ use attributes::{AttrError, Attribute, Attributes};
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::Empty(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Start(event.borrow()));
-/// // deref coercion of &BytesStart to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesStart to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 ///
 /// [`name`]: Self::name
@@ -323,10 +321,16 @@ impl<'a> Debug for BytesStart<'a> {
 }
 
 impl<'a> Deref for BytesStart<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.buf.as_bytes()
+    fn deref(&self) -> &str {
+        &self.buf
+    }
+}
+
+impl AsRef<str> for BytesStart<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -353,7 +357,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 ///
 /// The name can be accessed using the [`name`] or [`local_name`] methods.
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `</` and `>`.
 ///
 /// Note, that inner text will not contain `>` character inside:
@@ -373,10 +377,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::End(event.borrow()));
 /// assert_eq!(event.name().as_ref(), content);
-/// // deref coercion of &BytesEnd to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesEnd to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 ///
 /// [`name`]: Self::name
@@ -443,10 +445,16 @@ impl<'a> Debug for BytesEnd<'a> {
 }
 
 impl<'a> Deref for BytesEnd<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.name.as_bytes()
+    fn deref(&self) -> &str {
+        &self.name
+    }
+}
+
+impl AsRef<str> for BytesEnd<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -471,7 +479,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 
 /// Data from various events (most notably, `Event::Text`).
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event. In case of comment this is everything
 /// between `<!--` and `-->` and the text of comment may not contain `-->` inside
 /// (if [`Config::check_comments`] is set to `true`).
@@ -495,10 +503,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 /// assert_eq!(reader.read_event().unwrap(), Event::DocType(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Text(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
-/// // deref coercion of &BytesText to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesText to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 ///
 /// [`Config::check_comments`]: crate::reader::Config::check_comments
@@ -681,10 +687,16 @@ impl<'a> Debug for BytesText<'a> {
 }
 
 impl<'a> Deref for BytesText<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.content.as_bytes()
+    fn deref(&self) -> &str {
+        &self.content
+    }
+}
+
+impl AsRef<str> for BytesText<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -708,7 +720,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 /// CDATA content contains unescaped data from the reader. If you want to write them as a text,
 /// [convert](Self::escape) it to [`BytesText`].
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `<![CDATA[` and `]]>`.
 ///
 /// Note, that inner text will not contain `]]>` sequence inside:
@@ -722,10 +734,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 /// let event = BytesCData::new(content);
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::CData(event.borrow()));
-/// // deref coercion of &BytesCData to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesCData to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesCData<'a> {
@@ -960,10 +970,16 @@ impl<'a> Debug for BytesCData<'a> {
 }
 
 impl<'a> Deref for BytesCData<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.content.as_bytes()
+    fn deref(&self) -> &str {
+        &self.content
+    }
+}
+
+impl AsRef<str> for BytesCData<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -999,7 +1015,7 @@ impl FusedIterator for CDataIterator<'_> {}
 
 /// [Processing instructions][PI] (PIs) allow documents to contain instructions for applications.
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `<?` and `?>`.
 ///
 /// Note, that inner text will not contain `?>` sequence inside:
@@ -1013,10 +1029,8 @@ impl FusedIterator for CDataIterator<'_> {}
 /// let event = BytesPI::new(content);
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::PI(event.borrow()));
-/// // deref coercion of &BytesPI to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesPI to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 ///
 /// [PI]: https://www.w3.org/TR/xml11/#sec-pi
@@ -1149,10 +1163,16 @@ impl<'a> Debug for BytesPI<'a> {
 }
 
 impl<'a> Deref for BytesPI<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.content.buf.as_bytes()
+    fn deref(&self) -> &str {
+        &self.content.buf
+    }
+}
+
+impl AsRef<str> for BytesPI<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -1172,7 +1192,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `<?` and `?>`.
 ///
 /// Note, that inner text will not contain `?>` sequence inside:
@@ -1186,10 +1206,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
 /// let event = BytesDecl::from_start(BytesStart::from_content(content, 3));
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
-/// // deref coercion of &BytesDecl to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesDecl to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
@@ -1492,10 +1510,16 @@ impl<'a> BytesDecl<'a> {
 }
 
 impl<'a> Deref for BytesDecl<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.content.buf.as_bytes()
+    fn deref(&self) -> &str {
+        &self.content.buf
+    }
+}
+
+impl AsRef<str> for BytesDecl<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -1518,7 +1542,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 
 /// Character or general entity reference (`Event::GeneralRef`): `&ref;` or `&#<number>;`.
 ///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
 /// returns the content of this event between `&` and `;`:
 ///
 /// ```
@@ -1530,10 +1554,8 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 /// let event = BytesRef::new(content);
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::GeneralRef(event.borrow()));
-/// // deref coercion of &BytesRef to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
+/// // deref coercion of &BytesRef to &str
+/// assert_eq!(event.as_ref(), content);
 /// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesRef<'a> {
@@ -1703,10 +1725,16 @@ impl<'a> Debug for BytesRef<'a> {
 }
 
 impl<'a> Deref for BytesRef<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
-        self.content.as_bytes()
+    fn deref(&self) -> &str {
+        &self.content
+    }
+}
+
+impl AsRef<str> for BytesRef<'_> {
+    fn as_ref(&self) -> &str {
+        self
     }
 }
 
@@ -1793,9 +1821,9 @@ impl<'a> Event<'a> {
 }
 
 impl<'a> Deref for Event<'a> {
-    type Target = [u8];
+    type Target = str;
 
-    fn deref(&self) -> &[u8] {
+    fn deref(&self) -> &str {
         match *self {
             Event::Start(ref e) | Event::Empty(ref e) => e,
             Event::End(ref e) => e,
@@ -1806,7 +1834,7 @@ impl<'a> Deref for Event<'a> {
             Event::Comment(ref e) => e,
             Event::DocType(ref e) => e,
             Event::GeneralRef(ref e) => e,
-            Event::Eof => &[],
+            Event::Eof => "",
         }
     }
 }
