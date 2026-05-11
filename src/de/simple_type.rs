@@ -501,9 +501,6 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
     content: CowRef<'de, 'a, [u8]>,
     /// If `true`, `content` in escaped form and should be unescaped before use
     is_attr: bool,
-    /// Decoder used to deserialize string data, numeric and boolean data.
-    /// Not used for deserializing raw byte buffers
-    decoder: Decoder,
     version: XmlVersion,
 }
 
@@ -516,7 +513,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
-        Self::new(content, false, XmlVersion::Implicit1_0, Decoder::utf8())
+        Self::new(content, false, XmlVersion::Implicit1_0)
     }
     /// Creates a deserializer from an XML text node, that possible borrowed from input.
     ///
@@ -535,27 +532,20 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
         version: XmlVersion,
-        decoder: Decoder,
     ) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
             Cow::Owned(slice) => CowRef::Slice(&slice[range]),
         };
-        Self::new(content, true, version, decoder)
+        Self::new(content, true, version)
     }
 
     /// Constructor for tests
     #[inline]
-    const fn new(
-        content: CowRef<'de, 'a, [u8]>,
-        is_attr: bool,
-        version: XmlVersion,
-        decoder: Decoder,
-    ) -> Self {
+    const fn new(content: CowRef<'de, 'a, [u8]>, is_attr: bool, version: XmlVersion) -> Self {
         Self {
             content,
             is_attr,
-            decoder,
             version,
         }
     }
@@ -564,16 +554,17 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// The method will borrow if has the UTF-8 compatible representation.
     #[inline]
     fn decode<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
+        let decoder = Decoder::utf8();
         Ok(match self.content {
-            CowRef::Input(content) => match self.decoder.decode(content)? {
+            CowRef::Input(content) => match decoder.decode(content)? {
                 Cow::Borrowed(content) => CowRef::Input(content),
                 Cow::Owned(content) => CowRef::Owned(content),
             },
-            CowRef::Slice(content) => match self.decoder.decode(content)? {
+            CowRef::Slice(content) => match decoder.decode(content)? {
                 Cow::Borrowed(content) => CowRef::Slice(content),
                 Cow::Owned(content) => CowRef::Owned(content),
             },
-            CowRef::Owned(ref content) => match self.decoder.decode(content)? {
+            CowRef::Owned(ref content) => match decoder.decode(content)? {
                 Cow::Borrowed(content) => CowRef::Slice(content),
                 Cow::Owned(content) => CowRef::Owned(content),
             },
@@ -777,13 +768,11 @@ mod tests {
         ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
             #[test]
             fn $name() {
-                let decoder = Decoder::$encoding();
                 let xml = $xml;
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
                     XmlVersion::Implicit1_0,
-                    decoder,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -796,13 +785,11 @@ mod tests {
         ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
             #[test]
             fn $name() {
-                let decoder = Decoder::$encoding();
                 let xml = $xml;
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
                     XmlVersion::Implicit1_0,
-                    decoder,
                 );
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -826,13 +813,11 @@ mod tests {
         ($encoding:ident, $name:ident: $type:ty = $xml:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let decoder = Decoder::$encoding();
                 let xml = $xml;
                 let de = SimpleTypeDeserializer::new(
                     CowRef::Input(xml.as_ref()),
                     true,
                     XmlVersion::Implicit1_0,
-                    decoder,
                 );
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
@@ -1153,7 +1138,8 @@ mod tests {
             assert_eq!(seq.next_element::<()>().unwrap(), None);
         }
     }
-
+    // SimpleTypeDeserializer will only ever receive UTF-8 data. DecodingReader
+    // transcodes non-UTF-8 sources before the parser sees them.
     mod utf8 {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -1219,86 +1205,5 @@ mod tests {
 
         simple_only!(utf8, identifier: Id = "Field" => Id::Field);
         simple_only!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
-    }
-
-    #[cfg(feature = "encoding")]
-    mod utf16 {
-        use super::*;
-        use pretty_assertions::assert_eq;
-
-        fn to_utf16(string: &str) -> Vec<u8> {
-            let mut bytes = Vec::new();
-            for ch in string.encode_utf16() {
-                bytes.extend_from_slice(&ch.to_le_bytes());
-            }
-            bytes
-        }
-
-        macro_rules! utf16 {
-            ($name:ident: $type:ty = $xml:literal => $result:expr) => {
-                simple_only!(utf16, $name: $type = to_utf16($xml) => $result);
-            };
-        }
-
-        macro_rules! unsupported {
-            ($name:ident: $type:ty = $xml:literal => $err:literal) => {
-                err!(utf16, $name: $type = to_utf16($xml) => Custom($err));
-            };
-        }
-
-        utf16!(i8_:  i8  = "-2" => -2);
-        utf16!(i16_: i16 = "-2" => -2);
-        utf16!(i32_: i32 = "-2" => -2);
-        utf16!(i64_: i64 = "-2" => -2);
-
-        utf16!(u8_:  u8  = "3" => 3);
-        utf16!(u16_: u16 = "3" => 3);
-        utf16!(u32_: u32 = "3" => 3);
-        utf16!(u64_: u64 = "3" => 3);
-
-        utf16!(i128_: i128 = "-2" => -2);
-        utf16!(u128_: u128 = "2" => 2);
-
-        utf16!(f32_: f32 = "1.23" => 1.23);
-        utf16!(f64_: f64 = "1.23" => 1.23);
-
-        utf16!(false_: bool = "false" => false);
-        utf16!(true_: bool  = "true" => true);
-        utf16!(char_unescaped: char = "h" => 'h');
-        utf16!(char_escaped: char = "&lt;" => '<');
-
-        utf16!(string: String = "&lt;escaped&#32;string" => "<escaped string");
-        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#32;string"
-                    => "invalid type: string \"<escaped string\", expected borrowed bytes");
-
-        utf16!(option_none: Option<()> = "" => Some(()));
-        utf16!(option_some: Option<()> = "any data" => Some(()));
-
-        utf16!(unit: () = "any data" => ());
-        utf16!(unit_struct: Unit = "any data" => Unit);
-
-        utf16!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
-
-        // UTF-16 data never borrow because data was decoded not in-place
-        unsupported!(newtype_borrowed: BorrowedNewtype = "non-escaped string"
-                    => "invalid type: string \"non-escaped string\", expected a borrowed string");
-
-        unsupported!(map: HashMap<(), ()> = "any data"
-                    => "invalid type: string \"any data\", expected a map");
-        unsupported!(struct_: Struct = "any data"
-                    => "invalid type: string \"any data\", expected struct Struct");
-
-        utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
-        unsupported!(enum_newtype: Enum = "Newtype"
-                    => "invalid type: unit value, expected a string");
-        unsupported!(enum_tuple: Enum = "Tuple"
-                    => "invalid type: unit value, expected tuple variant Enum::Tuple");
-        unsupported!(enum_struct: Enum = "Struct"
-                    => "invalid type: unit value, expected struct variant Enum::Struct");
-        unsupported!(enum_other: Enum = "any data"
-                    => "unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`");
-
-        utf16!(identifier: Id = "Field" => Id::Field);
-        utf16!(ignored_any: Any = "any data" => Any(IgnoredAny));
     }
 }

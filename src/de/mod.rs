@@ -2456,7 +2456,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
 
     fn resolve_reference(&mut self, result: &mut String, event: BytesRef) -> Result<(), DeError> {
         let len = event.len();
-        let reference = self.decoder().decode(&event)?;
+        let reference = event.decode()?;
 
         if let Some(num) = reference.strip_prefix('#') {
             let codepoint = parse_number(num).map_err(EscapeError::InvalidCharRef)?;
@@ -2936,7 +2936,7 @@ where
                     e.name().as_ref().as_bytes().to_owned(),
                 )),
                 // Reached by struct_::non_closed::elements_child
-                DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
+                DeEvent::Eof => Err(Error::missed_end(name).into()),
             },
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
@@ -2948,7 +2948,7 @@ where
                 s.name().as_ref().as_bytes().to_owned(),
             )),
             // Reached by struct_::non_closed::elements_child
-            DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
+            DeEvent::Eof => Err(Error::missed_end(name).into()),
         }
     }
 

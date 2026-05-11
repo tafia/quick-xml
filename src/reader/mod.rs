@@ -288,7 +288,7 @@ macro_rules! read_event_impl {
                             $self.state.state = ParseState::InsideText;
                             // +1 to skip start `&`
                             // -1 to skip end `;`
-                            Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..bytes.len() - 1], $self.decoder())))
+                            Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..bytes.len() - 1])))
                         }
                         // Go to Done state
                         ReadRefResult::UpToEof(bytes) if $self.state.config.allow_dangling_amp => {
@@ -527,7 +527,7 @@ macro_rules! read_to_end {
                 }
                 Ok(Event::Eof) => {
                     $self.config_mut().trim_text_start = trim;
-                    return Err(Error::missed_end($end, $self.decoder()));
+                    return Err(Error::missed_end($end));
                 }
                 _ => (),
             }

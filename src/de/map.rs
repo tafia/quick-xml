@@ -255,8 +255,6 @@ where
 
         // FIXME: There error positions counted from the start of tag name - need global position
         let slice = &self.start.buf;
-        let decoder = self.start.decoder();
-
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
@@ -269,7 +267,6 @@ where
 
             let de = QNameDeserializer::from_attr(
                 QName(std::str::from_utf8(&slice[key]).expect("attribute keys are valid UTF-8")), // temporary-#963
-                decoder,
                 &mut self.de.key_buf,
             )?;
             seed.deserialize(de).map(Some)
@@ -333,9 +330,7 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
-                DeEvent::Eof => {
-                    Err(Error::missed_end(self.start.name(), self.start.decoder()).into())
-                }
+                DeEvent::Eof => Err(Error::missed_end(self.start.name()).into()),
             }
         }
     }
@@ -349,7 +344,6 @@ where
                 &self.start.buf,
                 value,
                 self.de.reader.reader.xml_version(),
-                self.start.decoder(),
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -987,9 +981,7 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
-                DeEvent::Eof => {
-                    Err(Error::missed_end(self.map.start.name(), self.map.start.decoder()).into())
-                }
+                DeEvent::Eof => Err(Error::missed_end(self.map.start.name()).into()),
 
                 DeEvent::Text(_) => match self.map.de.next()? {
                     DeEvent::Text(e) => seed.deserialize(TextDeserializer(e)).map(Some),

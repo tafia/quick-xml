@@ -1,6 +1,6 @@
 //! Error management module
 
-use crate::encoding::{Decoder, EncodingError};
+use crate::encoding::EncodingError;
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
 use crate::name::{NamespaceError, QName};
@@ -209,7 +209,7 @@ pub enum Error {
 }
 
 impl Error {
-    pub(crate) fn missed_end(name: QName, _decoder: Decoder) -> Self {
+    pub(crate) fn missed_end(name: QName) -> Self {
         IllFormedError::MissingEndTag(name.as_ref().to_string()).into()
     }
 }

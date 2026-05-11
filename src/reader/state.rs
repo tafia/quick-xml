@@ -73,7 +73,7 @@ impl ReaderState {
             content = &bytes[..len];
         }
         from_utf8(content)?;
-        Ok(BytesText::wrap(content, self.decoder()))
+        Ok(BytesText::wrap(content))
     }
 
     /// Returns `Comment`, `CData` or `DocType` event.
@@ -141,7 +141,6 @@ impl ReaderState {
                 Ok(Event::Comment(BytesText::wrap(
                     // Cut of `<!--` and `-->` from start and end
                     &buf[4..len - 3],
-                    self.decoder(),
                 )))
             }
             // XML requires uppercase only:
@@ -157,7 +156,6 @@ impl ReaderState {
                 Ok(Event::CData(BytesCData::wrap(
                     // Cut of `<![CDATA[` and `]]>` from start and end
                     &buf[9..len - 3],
-                    self.decoder(),
                 )))
             }
             // XML requires uppercase only, but we will check that on validation stage:
@@ -169,7 +167,6 @@ impl ReaderState {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         // Cut of `<!DOCTYPE` and any number of spaces from start and `>` from the end
                         &buf[9 + start..len - 1],
-                        self.decoder(),
                     ))),
                     None => {
                         // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
@@ -286,7 +283,7 @@ impl ReaderState {
             let len = content.len();
 
             if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                let event = BytesDecl::from_start(BytesStart::wrap(content, 3, self.decoder()));
+                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -298,11 +295,7 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesPI::wrap(
-                    content,
-                    name_len(content),
-                    self.decoder(),
-                )))
+                Ok(Event::PI(BytesPI::wrap(content, name_len(content))))
             }
         } else {
             // <?...?>
@@ -335,7 +328,7 @@ impl ReaderState {
         let content = &content[1..];
         if let Some(content) = content.strip_suffix(b"/>") {
             // This is self-closed tag `<something/>`
-            let event = BytesStart::wrap(content, name_len(content), self.decoder());
+            let event = BytesStart::wrap(content, name_len(content));
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
@@ -348,7 +341,7 @@ impl ReaderState {
         } else {
             // strip `>`
             let content = &content[..content.len() - 1];
-            let event = BytesStart::wrap(content, name_len(content), self.decoder());
+            let event = BytesStart::wrap(content, name_len(content));
 
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be

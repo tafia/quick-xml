@@ -1,5 +1,4 @@
 use crate::de::simple_type::UnitOnly;
-use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::events::BytesStart;
 use crate::name::QName;
@@ -78,11 +77,7 @@ pub struct QNameDeserializer<'i, 'd> {
 
 impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an attribute
-    pub fn from_attr(
-        name: QName<'d>,
-        _decoder: Decoder,
-        key_buf: &'d mut String,
-    ) -> Result<Self, DeError> {
+    pub fn from_attr(name: QName<'d>, key_buf: &'d mut String) -> Result<Self, DeError> {
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         if name.as_namespace_binding().is_some() {
