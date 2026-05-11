@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::str::from_utf8;
 
@@ -72,7 +73,7 @@ impl ReaderState {
                 .map_or(0, |p| p + 1);
             content = &bytes[..len];
         }
-        from_utf8(content)?;
+        let content = from_utf8(content)?;
         Ok(BytesText::wrap(content))
     }
 
@@ -95,7 +96,7 @@ impl ReaderState {
             crate::utils::Bytes(buf)
         );
 
-        from_utf8(buf)?;
+        let buf_str = from_utf8(buf)?;
 
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
@@ -140,7 +141,7 @@ impl ReaderState {
                 }
                 Ok(Event::Comment(BytesText::wrap(
                     // Cut of `<!--` and `-->` from start and end
-                    &buf[4..len - 3],
+                    &buf_str[4..len - 3],
                 )))
             }
             // XML requires uppercase only:
@@ -155,7 +156,7 @@ impl ReaderState {
                 );
                 Ok(Event::CData(BytesCData::wrap(
                     // Cut of `<![CDATA[` and `]]>` from start and end
-                    &buf[9..len - 3],
+                    &buf_str[9..len - 3],
                 )))
             }
             // XML requires uppercase only, but we will check that on validation stage:
@@ -166,7 +167,7 @@ impl ReaderState {
                 match buf[9..len - 1].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         // Cut of `<!DOCTYPE` and any number of spaces from start and `>` from the end
-                        &buf[9 + start..len - 1],
+                        &buf_str[9 + start..len - 1],
                     ))),
                     None => {
                         // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
@@ -203,7 +204,7 @@ impl ReaderState {
             crate::utils::Bytes(buf)
         );
 
-        from_utf8(buf)?;
+        let buf_str = from_utf8(buf)?;
 
         // Strip the `</` and `>` characters. `content` contains data between `</` and `>`
         let content = &buf[2..buf.len() - 1];
@@ -253,7 +254,9 @@ impl ReaderState {
             }
         }
 
-        Ok(Event::End(BytesEnd::wrap(name.into())))
+        // name is a subslice of buf which was validated, so the str slice is at the same offset
+        let name_str = &buf_str[2..2 + name.len()];
+        Ok(Event::End(BytesEnd::wrap(Cow::Borrowed(name_str))))
     }
 
     /// `buf` contains data between `<` and `>` and the first byte is `?`.
@@ -272,7 +275,7 @@ impl ReaderState {
             crate::utils::Bytes(buf)
         );
 
-        from_utf8(buf)?;
+        let buf_str = from_utf8(buf)?;
 
         let len = buf.len();
         // We accept at least <??>
@@ -280,10 +283,11 @@ impl ReaderState {
         if len > 3 {
             // Cut of `<?` and `?>` from start and end
             let content = &buf[2..len - 2];
+            let content_str = &buf_str[2..len - 2];
             let len = content.len();
 
             if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
+                let event = BytesDecl::from_start(BytesStart::wrap(content_str, 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -295,7 +299,7 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesPI::wrap(content, name_len(content))))
+                Ok(Event::PI(BytesPI::wrap(content_str, name_len(content))))
             }
         } else {
             // <?...?>
@@ -322,13 +326,15 @@ impl ReaderState {
             crate::utils::Bytes(content)
         );
 
-        from_utf8(content)?;
+        let content_str = from_utf8(content)?;
 
         // strip `<`
         let content = &content[1..];
+        let content_str = &content_str[1..];
         if let Some(content) = content.strip_suffix(b"/>") {
             // This is self-closed tag `<something/>`
-            let event = BytesStart::wrap(content, name_len(content));
+            let content_str = &content_str[..content.len()];
+            let event = BytesStart::wrap(content_str, name_len(content));
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
@@ -341,7 +347,8 @@ impl ReaderState {
         } else {
             // strip `>`
             let content = &content[..content.len() - 1];
-            let event = BytesStart::wrap(content, name_len(content));
+            let content_str = &content_str[..content.len()];
+            let event = BytesStart::wrap(content_str, name_len(content));
 
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be
@@ -358,7 +365,9 @@ impl ReaderState {
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
-        BytesEnd::wrap(name.into())
+        // Could use String::from_utf8_unchecked: opened_buffer is populated from validated UTF-8
+        let name_str = String::from_utf8(name).expect("opened_buffer contains valid UTF-8");
+        BytesEnd::wrap(Cow::Owned(name_str))
     }
 
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.

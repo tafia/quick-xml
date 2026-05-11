@@ -140,42 +140,6 @@ impl Decoder {
 
         Ok(())
     }
-
-    /// Decodes the `Cow` buffer, preserves the lifetime
-    pub(crate) fn decode_cow<'b>(
-        &self,
-        bytes: &Cow<'b, [u8]>,
-    ) -> Result<Cow<'b, str>, EncodingError> {
-        match bytes {
-            Cow::Borrowed(bytes) => self.decode(bytes),
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => Ok(self.decode(bytes)?.into_owned().into()),
-        }
-    }
-
-    /// Decodes the `Cow` buffer, normalizes XML EOLs, preserves the lifetime
-    pub(crate) fn content<'b>(
-        &self,
-        bytes: &Cow<'b, [u8]>,
-        normalize_eol: impl Fn(&str) -> Cow<str>,
-    ) -> Result<Cow<'b, str>, EncodingError> {
-        match bytes {
-            Cow::Borrowed(bytes) => {
-                let text = self.decode(bytes)?;
-                match normalize_eol(&text) {
-                    // If text borrowed after normalization that means that it's not changed
-                    Cow::Borrowed(_) => Ok(text),
-                    Cow::Owned(s) => Ok(Cow::Owned(s)),
-                }
-            }
-            Cow::Owned(bytes) => {
-                let text = self.decode(bytes)?;
-                let text = normalize_eol(&text);
-                // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-                Ok(text.into_owned().into())
-            }
-        }
-    }
 }
 
 /// Decodes the provided bytes using the specified encoding.

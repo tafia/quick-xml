@@ -270,7 +270,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         // usize (because otherwise we panic at appending to the buffer before that point)
         let end = start + len as usize;
 
-        Ok(BytesText::wrap(&buf[start..end]))
+        let text = std::str::from_utf8(&buf[start..end]).expect("read_text buffer is valid UTF-8"); // temporary-#963
+        Ok(BytesText::wrap(text))
     }
 
     /// Private function to read until `>` is found. This function expects that

@@ -4,7 +4,6 @@
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
 use crate::de::Text;
-use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::resolve_predefined_entity;
 use crate::utils::{trim_xml_spaces, CowRef};
@@ -498,7 +497,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 pub struct SimpleTypeDeserializer<'de, 'a> {
     /// - In case of attribute contains escaped attribute value
     /// - In case of text contains unescaped text value
-    content: CowRef<'de, 'a, [u8]>,
+    content: CowRef<'de, 'a, str>,
     /// If `true`, `content` in escaped form and should be unescaped before use
     is_attr: bool,
     version: XmlVersion,
@@ -510,8 +509,8 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// It is assumed that `text` does not have entities.
     pub fn from_text(text: Cow<'de, str>) -> Self {
         let content = match text {
-            Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
-            Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
+            Cow::Borrowed(slice) => CowRef::Input(slice),
+            Cow::Owned(content) => CowRef::Owned(content),
         };
         Self::new(content, false, XmlVersion::Implicit1_0)
     }
@@ -529,7 +528,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// This constructor used internally to deserialize from attribute values.
     #[allow(clippy::ptr_arg)]
     pub(crate) fn from_attr(
-        value: &'a Cow<'de, [u8]>,
+        value: &'a Cow<'de, str>,
         range: Range<usize>,
         version: XmlVersion,
     ) -> Self {
@@ -542,7 +541,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
 
     /// Constructor for tests
     #[inline]
-    const fn new(content: CowRef<'de, 'a, [u8]>, is_attr: bool, version: XmlVersion) -> Self {
+    const fn new(content: CowRef<'de, 'a, str>, is_attr: bool, version: XmlVersion) -> Self {
         Self {
             content,
             is_attr,
@@ -550,24 +549,13 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         }
     }
 
-    /// Decodes raw bytes using the encoding specified.
-    /// The method will borrow if has the UTF-8 compatible representation.
+    /// Returns content as a string reference.
     #[inline]
     fn decode<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
-        let decoder = Decoder::utf8();
         Ok(match self.content {
-            CowRef::Input(content) => match decoder.decode(content)? {
-                Cow::Borrowed(content) => CowRef::Input(content),
-                Cow::Owned(content) => CowRef::Owned(content),
-            },
-            CowRef::Slice(content) => match decoder.decode(content)? {
-                Cow::Borrowed(content) => CowRef::Slice(content),
-                Cow::Owned(content) => CowRef::Owned(content),
-            },
-            CowRef::Owned(ref content) => match decoder.decode(content)? {
-                Cow::Borrowed(content) => CowRef::Slice(content),
-                Cow::Owned(content) => CowRef::Owned(content),
-            },
+            CowRef::Input(content) => CowRef::Input(content),
+            CowRef::Slice(content) => CowRef::Slice(content),
+            CowRef::Owned(ref content) => CowRef::Slice(content),
         })
     }
 

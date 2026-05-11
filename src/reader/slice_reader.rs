@@ -235,7 +235,10 @@ impl<'a> Reader<&'a [u8]> {
         let len = span.end - span.start;
         // SAFETY: `span` can only contain indexes up to usize::MAX because it
         // was created from offsets from a single &[u8] slice
-        Ok(BytesText::wrap(&buffer[0..len as usize]))
+        // Could use from_utf8_unchecked: buffer was validated during event parsing
+        let text =
+            std::str::from_utf8(&buffer[0..len as usize]).expect("read_text buffer is valid UTF-8");
+        Ok(BytesText::wrap(text))
     }
 }
 

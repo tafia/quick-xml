@@ -16,18 +16,11 @@ use serde::de::{Deserialize, Deserializer, Error, Visitor};
 use serde::ser::{Serialize, Serializer};
 
 #[allow(clippy::ptr_arg)]
-pub fn write_cow_string(f: &mut Formatter, cow_string: &Cow<[u8]>) -> fmt::Result {
+pub fn write_cow_string(f: &mut Formatter, cow_string: &Cow<str>) -> fmt::Result {
     match cow_string {
-        Cow::Owned(s) => {
-            write!(f, "Owned(")?;
-            write_byte_string(f, s)?;
-        }
-        Cow::Borrowed(s) => {
-            write!(f, "Borrowed(")?;
-            write_byte_string(f, s)?;
-        }
+        Cow::Owned(s) => write!(f, "Owned({s:?})"),
+        Cow::Borrowed(s) => write!(f, "Borrowed({s:?})"),
     }
-    write!(f, ")")
 }
 
 pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
@@ -341,38 +334,28 @@ pub const fn name_len(mut bytes: &[u8]) -> usize {
     len
 }
 
-/// Returns a byte slice with leading XML whitespace bytes removed.
+/// Returns a string slice with leading XML whitespace characters removed.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
-pub const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [first, rest @ ..] = bytes {
-        if is_whitespace(*first) {
-            bytes = rest;
-        } else {
-            break;
-        }
+pub fn trim_xml_start(s: &str) -> &str {
+    let trimmed = s.as_bytes().iter().position(|b| !is_whitespace(*b));
+    match trimmed {
+        Some(pos) => &s[pos..],
+        None => &s[s.len()..],
     }
-    bytes
 }
 
-/// Returns a byte slice with trailing XML whitespace bytes removed.
+/// Returns a string slice with trailing XML whitespace characters removed.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
-pub const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [rest @ .., last] = bytes {
-        if is_whitespace(*last) {
-            bytes = rest;
-        } else {
-            break;
-        }
+pub fn trim_xml_end(s: &str) -> &str {
+    let trimmed = s.as_bytes().iter().rposition(|b| !is_whitespace(*b));
+    match trimmed {
+        Some(pos) => &s[..pos + 1],
+        None => &s[..0],
     }
-    bytes
 }
 
 /// Returns a string slice with XML whitespace characters removed from both sides.
@@ -380,12 +363,7 @@ pub const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
 pub fn trim_xml_spaces(text: &str) -> &str {
-    let bytes = trim_xml_end(trim_xml_start(text.as_bytes()));
-    match core::str::from_utf8(bytes) {
-        Ok(s) => s,
-        // SAFETY: Removing XML space characters (subset of ASCII) from a `&str` does not invalidate UTF-8.
-        _ => unreachable!(),
-    }
+    trim_xml_end(trim_xml_start(text))
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -484,21 +462,21 @@ mod tests {
 
     #[test]
     fn trim_xml_start() {
-        assert_eq!(Bytes(super::trim_xml_start(b"")), Bytes(b""));
-        assert_eq!(Bytes(super::trim_xml_start(b"abc")), Bytes(b"abc"));
+        assert_eq!(super::trim_xml_start(""), "");
+        assert_eq!(super::trim_xml_start("abc"), "abc");
         assert_eq!(
-            Bytes(super::trim_xml_start(b"\r\n\t ab \t\r\nc \t\r\n")),
-            Bytes(b"ab \t\r\nc \t\r\n")
+            super::trim_xml_start("\r\n\t ab \t\r\nc \t\r\n"),
+            "ab \t\r\nc \t\r\n"
         );
     }
 
     #[test]
     fn trim_xml_end() {
-        assert_eq!(Bytes(super::trim_xml_end(b"")), Bytes(b""));
-        assert_eq!(Bytes(super::trim_xml_end(b"abc")), Bytes(b"abc"));
+        assert_eq!(super::trim_xml_end(""), "");
+        assert_eq!(super::trim_xml_end("abc"), "abc");
         assert_eq!(
-            Bytes(super::trim_xml_end(b"\r\n\t ab \t\r\nc \t\r\n")),
-            Bytes(b"\r\n\t ab \t\r\nc")
+            super::trim_xml_end("\r\n\t ab \t\r\nc \t\r\n"),
+            "\r\n\t ab \t\r\nc"
         );
     }
 }

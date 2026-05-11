@@ -92,6 +92,10 @@
   `BytesCData`, `BytesRef`) and `Attributes`. The `decoder()` method is no longer available
   on these types. Decode methods on events now always assume UTF-8 input.
   `Error::missed_end()` no longer takes a `Decoder` parameter.
+- [#963]: Event types (`BytesStart`, `BytesEnd`, `BytesText`, `BytesCData`, `BytesPI`,
+  `BytesRef`) now store `Cow<str>` internally instead of `Cow<[u8]>`. `into_inner()` on
+  `BytesText`, `BytesCData`, `BytesPI`, and `BytesRef` now returns `Cow<str>`.
+  `BytesStart::set_name()` now takes `&str` instead of `&[u8]`.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 
