@@ -34,7 +34,7 @@ async fn test_sample() {
         );
         match reader.read_event_into_async(&mut buf).await {
             Ok(Start(_)) => count += 1,
-            Ok(Decl(e)) => assert_eq!(e.version().unwrap(), b"1.0".as_ref()),
+            Ok(Decl(e)) => assert_eq!(e.version().unwrap().as_ref(), "1.0"),
             Ok(Eof) => break,
             Ok(_) => (),
             Err(e) => panic!("{} at {}", e, reader.error_position()),

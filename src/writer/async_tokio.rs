@@ -62,7 +62,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     pub async fn write_indent_async(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").await?;
-            self.writer.write_all(i.current()).await?;
+            self.writer.write_all(i.current().as_bytes()).await?;
         }
         Ok(())
     }
@@ -82,7 +82,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n").await?;
-                self.writer.write_all(i.current()).await?;
+                self.writer.write_all(i.current().as_bytes()).await?;
             }
         }
         self.write_async(before).await?;

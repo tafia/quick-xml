@@ -44,7 +44,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Deref;
-use std::str::from_utf8;
 
 use crate::encoding::EncodingError;
 use crate::errors::{Error, IllFormedError};
@@ -261,12 +260,12 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes<'_> {
-        Attributes::wrap(self.buf.as_bytes(), self.name_len, false)
+        Attributes::wrap(&self.buf, self.name_len, false)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes<'_> {
-        Attributes::wrap(self.buf.as_bytes(), self.name_len, true)
+        Attributes::wrap(&self.buf, self.name_len, true)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
@@ -296,7 +295,7 @@ impl<'a> BytesStart<'a> {
         s.push_str(attr.key.as_ref());
         s.push_str("=\"");
         // FIXME: need to escape attribute content
-        s.push_str(from_utf8(&attr.value).expect("attribute values are valid UTF-8")); // temporary-#963
+        s.push_str(&attr.value);
         s.push('"');
     }
 
@@ -305,10 +304,9 @@ impl<'a> BytesStart<'a> {
         self.buf.to_mut().push('\n');
     }
 
-    /// Adds indentation bytes in existing element
-    pub(crate) fn push_indent(&mut self, indent: &[u8]) {
-        let indent_str = from_utf8(indent).expect("indent bytes are valid UTF-8"); // temporary-#963
-        self.buf.to_mut().push_str(indent_str);
+    /// Adds indentation in existing element
+    pub(crate) fn push_indent(&mut self, indent: &str) {
+        self.buf.to_mut().push_str(indent);
     }
 }
 
@@ -1109,7 +1107,7 @@ impl<'a> BytesPI<'a> {
     /// for attr in instruction.attributes() {
     ///     assert_eq!(attr, Ok(Attribute {
     ///         key: QName("href"),
-    ///         value: Cow::Borrowed(b"style.css"),
+    ///         value: Cow::Borrowed("style.css"),
     ///     }));
     /// }
     /// ```
@@ -1249,11 +1247,11 @@ impl<'a> BytesDecl<'a> {
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap(), b"1.1".as_ref());
+    /// assert_eq!(decl.version().unwrap().as_ref(), "1.1");
     ///
     /// // <?xml version='1.0' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap(), b"1.0".as_ref());
+    /// assert_eq!(decl.version().unwrap().as_ref(), "1.0");
     ///
     /// // <?xml encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
@@ -1278,7 +1276,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn version(&self) -> Result<Cow<'_, [u8]>, Error> {
+    pub fn version(&self) -> Result<Cow<'_, str>, Error> {
         // The version *must* be the first thing in the declaration.
         match self.content.attributes().with_checks(false).next() {
             Some(Ok(a)) if a.key.as_ref() == "version" => Ok(a.value),
@@ -1318,20 +1316,20 @@ impl<'a> BytesDecl<'a> {
     /// // <?xml encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
     /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, "utf-8"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='something_WRONG' encoding='utf-8'", 0));
     /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, "something_WRONG"),
     ///     _ => assert!(false),
     /// }
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<'_, [u8]>, AttrError>> {
+    pub fn encoding(&self) -> Option<Result<Cow<'_, str>, AttrError>> {
         self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
@@ -1360,20 +1358,20 @@ impl<'a> BytesDecl<'a> {
     /// // <?xml standalone='yes'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='yes'", 0));
     /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, "yes"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='something_WRONG' encoding='utf-8'", 0));
     /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
+    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, "something_WRONG"),
     ///     _ => assert!(false),
     /// }
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<'_, [u8]>, AttrError>> {
+    pub fn standalone(&self) -> Option<Result<Cow<'_, str>, AttrError>> {
         self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
@@ -1439,8 +1437,8 @@ impl<'a> BytesDecl<'a> {
     pub fn xml_version(&self) -> Result<XmlVersion, Error> {
         let v = self.version()?;
         match v.as_ref() {
-            b"1.0" => Ok(XmlVersion::Explicit1_0),
-            b"1.1" => Ok(XmlVersion::Explicit1_1),
+            "1.0" => Ok(XmlVersion::Explicit1_0),
+            "1.1" => Ok(XmlVersion::Explicit1_1),
             _ => Err(Error::IllFormed(IllFormedError::UnknownVersion)),
         }
     }
@@ -1455,7 +1453,7 @@ impl<'a> BytesDecl<'a> {
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())
-            .and_then(|e| Encoding::for_label(&e))
+            .and_then(|e| Encoding::for_label(e.as_bytes()))
     }
 
     /// Converts the event into an owned event.

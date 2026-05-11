@@ -54,7 +54,7 @@ fn parse_document_from_str(doc: &str) -> XmlResult<()> {
             }
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    black_box(attr?.decoded_and_normalized_value(version, r.decoder())?);
+                    black_box(attr?.normalized_value(version)?);
                 }
             }
             Event::Text(e) => {
@@ -82,7 +82,7 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
             }
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    black_box(attr?.decoded_and_normalized_value(version, r.decoder())?);
+                    black_box(attr?.normalized_value(version)?);
                 }
             }
             Event::Text(e) => {
@@ -111,7 +111,7 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 black_box(resolved_ns);
                 for attr in e.attributes() {
-                    black_box(attr?.decoded_and_normalized_value(version, r.decoder())?);
+                    black_box(attr?.normalized_value(version)?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
@@ -142,7 +142,7 @@ fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 black_box(resolved_ns);
                 for attr in e.attributes() {
-                    black_box(attr?.decoded_and_normalized_value(version, r.decoder())?);
+                    black_box(attr?.normalized_value(version)?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {

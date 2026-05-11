@@ -727,9 +727,7 @@ impl NamespaceResolver {
                         ));
                     }
                     count += 1;
-                    let ns_str =
-                        std::str::from_utf8(&v).expect("namespace buffer contains valid UTF-8");
-                    self.add(prefix, Namespace(ns_str))?;
+                    self.add(prefix, Namespace(&v))?;
                 }
             } else {
                 break;
