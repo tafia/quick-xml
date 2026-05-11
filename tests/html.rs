@@ -55,10 +55,8 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
                 // Declaration could change decoder
                 decoder = reader.decoder();
 
-                let version_cow = e.version().unwrap();
-                let version = decoder.decode(version_cow.as_ref()).unwrap();
-                let encoding_cow = e.encoding().unwrap().unwrap();
-                let encoding = decoder.decode(encoding_cow.as_ref()).unwrap();
+                let version = e.version().unwrap();
+                let encoding = e.encoding().unwrap().unwrap();
                 format!("StartDocument({}, {})", version, encoding)
             }
             Ok((_, Event::PI(e))) => {
@@ -125,15 +123,14 @@ fn namespace_name(n: ResolveResult, name: QName, _decoder: Decoder) -> String {
     }
 }
 
-fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String, String> {
+fn make_attrs(e: &BytesStart, _decoder: Decoder) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {
             Ok(a) => {
                 if a.key.as_namespace_binding().is_none() {
                     let key = a.key.as_ref();
-                    let value = decoder.decode(a.value.as_ref()).unwrap();
-                    let unescaped_value = unescape(&value).unwrap();
+                    let unescaped_value = unescape(&a.value).unwrap();
                     atts.push(format!(
                         "{}=\"{}\"",
                         key,

@@ -79,6 +79,11 @@
 ### Misc Changes
 
 - [#963]: MSRV bumped to 1.86 (April 2025)
+- [#963]: Deprecated `Attribute` methods that take a `Decoder` parameter, since
+  attribute values are now always valid UTF-8: `decoded_and_normalized_value()`,
+  `decoded_and_normalized_value_with()`, `decode_and_unescape_value()`, and
+  `decode_and_unescape_value_with()`. Use `normalized_value()` and
+  `normalized_value_with()` instead.
 
 ### Breaking Changes
 
@@ -105,6 +110,10 @@
   Content is already available as `&str` via `Deref`. The `xml10_content()`,
   `xml11_content()`, `xml_content()`, and `html_content()` methods now return
   `Cow<str>` directly instead of `Result<Cow<str>, EncodingError>`.
+- [#963]: `Attribute::value` is now `Cow<'a, str>` instead of `Cow<'a, [u8]>`.
+  The `From<(&[u8], &[u8])>` impl has been removed.
+- [#963]: `BytesDecl::version()`, `encoding()`, and `standalone()` now return
+  `Cow<'_, str>` instead of `Cow<'_, [u8]>`.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 

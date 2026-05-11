@@ -37,7 +37,7 @@ fn issue115() {
     match r.read_event() {
         Ok(Event::Start(e)) if e.name() == QName("tag1") => {
             let v = e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>();
-            assert_eq!(v[0].clone().into_owned(), b"line 1\nline 2");
+            assert_eq!(v[0].as_ref(), "line 1\nline 2");
         }
         _ => (),
     }

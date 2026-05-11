@@ -97,7 +97,7 @@ impl<'i> Attributes<'i> {
 pub struct AttributesDeserializer<'i> {
     iter: Attributes<'i>,
     /// The value of the attribute, read in last call to `next_key_seed`.
-    value: Option<Cow<'i, [u8]>>,
+    value: Option<Cow<'i, str>>,
     /// This prefix will be stripped from struct fields before match against attribute name.
     prefix: &'static str,
     /// Buffer to store attribute name as a field name exposed to serde consumers.
@@ -152,17 +152,7 @@ impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
     {
         match self.value.take() {
             Some(value) => {
-                let value_str = match value {
-                    Cow::Borrowed(b) => Cow::Borrowed(
-                        std::str::from_utf8(b).expect("attribute values are valid UTF-8"), // temporary-#963
-                    ),
-                    Cow::Owned(b) => {
-                        Cow::Owned(String::from_utf8(b).expect("attribute values are valid UTF-8"))
-                        // temporary-#963
-                    }
-                };
-                let de =
-                    SimpleTypeDeserializer::from_attr(&value_str, 0..value_str.len(), self.version);
+                let de = SimpleTypeDeserializer::from_attr(&value, 0..value.len(), self.version);
                 seed.deserialize(de)
             }
             None => Err(DeError::KeyNotRead),

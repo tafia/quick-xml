@@ -115,10 +115,7 @@ mod default_namespace {
                 let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
-        assert_eq!(
-            attrs.next(),
-            Some((Unbound, "attr", Cow::Borrowed(&b"val"[..])))
-        );
+        assert_eq!(attrs.next(), Some((Unbound, "attr", Cow::Borrowed("val"))));
         assert_eq!(attrs.next(), None);
 
         let it = r.resolver().bindings();
@@ -288,10 +285,7 @@ mod default_namespace {
                 });
             // the attribute should _not_ have a namespace name. The default namespace does not
             // apply to attributes.
-            assert_eq!(
-                attrs.next(),
-                Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
-            );
+            assert_eq!(attrs.next(), Some((Unbound, "att1", Cow::Borrowed("a"))));
             assert_eq!(attrs.next(), None);
 
             let it = r.resolver().bindings();
@@ -357,10 +351,7 @@ mod default_namespace {
                 });
             // the attribute should _not_ have a namespace name. The default namespace does not
             // apply to attributes.
-            assert_eq!(
-                attrs.next(),
-                Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
-            );
+            assert_eq!(attrs.next(), Some((Unbound, "att1", Cow::Borrowed("a"))));
             assert_eq!(attrs.next(), None);
         }
 
@@ -406,16 +397,13 @@ fn attributes_empty_ns() {
             let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
             (opt_ns, local_name.into_inner(), value)
         });
-    assert_eq!(
-        attrs.next(),
-        Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
-    );
+    assert_eq!(attrs.next(), Some((Unbound, "att1", Cow::Borrowed("a"))));
     assert_eq!(
         attrs.next(),
         Some((
             Bound(Namespace("urn:example:r")),
             "att2",
-            Cow::Borrowed(&b"b"[..])
+            Cow::Borrowed("b")
         ))
     );
     assert_eq!(attrs.next(), None);
@@ -452,16 +440,13 @@ fn attributes_empty_ns_expanded() {
                 let (opt_ns, local_name) = r.resolver().resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
-        assert_eq!(
-            attrs.next(),
-            Some((Unbound, "att1", Cow::Borrowed(&b"a"[..])))
-        );
+        assert_eq!(attrs.next(), Some((Unbound, "att1", Cow::Borrowed("a"))));
         assert_eq!(
             attrs.next(),
             Some((
                 Bound(Namespace("urn:example:r")),
                 "att2",
-                Cow::Borrowed(&b"b"[..])
+                Cow::Borrowed("b")
             ))
         );
         assert_eq!(attrs.next(), None);

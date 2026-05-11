@@ -217,7 +217,7 @@ impl<W> Writer<W> {
             writer: self,
             start_tag: BytesStart::new(name),
             state: AttributeIndent::NoneAttributesWritten,
-            spaces: Vec::new(),
+            spaces: String::new(),
         }
     }
 }
@@ -317,7 +317,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n")?;
-                self.writer.write_all(i.current())?;
+                self.writer.write_all(i.current().as_bytes())?;
             }
         }
         self.write(before)?;
@@ -340,7 +340,7 @@ impl<W: Write> Writer<W> {
     pub fn write_indent(&mut self) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n")?;
-            self.writer.write_all(i.current())?;
+            self.writer.write_all(i.current().as_bytes())?;
         }
         Ok(())
     }
@@ -453,7 +453,7 @@ pub struct ElementWriter<'a, W> {
     start_tag: BytesStart<'a>,
     state: AttributeIndent,
     /// Contains spaces used to write space indents of attributes
-    spaces: Vec<u8>,
+    spaces: String,
 }
 
 impl<'a, W> ElementWriter<'a, W> {
@@ -570,7 +570,7 @@ impl<'a, W> ElementWriter<'a, W> {
                 // New line was already written
                 AttributeIndent::WriteSpaces(indent) => {
                     if self.spaces.len() < indent {
-                        self.spaces.resize(indent, b' ');
+                        self.spaces = " ".repeat(indent);
                     }
                     self.start_tag.push_indent(&self.spaces[..indent]);
                     self.start_tag.push_attr(attr);
@@ -671,24 +671,25 @@ pub(crate) struct Indentation {
     /// todo: this is an awkward fit as it has no impact on indentation logic, but it is
     /// only applicable when an indentation exists. Potentially refactor later
     should_line_break: bool,
-    /// The character code to be used for indentations (e.g. ` ` or `\t`)
-    indent_char: u8,
+    /// The character to be used for indentations (e.g. ` ` or `\t`)
+    indent_char: char,
     /// How many instances of the indent character ought to be used for each level of indentation
     indent_size: usize,
-    /// Used as a cache for the bytes used for indentation
-    indents: Vec<u8>,
+    /// Used as a cache for the string used for indentation
+    indents: String,
     /// The current amount of indentation
     current_indent_len: usize,
 }
 
 impl Indentation {
     pub fn new(indent_char: u8, indent_size: usize) -> Self {
+        let indent_char = char::from(indent_char);
         Self {
             should_line_break: false,
             indent_char,
             indent_size,
-            indents: vec![indent_char; 128],
-            current_indent_len: 0, // invariant - needs to remain less than indents.len()
+            indents: std::iter::repeat(indent_char).take(128).collect(),
+            current_indent_len: 0,
         }
     }
 
@@ -704,20 +705,20 @@ impl Indentation {
     }
 
     /// Returns indent string for current level
-    pub fn current(&self) -> &[u8] {
+    pub fn current(&self) -> &str {
         &self.indents[..self.current_indent_len]
     }
 
     /// Returns indent with current indent plus additional indent
-    pub fn additional(&mut self, additional_indent: usize) -> &[u8] {
+    pub fn additional(&mut self, additional_indent: usize) -> &str {
         let new_len = self.current_indent_len + additional_indent;
         self.ensure(new_len);
         &self.indents[..new_len]
     }
 
     fn ensure(&mut self, new_len: usize) {
-        if self.indents.len() < new_len {
-            self.indents.resize(new_len, self.indent_char);
+        while self.indents.len() < new_len {
+            self.indents.push(self.indent_char);
         }
     }
 }

@@ -32,8 +32,7 @@ fn fuzz_101() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| {
-                        a.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
-                            .is_err()
+                        a.normalized_value(XmlVersion::Implicit1_0).is_err()
                     }) {
                         break;
                     }

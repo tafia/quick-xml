@@ -551,11 +551,11 @@ impl<'i> Indent<'i> {
             Self::None => {}
             Self::Owned(i) => {
                 writer.write_char('\n')?;
-                writer.write_str(from_utf8(i.current())?)?;
+                writer.write_str(i.current())?;
             }
             Self::Borrow(i) => {
                 writer.write_char('\n')?;
-                writer.write_str(from_utf8(i.current())?)?;
+                writer.write_str(i.current())?;
             }
         }
         Ok(())

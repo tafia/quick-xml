@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 use quick_xml::events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event::*};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -93,19 +91,19 @@ fn test_xml_decl() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => assert_eq!(
-                    &*v,
-                    b"1.0",
+                    v.as_ref(),
+                    "1.0",
                     "expecting version '1.0', got '{:?}",
-                    from_utf8(&v)
+                    v.as_ref()
                 ),
                 Err(e) => panic!("{:?}", e),
             }
             match e.encoding() {
                 Some(Ok(v)) => assert_eq!(
-                    &*v,
-                    b"utf-8",
+                    v.as_ref(),
+                    "utf-8",
                     "expecting encoding 'utf-8', got '{:?}",
-                    from_utf8(&v)
+                    v.as_ref()
                 ),
                 Some(Err(e)) => panic!("{:?}", e),
                 None => panic!("cannot find encoding"),
