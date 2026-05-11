@@ -154,7 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut attrs = e.attributes();
 
         let label = attrs.next().unwrap()?;
-        assert_eq!(label.key, QName(b"label"));
+        assert_eq!(label.key, QName("label"));
         assert_eq!(
             label.decoded_and_normalized_value_with(
                 XmlVersion::Implicit1_0,
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut attrs = e.attributes();
 
         let attr = attrs.next().unwrap()?;
-        assert_eq!(attr.key, QName(b"attr"));
+        assert_eq!(attr.key, QName("attr"));
         assert_eq!(
             attr.decoded_and_normalized_value_with(
                 XmlVersion::Implicit1_0,

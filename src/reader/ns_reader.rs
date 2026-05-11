@@ -167,8 +167,8 @@ impl<R: BufRead> NsReader<R> {
     ///             count += 1;
     ///             let (ns, local) = reader.resolver().resolve_element(e.name());
     ///             match local.as_ref() {
-    ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
-    ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
+    ///                 "tag1" => assert_eq!(ns, Bound(Namespace("www.xxxx"))),
+    ///                 "tag2" => assert_eq!(ns, Bound(Namespace("www.yyyy"))),
     ///                 _ => unreachable!(),
     ///             }
     ///         }
@@ -221,13 +221,13 @@ impl<R: BufRead> NsReader<R> {
     /// let mut txt = Vec::new();
     /// loop {
     ///     match reader.read_resolved_event_into(&mut buf).unwrap() {
-    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///         (Bound(Namespace("www.xxxx")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///             assert_eq!(e.local_name(), QName("tag1").into());
     ///         }
-    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///         (Bound(Namespace("www.yyyy")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///             assert_eq!(e.local_name(), QName("tag2").into());
     ///         }
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
@@ -324,7 +324,7 @@ impl<R: BufRead> NsReader<R> {
     /// reader.config_mut().trim_text(true);
     /// let mut buf = Vec::new();
     ///
-    /// let ns = Namespace(b"namespace 1");
+    /// let ns = Namespace("namespace 1");
     /// let start = BytesStart::from_content(r#"outer xmlns="namespace 1""#, 5);
     /// let end   = start.to_end().into_owned();
     ///
@@ -496,8 +496,8 @@ impl<'i> NsReader<&'i [u8]> {
     ///             count += 1;
     ///             let (ns, local) = reader.resolver().resolve_element(e.name());
     ///             match local.as_ref() {
-    ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
-    ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
+    ///                 "tag1" => assert_eq!(ns, Bound(Namespace("www.xxxx"))),
+    ///                 "tag2" => assert_eq!(ns, Bound(Namespace("www.yyyy"))),
     ///                 _ => unreachable!(),
     ///             }
     ///         }
@@ -553,13 +553,13 @@ impl<'i> NsReader<&'i [u8]> {
     /// let mut txt = Vec::new();
     /// loop {
     ///     match reader.read_resolved_event().unwrap() {
-    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///         (Bound(Namespace("www.xxxx")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///             assert_eq!(e.local_name(), QName("tag1").into());
     ///         }
-    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///         (Bound(Namespace("www.yyyy")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///             assert_eq!(e.local_name(), QName("tag2").into());
     ///         }
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
@@ -645,7 +645,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// "#);
     /// reader.config_mut().trim_text(true);
     ///
-    /// let ns = Namespace(b"namespace 1");
+    /// let ns = Namespace("namespace 1");
     /// let start = BytesStart::from_content(r#"outer xmlns="namespace 1""#, 5);
     /// let end   = start.to_end().into_owned();
     ///

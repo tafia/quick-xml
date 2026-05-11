@@ -215,7 +215,7 @@ impl<'a> BytesStart<'a> {
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
     pub fn name(&self) -> QName<'_> {
-        QName(&self.buf[..self.name_len])
+        QName(from_utf8(&self.buf[..self.name_len]).expect("event names are valid UTF-8"))
     }
 
     /// Gets the undecoded raw local tag name (excluding namespace) as present
@@ -307,7 +307,7 @@ impl<'a> BytesStart<'a> {
     ) -> Result<Option<Attribute<'a>>, AttrError> {
         for a in self.attributes().with_checks(false) {
             let a = a?;
-            if a.key.as_ref() == attr_name.as_ref() {
+            if a.key.as_ref().as_bytes() == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
@@ -317,7 +317,7 @@ impl<'a> BytesStart<'a> {
     /// Adds an attribute to this element.
     pub(crate) fn push_attr<'b>(&mut self, attr: Attribute<'b>) {
         let bytes = self.buf.to_mut();
-        bytes.extend_from_slice(attr.key.as_ref());
+        bytes.extend_from_slice(attr.key.as_ref().as_bytes());
         bytes.extend_from_slice(b"=\"");
         // FIXME: need to escape attribute content
         bytes.extend_from_slice(attr.value.as_ref());
@@ -393,7 +393,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 /// reader.read_event().unwrap(); // Skip `<element>`
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::End(event.borrow()));
-/// assert_eq!(event.name().as_ref(), content.as_bytes());
+/// assert_eq!(event.name().as_ref(), content);
 /// // deref coercion of &BytesEnd to &[u8]
 /// assert_eq!(&event as &[u8], content.as_bytes());
 /// // AsRef<[u8]> for &T + deref coercion
@@ -442,7 +442,7 @@ impl<'a> BytesEnd<'a> {
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
     pub fn name(&self) -> QName<'_> {
-        QName(&self.name)
+        QName(from_utf8(&self.name).expect("event names are valid UTF-8"))
     }
 
     /// Gets the undecoded raw local tag name (excluding namespace) as present
@@ -474,7 +474,7 @@ impl<'a> Deref for BytesEnd<'a> {
 impl<'a> From<QName<'a>> for BytesEnd<'a> {
     #[inline]
     fn from(name: QName<'a>) -> Self {
-        Self::wrap(name.into_inner().into())
+        Self::wrap(Cow::Borrowed(name.into_inner().as_bytes()))
     }
 }
 
@@ -1139,7 +1139,7 @@ impl<'a> BytesPI<'a> {
     /// ```
     #[inline]
     pub fn target(&self) -> &[u8] {
-        self.content.name().0
+        self.content.name().0.as_bytes()
     }
 
     /// Content of the processing instruction. Contains everything between target
@@ -1184,7 +1184,7 @@ impl<'a> BytesPI<'a> {
     /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
     /// for attr in instruction.attributes() {
     ///     assert_eq!(attr, Ok(Attribute {
-    ///         key: QName(b"href"),
+    ///         key: QName("href"),
     ///         value: Cow::Borrowed(b"style.css"),
     ///     }));
     /// }
@@ -1353,12 +1353,10 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<Cow<'_, [u8]>, Error> {
         // The version *must* be the first thing in the declaration.
         match self.content.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
+            Some(Ok(a)) if a.key.as_ref() == "version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref())
-                    .map_err(|_| IllFormedError::MissingDeclVersion(None))?
-                    .to_string();
+                let found = a.key.as_ref().to_string();
                 Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(
                     found,
                 ))))
@@ -1918,21 +1916,21 @@ mod test {
     fn bytestart_create() {
         let b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
     }
 
     #[test]
     fn bytestart_set_name() {
         let mut b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
         assert_eq!(b.attributes_raw(), b"");
         b.push_attribute(("x", "a"));
         assert_eq!(b.len(), 10);
         assert_eq!(b.attributes_raw(), b" x=\"a\"");
         b.set_name(b"g");
         assert_eq!(b.len(), 7);
-        assert_eq!(b.name(), QName(b"g"));
+        assert_eq!(b.name(), QName("g"));
     }
 
     #[test]
@@ -1943,6 +1941,6 @@ mod test {
         b.clear_attributes();
         assert!(b.attributes().next().is_none());
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
     }
 }

@@ -10,7 +10,7 @@ fn main() {
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"tag2" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "tag2" => {
                 // read_text_into for buffered readers not implemented
                 let txt = reader
                     .read_text(e.name())

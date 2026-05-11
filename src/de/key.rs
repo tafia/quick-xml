@@ -22,13 +22,10 @@ macro_rules! deserialize_num {
     };
 }
 
-/// Decodes raw bytes using the deserializer encoding.
-/// The method will borrow if encoding is UTF-8 compatible and `name` contains
-/// only UTF-8 compatible characters (usually only ASCII characters).
+/// Extracts the local name from a qualified name as a string slice.
 #[inline]
-fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, DeError> {
-    let local = name.local_name();
-    Ok(decoder.decode(local.into_inner())?)
+fn local_name_str<'n>(name: QName<'n>) -> &'n str {
+    name.local_name().into_inner()
 }
 
 /// A deserializer for xml names of elements and attributes.
@@ -83,22 +80,22 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an attribute
     pub fn from_attr(
         name: QName<'d>,
-        decoder: Decoder,
+        _decoder: Decoder,
         key_buf: &'d mut String,
     ) -> Result<Self, DeError> {
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         if name.as_namespace_binding().is_some() {
-            decoder.decode_into(name.into_inner(), key_buf)?;
+            key_buf.push_str(name.as_ref());
         } else {
             // https://github.com/tafia/quick-xml/issues/841
             // we also want to map to the full name for `xml:xxx`, because `xml:xxx` attributes
             // can apper only in this literal form, as `xml` prefix cannot be redeclared or unbound
             let (local, prefix_opt) = name.decompose();
             if prefix_opt.map_or(false, |prefix| prefix.is_xml()) {
-                decoder.decode_into(name.into_inner(), key_buf)?;
+                key_buf.push_str(name.as_ref());
             } else {
-                decoder.decode_into(local.into_inner(), key_buf)?;
+                key_buf.push_str(local.as_ref());
             }
         };
 
@@ -110,14 +107,16 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an element
     pub fn from_elem(start: &'d BytesStart<'i>) -> Result<Self, DeError> {
         let local = match start.buf {
-            Cow::Borrowed(b) => match decode_name(QName(&b[..start.name_len]), start.decoder())? {
-                Cow::Borrowed(borrowed) => CowRef::Input(borrowed),
-                Cow::Owned(owned) => CowRef::Owned(owned),
-            },
-            Cow::Owned(ref o) => match decode_name(QName(&o[..start.name_len]), start.decoder())? {
-                Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
-                Cow::Owned(owned) => CowRef::Owned(owned),
-            },
+            Cow::Borrowed(b) => {
+                let name_str = std::str::from_utf8(&b[..start.name_len]) // temporary-#963
+                    .expect("element names are valid UTF-8");
+                CowRef::Input(local_name_str(QName(name_str)))
+            }
+            Cow::Owned(ref o) => {
+                let name_str = std::str::from_utf8(&o[..start.name_len]) // temporary-#963
+                    .expect("element names are valid UTF-8");
+                CowRef::Slice(local_name_str(QName(name_str)))
+            }
         };
 
         Ok(Self { name: local })

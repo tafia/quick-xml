@@ -30,13 +30,11 @@ fn main() -> Result<(), quick_xml::Error> {
             }
             Ok(Event::Start(ref e)) => {
                 let name = e.name();
-                let name = std::str::from_utf8(name.as_ref()).unwrap();
-                println!("start: <{}>", name);
+                println!("start: <{}>", name.as_ref());
 
                 for attr in e.attributes().flatten() {
-                    let key = std::str::from_utf8(attr.key.as_ref()).unwrap();
                     let val = attr.normalized_value(version)?;
-                    println!("  {}={:?}", key, val);
+                    println!("  {}={:?}", attr.key.as_ref(), val);
                 }
             }
             Ok(Event::Text(e)) => {
@@ -45,8 +43,7 @@ fn main() -> Result<(), quick_xml::Error> {
             }
             Ok(Event::End(ref e)) => {
                 let name = e.name();
-                let name = std::str::from_utf8(name.as_ref()).unwrap();
-                println!("end:   </{}>", name);
+                println!("end:   </{}>", name.as_ref());
             }
             Ok(Event::Eof) => break,
             Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),

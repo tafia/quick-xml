@@ -62,7 +62,7 @@ mod read_to_end {
             Start(BytesStart::new("tag"))
         );
         assert_eq!(
-            r.read_to_end_into_async(QName(b"tag"), &mut buf)
+            r.read_to_end_into_async(QName("tag"), &mut buf)
                 .await
                 .unwrap(),
             5..11
@@ -82,7 +82,7 @@ mod read_to_end {
             Start(BytesStart::new("tag"))
         );
         assert_eq!(
-            r.read_to_end_into_async(QName(b"tag"), &mut buf)
+            r.read_to_end_into_async(QName("tag"), &mut buf)
                 .await
                 .unwrap(),
             5..16
@@ -166,7 +166,7 @@ async fn issue751() {
                 starts += 1;
                 assert_eq!(
                     e.name(),
-                    QName(b"content"),
+                    QName("content"),
                     "starts: {starts}, ends: {ends}, texts: {texts}"
                 );
             }
@@ -174,7 +174,7 @@ async fn issue751() {
                 ends += 1;
                 assert_eq!(
                     e.name(),
-                    QName(b"content"),
+                    QName("content"),
                     "starts: {starts}, ends: {ends}, texts: {texts}"
                 );
             }

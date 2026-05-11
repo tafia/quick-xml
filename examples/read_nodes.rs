@@ -78,11 +78,11 @@ impl Translation {
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
-                b"Language" => {
+                "Language" => {
                     lang =
                         a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
                 }
-                b"Tag" => {
+                "Tag" => {
                     tag =
                         a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())?
                 }
@@ -94,7 +94,7 @@ impl Translation {
 
         if let Event::Start(ref e) = event {
             let name = e.name();
-            if name == QName(b"Text") {
+            if name == QName("Text") {
                 // note: `read_text` does not support content as CDATA
                 let text_content = reader.read_text(e.name())?;
                 Ok(Translation {
@@ -104,10 +104,7 @@ impl Translation {
                 })
             } else {
                 dbg!("Expected Event::Start for Text, got: {:?}", &event);
-                let name_string = reader
-                    .decoder()
-                    .decode(name.as_ref())
-                    .map_err(quick_xml::Error::Encoding)?;
+                let name_string = name.as_ref();
                 Err(AppError::NoText(name_string.into()))
             }
         } else {
@@ -141,7 +138,7 @@ fn main() -> Result<(), AppError> {
 
         match event {
             Event::Start(element) => match element.name().as_ref() {
-                b"DefaultSettings" => {
+                "DefaultSettings" => {
                     // Note: real app would handle errors with good defaults or halt program with nice message
                     // This illustrates decoding an attribute's key and value with error handling
                     settings = element
@@ -149,12 +146,7 @@ fn main() -> Result<(), AppError> {
                         .map(|attr_result| {
                             match attr_result {
                                 Ok(a) => {
-                                    let key = reader.decoder().decode(a.key.local_name().as_ref())
-                                        .or_else(|err| {
-                                            dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
-                                            Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
-                                        })
-                                        .unwrap().to_string();
+                                    let key = a.key.local_name().as_ref().to_string();
                                     let value = a.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder()).or_else(|err| {
                                             dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
                                             Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
@@ -172,7 +164,7 @@ fn main() -> Result<(), AppError> {
                     assert_eq!(settings["Greeting"], "HELLO");
                     reader.read_to_end(element.name())?;
                 }
-                b"Translation" => {
+                "Translation" => {
                     translations.push(Translation::new_from_element(&mut reader, element)?);
                 }
                 _ => (),
