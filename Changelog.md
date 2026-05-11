@@ -98,6 +98,9 @@
   `BytesRef`) now store `Cow<str>` internally instead of `Cow<[u8]>`. `into_inner()` on
   `BytesText`, `BytesCData`, `BytesPI`, and `BytesRef` now returns `Cow<str>`.
   `BytesStart::set_name()` now takes `&str` instead of `&[u8]`.
+- [#963]: All event types and the `Event` enum now implement `Deref<Target = str>`
+  instead of `Deref<Target = [u8]>`. Explicit `AsRef<str>` impls are provided to
+  avoid ambiguity.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 

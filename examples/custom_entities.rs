@@ -71,7 +71,7 @@ impl<'i> MyReader<'i> {
                             self.readers.push_back(reader);
                             return Ok(Event::Text(BytesText::from_escaped(ch.to_string())));
                         }
-                        let mut r = Reader::from_reader(self.resolve(&e)?);
+                        let mut r = Reader::from_reader(self.resolve(e.as_bytes())?);
                         *r.config_mut() = reader.config().clone();
 
                         self.readers.push_back(reader);

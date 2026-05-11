@@ -1847,7 +1847,7 @@ mod resolve {
         fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
             self.capture_called = true;
 
-            assert_eq!(doctype.as_ref(), br#"dict[ <!ENTITY unc "unclassified"> ]"#);
+            assert_eq!(doctype.as_ref(), r#"dict[ <!ENTITY unc "unclassified"> ]"#);
 
             Ok(())
         }

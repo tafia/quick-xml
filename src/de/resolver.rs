@@ -39,7 +39,7 @@ use crate::events::BytesText;
 ///     type Error = FromUtf8Error;
 ///
 ///     fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
-///         for cap in self.re.captures_iter(&doctype) {
+///         for cap in self.re.captures_iter(doctype.as_ref().as_bytes()) {
 ///             self.map.insert(
 ///                 String::from_utf8(cap[1].to_vec())?,
 ///                 String::from_utf8(cap[2].to_vec())?,

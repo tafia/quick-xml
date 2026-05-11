@@ -13,7 +13,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
         let mut next_should_line_break = true;
         let result = match event.into() {
             Event::Start(e) => {
-                let result = self.write_wrapped_async(b"<", &e, b">").await;
+                let result = self.write_wrapped_async(b"<", e.as_bytes(), b">").await;
                 if let Some(i) = self.indent.as_mut() {
                     i.grow();
                 }
@@ -23,24 +23,30 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
-                self.write_wrapped_async(b"</", &e, b">").await
+                self.write_wrapped_async(b"</", e.as_bytes(), b">").await
             }
-            Event::Empty(e) => self.write_wrapped_async(b"<", &e, b"/>").await,
+            Event::Empty(e) => self.write_wrapped_async(b"<", e.as_bytes(), b"/>").await,
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write_async(&e).await
+                self.write_async(e.as_bytes()).await
             }
-            Event::Comment(e) => self.write_wrapped_async(b"<!--", &e, b"-->").await,
+            Event::Comment(e) => {
+                self.write_wrapped_async(b"<!--", e.as_bytes(), b"-->")
+                    .await
+            }
             Event::CData(e) => {
                 next_should_line_break = false;
                 self.write_async(b"<![CDATA[").await?;
-                self.write_async(&e).await?;
+                self.write_async(e.as_bytes()).await?;
                 self.write_async(b"]]>").await
             }
-            Event::Decl(e) => self.write_wrapped_async(b"<?", &e, b"?>").await,
-            Event::PI(e) => self.write_wrapped_async(b"<?", &e, b"?>").await,
-            Event::DocType(e) => self.write_wrapped_async(b"<!DOCTYPE ", &e, b">").await,
-            Event::GeneralRef(e) => self.write_wrapped_async(b"&", &e, b";").await,
+            Event::Decl(e) => self.write_wrapped_async(b"<?", e.as_bytes(), b"?>").await,
+            Event::PI(e) => self.write_wrapped_async(b"<?", e.as_bytes(), b"?>").await,
+            Event::DocType(e) => {
+                self.write_wrapped_async(b"<!DOCTYPE ", e.as_bytes(), b">")
+                    .await
+            }
+            Event::GeneralRef(e) => self.write_wrapped_async(b"&", e.as_bytes(), b";").await,
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
