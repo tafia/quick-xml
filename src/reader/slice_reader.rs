@@ -63,7 +63,7 @@ impl<'a> Reader<&'a [u8]> {
     /// loop {
     ///     match reader.read_event().unwrap() {
     ///         Event::Start(e) => count += 1,
-    ///         Event::Text(e) => txt.push(e.decode().unwrap().into_owned()),
+    ///         Event::Text(e) => txt.push(e.into_inner().into_owned()),
     ///         Event::Eof => break,
     ///         _ => (),
     ///     }
@@ -210,7 +210,7 @@ impl<'a> Reader<&'a [u8]> {
     /// // ...then, we could read text content until close tag.
     /// // This call will correctly handle nested <html> elements.
     /// let text = reader.read_text(end.name()).unwrap();
-    /// let text = text.decode().unwrap();
+    /// let text = text.into_inner();
     /// assert_eq!(text, r#"
     ///         <title>This is a HTML text</title>
     ///         <p>Usual XML rules does not apply inside it

@@ -377,7 +377,7 @@ impl<R: BufRead> Reader<R> {
     /// loop {
     ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(_)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
+    ///         Ok(Event::Text(e)) => txt.push(e.into_inner().into_owned()),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
@@ -534,7 +534,7 @@ impl<R: BufRead> Reader<R> {
     /// // ...then, we could read text content until close tag.
     /// // This call will correctly handle nested <html> elements.
     /// let text = reader.read_text_into(end.name(), &mut buf).unwrap();
-    /// let text = text.decode().unwrap();
+    /// let text = text.into_inner();
     /// assert_eq!(text, r#"
     ///         <title>This is a HTML text</title>
     ///         <p>Usual XML rules does not apply inside it

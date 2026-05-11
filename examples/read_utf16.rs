@@ -38,7 +38,7 @@ fn main() -> Result<(), quick_xml::Error> {
                 }
             }
             Ok(Event::Text(e)) => {
-                let text = e.xml_content(version)?;
+                let text = e.xml_content(version);
                 print!("text:   {}", text);
             }
             Ok(Event::End(ref e)) => {

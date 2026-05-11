@@ -926,7 +926,7 @@ impl NamespaceResolver {
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
     ///         (_, Event::Text(e)) => {
-    ///             txt.push(e.decode().unwrap().into_owned())
+    ///             txt.push(e.into_inner().into_owned())
     ///         }
     ///         (_, Event::Eof) => break,
     ///         _ => (),

@@ -236,7 +236,7 @@ fn reescape_text() {
         match reader.read_event().unwrap() {
             Eof => break,
             Text(e) => {
-                let t = e.xml10_content().unwrap();
+                let t = e.xml10_content();
                 assert!(writer.write_event(Text(BytesText::new(&t))).is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),

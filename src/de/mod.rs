@@ -2408,10 +2408,10 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             match self.next_impl()? {
                 PayloadEvent::Text(e) => result
                     .to_mut()
-                    .push_str(&e.xml_content(self.reader.xml_version())?),
+                    .push_str(&e.xml_content(self.reader.xml_version())),
                 PayloadEvent::CData(e) => result
                     .to_mut()
-                    .push_str(&e.xml_content(self.reader.xml_version())?),
+                    .push_str(&e.xml_content(self.reader.xml_version())),
                 PayloadEvent::GeneralRef(e) => self.resolve_reference(result.to_mut(), e)?,
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
@@ -2434,10 +2434,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             return match self.next_impl()? {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
-                PayloadEvent::Text(e) => self.drain_text(e.xml_content(self.reader.xml_version())?),
-                PayloadEvent::CData(e) => {
-                    self.drain_text(e.xml_content(self.reader.xml_version())?)
-                }
+                PayloadEvent::Text(e) => self.drain_text(e.xml_content(self.reader.xml_version())),
+                PayloadEvent::CData(e) => self.drain_text(e.xml_content(self.reader.xml_version())),
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
                         .capture(e)
@@ -2456,14 +2454,14 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
 
     fn resolve_reference(&mut self, result: &mut String, event: BytesRef) -> Result<(), DeError> {
         let len = event.len();
-        let reference = event.decode()?;
+        let reference = event.as_ref();
 
         if let Some(num) = reference.strip_prefix('#') {
             let codepoint = parse_number(num).map_err(EscapeError::InvalidCharRef)?;
             result.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
             return Ok(());
         }
-        if let Some(value) = self.entity_resolver.resolve(reference.as_ref()) {
+        if let Some(value) = self.entity_resolver.resolve(reference) {
             result.push_str(value);
             return Ok(());
         }

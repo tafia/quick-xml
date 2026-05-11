@@ -40,9 +40,7 @@ fn fuzz_101() {
                 }
             }
             Ok(Event::Text(e)) => {
-                if e.xml10_content().is_err() {
-                    break;
-                }
+                e.xml10_content();
             }
             Ok(Event::Eof) | Err(..) => break,
             _ => (),

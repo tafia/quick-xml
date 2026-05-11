@@ -58,7 +58,7 @@ fn parse_document_from_str(doc: &str) -> XmlResult<()> {
                 }
             }
             Event::Text(e) => {
-                black_box(e.xml10_content()?);
+                black_box(e.xml10_content());
             }
             Event::CData(e) => {
                 black_box(e.into_inner());
@@ -86,7 +86,7 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
                 }
             }
             Event::Text(e) => {
-                black_box(e.xml10_content()?);
+                black_box(e.xml10_content());
             }
             Event::CData(e) => {
                 black_box(e.into_inner());
@@ -115,7 +115,7 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
                 }
             }
             (resolved_ns, Event::Text(e)) => {
-                black_box(e.xml10_content()?);
+                black_box(e.xml10_content());
                 black_box(resolved_ns);
             }
             (resolved_ns, Event::CData(e)) => {
@@ -146,7 +146,7 @@ fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
                 }
             }
             (resolved_ns, Event::Text(e)) => {
-                black_box(e.xml10_content()?);
+                black_box(e.xml10_content());
                 black_box(resolved_ns);
             }
             (resolved_ns, Event::CData(e)) => {

@@ -102,7 +102,7 @@ mod xml_decoding_reader {
         loop {
             match r.read_event_into(&mut buf) {
                 Ok(Text(e)) => {
-                    e.xml10_content().unwrap();
+                    e.xml10_content();
                 }
                 Ok(Eof) => break,
                 _ => (),
@@ -205,7 +205,7 @@ mod legacy_decoding {
         loop {
             match r.read_event_into(&mut buf) {
                 Ok(Text(e)) => {
-                    e.xml10_content().unwrap();
+                    e.xml10_content();
                 }
                 Ok(Eof) => break,
                 _ => (),

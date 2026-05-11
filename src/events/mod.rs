@@ -585,19 +585,6 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Decodes the content of the event.
-    ///
-    /// This method does not normalize end-of-line characters as required by [specification].
-    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
-    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        match &self.content {
-            Cow::Borrowed(s) => Ok(Cow::Borrowed(s)),
-            Cow::Owned(s) => Ok(Cow::Owned(s.clone())),
-        }
-    }
-
     /// Returns the content of the XML 1.0 or HTML event with EOL normalization applied.
     ///
     /// This will allocate if EOL normalization is required.
@@ -610,11 +597,11 @@ impl<'a> BytesText<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml10_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
-        })
+        }
     }
 
     /// Returns the content of the XML 1.1 event with EOL normalization applied.
@@ -629,23 +616,19 @@ impl<'a> BytesText<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml11_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
-        })
+        }
     }
 
-    /// Decodes the content of the XML event according to the specified version.
+    /// Returns the content of the XML event with EOL normalization applied
+    /// according to the specified version.
     ///
-    /// When this event produced by the reader, it uses the encoding information
-    /// associated with that reader to interpret the raw bytes contained within
-    /// this text event.
-    ///
-    /// This will allocate if the value is encoded in non-UTF-8 encoding, or EOL normalization
-    /// is required.
+    /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -654,7 +637,7 @@ impl<'a> BytesText<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn html_content(&self) -> Cow<'a, str> {
         self.xml10_content()
     }
 
@@ -884,19 +867,6 @@ impl<'a> BytesCData<'a> {
         })
     }
 
-    /// Returns the content of the CDATA section as a string.
-    ///
-    /// This method does not normalize end-of-line characters as required by [specification].
-    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
-    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        match &self.content {
-            Cow::Borrowed(s) => Ok(Cow::Borrowed(s)),
-            Cow::Owned(s) => Ok(Cow::Owned(s.clone())),
-        }
-    }
-
     /// Returns the content of the CDATA section of the XML 1.0 or HTML event
     /// with EOL normalization applied.
     ///
@@ -910,11 +880,11 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml10_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
-        })
+        }
     }
 
     /// Returns the content of the CDATA section of the XML 1.1 event
@@ -930,24 +900,19 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml11_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
-        })
+        }
     }
 
-    /// Decodes the raw input byte content of the CDATA section of the XML event
-    /// into a string according to the specified version.
+    /// Returns the content of the CDATA section with EOL normalization applied
+    /// according to the specified version.
     ///
-    /// When this event produced by the reader, it uses the encoding information
-    /// associated with that reader to interpret the raw bytes contained within
-    /// this CDATA event.
-    ///
-    /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
-    /// is required.
+    /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -956,7 +921,7 @@ impl<'a> BytesCData<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn html_content(&self) -> Cow<'a, str> {
         self.xml10_content()
     }
 }
@@ -1606,17 +1571,6 @@ impl<'a> BytesRef<'a> {
 
     /// Returns the content of the event as a string.
     ///
-    /// This method does not normalize end-of-line characters as required by [specification].
-    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
-    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
-        match &self.content {
-            Cow::Borrowed(s) => Ok(Cow::Borrowed(s)),
-            Cow::Owned(s) => Ok(Cow::Owned(s.clone())),
-        }
-    }
-
     /// Returns the content of the XML 1.0 or HTML event with EOL normalization applied.
     ///
     /// This will allocate if EOL normalization is required.
@@ -1629,11 +1583,11 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml10_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
-        })
+        }
     }
 
     /// Returns the content of the XML 1.1 event with EOL normalization applied.
@@ -1648,23 +1602,19 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Result<Cow<'a, str>, EncodingError> {
-        Ok(match &self.content {
+    pub fn xml11_content(&self) -> Cow<'a, str> {
+        match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
-        })
+        }
     }
 
-    /// Decodes the content of the XML event according to the specified version.
+    /// Returns the content with EOL normalization applied according to the
+    /// specified version.
     ///
-    /// When this event produced by the reader, it uses the encoding information
-    /// associated with that reader to interpret the raw bytes contained within
-    /// this general reference event.
-    ///
-    /// This will allocate if the value in non-UTF-8 encoding, or EOL normalization
-    /// is required.
+    /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -1673,7 +1623,7 @@ impl<'a> BytesRef<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Result<Cow<'a, str>, EncodingError> {
+    pub fn html_content(&self) -> Cow<'a, str> {
         self.xml10_content()
     }
 
@@ -1708,7 +1658,7 @@ impl<'a> BytesRef<'a> {
     ///
     /// [WFC: Legal Char]: https://www.w3.org/TR/xml11/#wf-Legalchar
     pub fn resolve_char_ref(&self) -> Result<Option<char>, Error> {
-        if let Some(num) = self.decode()?.strip_prefix('#') {
+        if let Some(num) = self.content.strip_prefix('#') {
             let ch = parse_number(num).map_err(EscapeError::InvalidCharRef)?;
             return Ok(Some(ch));
         }

@@ -100,7 +100,7 @@ impl Translation {
                 Ok(Translation {
                     tag: tag.into(),
                     lang: lang.into(),
-                    text: text_content.decode()?.into(),
+                    text: text_content.into_inner().into(),
                 })
             } else {
                 dbg!("Expected Event::Start for Text, got: {:?}", &event);

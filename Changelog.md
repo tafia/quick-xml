@@ -101,6 +101,10 @@
 - [#963]: All event types and the `Event` enum now implement `Deref<Target = str>`
   instead of `Deref<Target = [u8]>`. Explicit `AsRef<str>` impls are provided to
   avoid ambiguity.
+- [#963]: Removed `decode()` methods from `BytesText`, `BytesCData`, and `BytesRef`.
+  Content is already available as `&str` via `Deref`. The `xml10_content()`,
+  `xml11_content()`, `xml_content()`, and `html_content()` methods now return
+  `Cow<str>` directly instead of `Result<Cow<str>, EncodingError>`.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 
