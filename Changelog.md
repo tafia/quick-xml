@@ -78,6 +78,8 @@
 
 ### Misc Changes
 
+- [#963]: MSRV bumped to 1.86 (April 2025)
+
 ### Breaking Changes
 
 - [#963]: Reader now validates that input is valid UTF-8 when constructing events.
