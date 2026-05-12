@@ -338,31 +338,41 @@ pub const fn name_len(mut bytes: &[u8]) -> usize {
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
-pub fn trim_xml_start(s: &str) -> &str {
-    let trimmed = s.as_bytes().iter().position(|b| !is_whitespace(*b));
-    match trimmed {
-        Some(pos) => &s[pos..],
-        None => &s[s.len()..],
+pub const fn trim_xml_start(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    let mut pos = 0;
+    while pos < bytes.len() {
+        if !is_whitespace(bytes[pos]) {
+            break;
+        }
+        pos += 1;
     }
+    let (_, rest) = s.split_at(pos);
+    rest
 }
 
 /// Returns a string slice with trailing XML whitespace characters removed.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
-pub fn trim_xml_end(s: &str) -> &str {
-    let trimmed = s.as_bytes().iter().rposition(|b| !is_whitespace(*b));
-    match trimmed {
-        Some(pos) => &s[..pos + 1],
-        None => &s[..0],
+pub const fn trim_xml_end(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    let mut end = bytes.len();
+    while end > 0 {
+        if !is_whitespace(bytes[end - 1]) {
+            break;
+        }
+        end -= 1;
     }
+    let (rest, _) = s.split_at(end);
+    rest
 }
 
 /// Returns a string slice with XML whitespace characters removed from both sides.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
 #[inline]
-pub fn trim_xml_spaces(text: &str) -> &str {
+pub const fn trim_xml_spaces(text: &str) -> &str {
     trim_xml_end(trim_xml_start(text))
 }
 
