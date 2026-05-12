@@ -464,38 +464,30 @@ struct NamespaceBinding {
 }
 
 impl NamespaceBinding {
+    // TODO: restore const once str indexing with Range is usable in const context
     /// Get the namespace prefix, bound to this namespace declaration, or `None`,
     /// if this declaration is for default namespace (`xmlns="..."`).
     #[inline]
-    // TODO: restore const
-    // NOTE: from_utf8_unchecked could be used here in the future, since the
-    // Reader guarantees all input is valid UTF-8 before it reaches this point.
-    fn prefix<'b>(&self, ns_buffer: &'b [u8]) -> Option<Prefix<'b>> {
+    fn prefix<'b>(&self, ns_buffer: &'b str) -> Option<Prefix<'b>> {
         if self.prefix_len == 0 {
             None
         } else {
-            let s = std::str::from_utf8(&ns_buffer[self.start..self.start + self.prefix_len])
-                .expect("namespace buffer contains valid UTF-8");
-            Some(Prefix(s))
+            Some(Prefix(&ns_buffer[self.start..self.start + self.prefix_len]))
         }
     }
 
-    // TODO: restore const
+    // TODO: restore const once str indexing with Range is usable in const context
     /// Gets the namespace name (the URI) slice out of namespace buffer
     ///
     /// Returns `None` if namespace for this prefix was explicitly removed from
     /// scope, using `xmlns[:prefix]=""`
     #[inline]
-    fn namespace<'ns>(&self, buffer: &'ns [u8]) -> ResolveResult<'ns> {
+    fn namespace<'ns>(&self, buffer: &'ns str) -> ResolveResult<'ns> {
         if self.value_len == 0 {
             ResolveResult::Unbound
         } else {
-            // We use split_at to get [start + prefix_len..start + prefix_len + value_len]
-            // in a constant way
-            let (_, ns) = buffer.split_at(self.start + self.prefix_len);
-            let (ns, _) = ns.split_at(self.value_len);
-            let ns = std::str::from_utf8(ns).expect("namespace buffer contains valid UTF-8");
-            ResolveResult::Bound(Namespace(ns))
+            let start = self.start + self.prefix_len;
+            ResolveResult::Bound(Namespace(&buffer[start..start + self.value_len]))
         }
     }
 }
@@ -508,7 +500,7 @@ impl NamespaceBinding {
 pub struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
-    buffer: Vec<u8>,
+    buffer: String,
     /// A stack of namespace bindings to prefixes that currently in scope
     bindings: Vec<NamespaceBinding>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
@@ -532,9 +524,8 @@ pub const DEFAULT_MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
 
 impl Debug for NamespaceResolver {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let buffer_str = std::str::from_utf8(&self.buffer).unwrap_or("<invalid UTF-8>");
         f.debug_struct("NamespaceResolver")
-            .field("buffer", &buffer_str)
+            .field("buffer", &self.buffer)
             .field("bindings", &self.bindings)
             .field("nesting_level", &self.nesting_level)
             .field(
@@ -570,7 +561,7 @@ const RESERVED_NAMESPACE_XMLNS: (Prefix, Namespace) =
 
 impl Default for NamespaceResolver {
     fn default() -> Self {
-        let mut buffer = Vec::new();
+        let mut buffer = String::new();
         let mut bindings = Vec::new();
         for ent in &[RESERVED_NAMESPACE_XML, RESERVED_NAMESPACE_XMLNS] {
             let prefix = ent.0.into_inner();
@@ -581,8 +572,8 @@ impl Default for NamespaceResolver {
                 value_len: uri.len(),
                 level: 0,
             });
-            buffer.extend(prefix.as_bytes());
-            buffer.extend(uri.as_bytes());
+            buffer.push_str(prefix);
+            buffer.push_str(uri);
         }
 
         Self {
@@ -659,7 +650,7 @@ impl NamespaceResolver {
         match prefix {
             PrefixDeclaration::Default => {
                 let start = self.buffer.len();
-                self.buffer.extend_from_slice(namespace.0.as_bytes());
+                self.buffer.push_str(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: 0,
@@ -693,8 +684,8 @@ impl NamespaceResolver {
                 }
 
                 let start = self.buffer.len();
-                self.buffer.extend_from_slice(prefix.as_bytes());
-                self.buffer.extend_from_slice(namespace.0.as_bytes());
+                self.buffer.push_str(prefix);
+                self.buffer.push_str(namespace.0);
                 self.bindings.push(NamespaceBinding {
                     start,
                     prefix_len: prefix.len(),
@@ -1354,14 +1345,14 @@ mod namespaces {
             resolver
                 .push(&BytesStart::from_content(" xmlns='default'", 0))
                 .unwrap();
-            assert_eq!(&resolver.buffer[s..], b"default");
+            assert_eq!(&resolver.buffer[s..], "default");
 
             // Check that tags without namespaces does not change result
             resolver.push(&BytesStart::from_content("", 0)).unwrap();
-            assert_eq!(&resolver.buffer[s..], b"default");
+            assert_eq!(&resolver.buffer[s..], "default");
             resolver.pop();
 
-            assert_eq!(&resolver.buffer[s..], b"default");
+            assert_eq!(&resolver.buffer[s..], "default");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(ns), LocalName("simple"))
@@ -1389,7 +1380,7 @@ mod namespaces {
                 .push(&BytesStart::from_content(" xmlns='new'", 0))
                 .unwrap();
 
-            assert_eq!(&resolver.buffer[s..], b"oldnew");
+            assert_eq!(&resolver.buffer[s..], "oldnew");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(new_ns), LocalName("simple"))
@@ -1400,7 +1391,7 @@ mod namespaces {
             );
 
             resolver.pop();
-            assert_eq!(&resolver.buffer[s..], b"old");
+            assert_eq!(&resolver.buffer[s..], "old");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName("simple"))
@@ -1430,7 +1421,7 @@ mod namespaces {
                 .push(&BytesStart::from_content(" xmlns=''", 0))
                 .unwrap();
 
-            assert_eq!(&resolver.buffer[s..], b"old");
+            assert_eq!(&resolver.buffer[s..], "old");
             assert_eq!(resolver.resolve(name, true), (Unbound, LocalName("simple")));
             assert_eq!(
                 resolver.resolve(name, false),
@@ -1438,7 +1429,7 @@ mod namespaces {
             );
 
             resolver.pop();
-            assert_eq!(&resolver.buffer[s..], b"old");
+            assert_eq!(&resolver.buffer[s..], "old");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName("simple"))
@@ -1466,14 +1457,14 @@ mod namespaces {
             resolver
                 .push(&BytesStart::from_content(" xmlns:p='default'", 0))
                 .unwrap();
-            assert_eq!(&resolver.buffer[s..], b"pdefault");
+            assert_eq!(&resolver.buffer[s..], "pdefault");
 
             // Check that tags without namespaces does not change result
             resolver.push(&BytesStart::from_content("", 0)).unwrap();
-            assert_eq!(&resolver.buffer[s..], b"pdefault");
+            assert_eq!(&resolver.buffer[s..], "pdefault");
             resolver.pop();
 
-            assert_eq!(&resolver.buffer[s..], b"pdefault");
+            assert_eq!(&resolver.buffer[s..], "pdefault");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(ns), LocalName("with-declared-prefix"))
@@ -1501,7 +1492,7 @@ mod namespaces {
                 .push(&BytesStart::from_content(" xmlns:p='new'", 0))
                 .unwrap();
 
-            assert_eq!(&resolver.buffer[s..], b"poldpnew");
+            assert_eq!(&resolver.buffer[s..], "poldpnew");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(new_ns), LocalName("with-declared-prefix"))
@@ -1512,7 +1503,7 @@ mod namespaces {
             );
 
             resolver.pop();
-            assert_eq!(&resolver.buffer[s..], b"pold");
+            assert_eq!(&resolver.buffer[s..], "pold");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName("with-declared-prefix"))
@@ -1542,7 +1533,7 @@ mod namespaces {
                 .push(&BytesStart::from_content(" xmlns:p=''", 0))
                 .unwrap();
 
-            assert_eq!(&resolver.buffer[s..], b"poldp");
+            assert_eq!(&resolver.buffer[s..], "poldp");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Unknown("p".to_string()), LocalName("with-declared-prefix"))
@@ -1553,7 +1544,7 @@ mod namespaces {
             );
 
             resolver.pop();
-            assert_eq!(&resolver.buffer[s..], b"pold");
+            assert_eq!(&resolver.buffer[s..], "pold");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName("with-declared-prefix"))
@@ -1606,7 +1597,7 @@ mod namespaces {
                         0,
                     ),
                 ).expect("`xml` prefix should be possible to bound to `http://www.w3.org/XML/1998/namespace`");
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// `xml` prefix cannot be re-declared to another namespace
@@ -1623,7 +1614,7 @@ mod namespaces {
                         "not_correct_namespace".to_string()
                     )),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// `xml` prefix cannot be unbound
@@ -1635,7 +1626,7 @@ mod namespaces {
                     resolver.push(&BytesStart::from_content(" xmlns:xml=''", 0)),
                     Err(NamespaceError::InvalidXmlPrefixBind("".to_string())),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// Other prefix cannot be bound to `xml` namespace
@@ -1650,7 +1641,7 @@ mod namespaces {
                     )),
                     Err(NamespaceError::InvalidPrefixForXml("not_xml".to_string())),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
         }
 
@@ -1691,7 +1682,7 @@ mod namespaces {
                         "http://www.w3.org/2000/xmlns/".to_string()
                     )),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// `xmlns` prefix cannot be re-declared
@@ -1708,7 +1699,7 @@ mod namespaces {
                         "not_correct_namespace".to_string()
                     )),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// `xmlns` prefix cannot be unbound
@@ -1720,7 +1711,7 @@ mod namespaces {
                     resolver.push(&BytesStart::from_content(" xmlns:xmlns=''", 0)),
                     Err(NamespaceError::InvalidXmlnsPrefixBind("".to_string())),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
 
             /// Other prefix cannot be bound to `xmlns` namespace
@@ -1737,7 +1728,7 @@ mod namespaces {
                         "not_xmlns".to_string()
                     )),
                 );
-                assert_eq!(&resolver.buffer[s..], b"");
+                assert_eq!(&resolver.buffer[s..], "");
             }
         }
     }
@@ -1750,7 +1741,7 @@ mod namespaces {
 
         assert_eq!(
             resolver.buffer,
-            b"xmlhttp://www.w3.org/XML/1998/namespacexmlnshttp://www.w3.org/2000/xmlns/"
+            "xmlhttp://www.w3.org/XML/1998/namespacexmlnshttp://www.w3.org/2000/xmlns/"
         );
         assert_eq!(
             resolver.resolve(name, true),
