@@ -1,10 +1,11 @@
 //! A module for wrappers that encode / decode data.
 
-use std::borrow::Cow;
 use std::str::Utf8Error;
 
 #[cfg(feature = "encoding")]
 use encoding_rs;
+#[cfg(feature = "encoding")]
+use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use std::io::{self, BufRead, Read};
 

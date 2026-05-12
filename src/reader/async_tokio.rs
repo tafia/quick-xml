@@ -576,7 +576,7 @@ mod test {
         read_event_into_async,
         TokioAdapter,
         1,
-        &mut Vec::new(),
+        &mut Vec::<u8>::new(),
         async,
         await
     );

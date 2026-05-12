@@ -83,7 +83,6 @@ use crate::de::TEXT_KEY;
 use crate::writer::{Indentation, ToFmtWrite};
 use serde::ser::{self, Serialize};
 use std::fmt::Write;
-use std::str::from_utf8;
 
 pub use self::simple_type::SimpleTypeSerializer;
 pub use crate::errors::serialize::SeError;

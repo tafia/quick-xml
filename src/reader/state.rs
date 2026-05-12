@@ -11,7 +11,7 @@ use crate::parser::{Parser, PiParser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 use crate::reader::{BangType, Config, DtdParser, ParseState};
-use crate::utils::{is_whitespace, name_len, Bytes};
+use crate::utils::{is_whitespace, name_len};
 
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
@@ -46,7 +46,7 @@ pub(super) struct ReaderState {
     ///
     /// The `^` symbols shows which positions stored in the [`Self::opened_starts`]
     /// (0 and 4 in that case).
-    opened_buffer: Vec<u8>,
+    opened_buffer: String,
     /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
     /// for that field for details
     opened_starts: Vec<usize>,
@@ -224,9 +224,8 @@ impl ReaderState {
             Some(start) => {
                 if self.config.check_end_names {
                     let expected = &self.opened_buffer[start..];
-                    if name != expected {
-                        // opened_buffer content is valid UTF-8 (validated at the reader boundary)
-                        let expected = from_utf8(expected).unwrap_or_default().to_owned();
+                    if name != expected.as_bytes() {
+                        let expected = expected.to_owned();
                         // #513: In order to allow error recovery we should drop content of the buffer
                         self.opened_buffer.truncate(start);
 
@@ -337,7 +336,7 @@ impl ReaderState {
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(event.name().as_ref().as_bytes());
+                self.opened_buffer.push_str(event.name().as_ref());
                 Ok(Event::Start(event))
             } else {
                 Ok(Event::Empty(event))
@@ -352,7 +351,7 @@ impl ReaderState {
             // because checks can be temporary disabled and when they would be
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.extend(event.name().as_ref().as_bytes());
+            self.opened_buffer.push_str(event.name().as_ref());
             Ok(Event::Start(event))
         }
     }
@@ -363,9 +362,7 @@ impl ReaderState {
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
-        // Could use String::from_utf8_unchecked: opened_buffer is populated from validated UTF-8
-        let name_str = String::from_utf8(name).expect("opened_buffer contains valid UTF-8");
-        BytesEnd::wrap(Cow::Owned(name_str))
+        BytesEnd::wrap(Cow::Owned(name))
     }
 }
 
@@ -376,7 +373,7 @@ impl Default for ReaderState {
             last_error_offset: 0,
             state: ParseState::Init,
             config: Config::default(),
-            opened_buffer: Vec::new(),
+            opened_buffer: String::new(),
             opened_starts: Vec::new(),
 
             #[cfg(feature = "encoding")]
@@ -393,7 +390,7 @@ impl Debug for ReaderState {
         d.field("last_error_offset", &self.last_error_offset);
         d.field("state", &self.state);
         d.field("config", &self.config);
-        d.field("opened_buffer", &Bytes(&self.opened_buffer));
+        d.field("opened_buffer", &self.opened_buffer);
         d.field("opened_starts", &self.opened_starts);
 
         #[cfg(feature = "encoding")]
