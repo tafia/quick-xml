@@ -2111,7 +2111,6 @@ use crate::XmlVersion;
 
 use crate::{
     de::map::ElementMapAccess,
-    encoding::Decoder,
     errors::Error,
     escape::{parse_number, EscapeError},
     events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event},
@@ -2502,11 +2501,6 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             }
         }
         Ok(())
-    }
-
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
     }
 }
 
@@ -3434,9 +3428,6 @@ pub trait XmlRead<'i> {
     /// Return an XML version of the source.
     fn xml_version(&self) -> XmlVersion;
 
-    /// A copy of the reader's decoder used to decode strings.
-    fn decoder(&self) -> Decoder;
-
     /// Checks if the `start` tag has a [`xsi:nil`] attribute. This method ignores
     /// any errors in attributes.
     ///
@@ -3516,11 +3507,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         self.version
     }
 
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
-    }
-
     fn has_nil_attr(&self, start: &BytesStart) -> bool {
         start.attributes().has_nil(self.reader.resolver())
     }
@@ -3592,11 +3578,6 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     #[inline]
     fn xml_version(&self) -> XmlVersion {
         self.version
-    }
-
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
     }
 
     fn has_nil_attr(&self, start: &BytesStart) -> bool {

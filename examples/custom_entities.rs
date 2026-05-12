@@ -14,7 +14,6 @@ use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::str::from_utf8;
 
-use quick_xml::encoding::Decoder;
 use quick_xml::errors::Error;
 use quick_xml::escape::EscapeError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
@@ -123,10 +122,6 @@ impl<'i> MyReader<'i> {
             // SAFETY: We are sure that slices are correct UTF-8 because we get
             // them from rust string
             .map(|value| from_utf8(value).unwrap())
-    }
-
-    fn decoder(&self) -> Decoder {
-        self.readers.back().unwrap().decoder()
     }
 }
 

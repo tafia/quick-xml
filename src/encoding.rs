@@ -80,68 +80,6 @@ pub struct Decoder {
     pub(crate) encoding: &'static encoding_rs::Encoding,
 }
 
-impl Decoder {
-    pub(crate) const fn utf8() -> Self {
-        Decoder {
-            #[cfg(feature = "encoding")]
-            encoding: encoding_rs::UTF_8,
-        }
-    }
-
-    #[cfg(all(test, feature = "encoding", feature = "serialize"))]
-    pub(crate) const fn utf16() -> Self {
-        Decoder {
-            encoding: encoding_rs::UTF_16LE,
-        }
-    }
-}
-
-impl Decoder {
-    /// Returns the `Reader`s encoding.
-    ///
-    /// This encoding will be used by [`decode`].
-    ///
-    /// [`decode`]: Self::decode
-    #[cfg(feature = "encoding")]
-    pub const fn encoding(&self) -> &'static encoding_rs::Encoding {
-        self.encoding
-    }
-
-    /// ## Without `encoding` feature
-    ///
-    /// Decodes an UTF-8 slice regardless of XML declaration and ignoring BOM
-    /// if it is present in the `bytes`.
-    ///
-    /// ## With `encoding` feature
-    ///
-    /// Decodes specified bytes using encoding, declared in the XML, if it was
-    /// declared there, or UTF-8 otherwise, and ignoring BOM if it is present
-    /// in the `bytes`.
-    ///
-    /// ----
-    /// Returns an error in case of malformed sequences in the `bytes`.
-    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>, EncodingError> {
-        #[cfg(not(feature = "encoding"))]
-        let decoded = Ok(Cow::Borrowed(std::str::from_utf8(bytes)?));
-
-        #[cfg(feature = "encoding")]
-        let decoded = decode(bytes, self.encoding);
-
-        decoded
-    }
-
-    /// Like [`decode`][Self::decode] but using a pre-allocated buffer.
-    pub fn decode_into(&self, bytes: &[u8], buf: &mut String) -> Result<(), EncodingError> {
-        #[cfg(not(feature = "encoding"))]
-        buf.push_str(std::str::from_utf8(bytes)?);
-
-        #[cfg(feature = "encoding")]
-        decode_into(bytes, self.encoding, buf)?;
-
-        Ok(())
-    }
-}
-
 /// Decodes the provided bytes using the specified encoding.
 ///
 /// Returns an error in case of malformed or non-representable sequences in the `bytes`.

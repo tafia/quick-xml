@@ -806,8 +806,7 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Check if tag `start` is included in the `fields` list. `decoder` is used to
-/// get a string representation of a tag.
+/// Check if tag `start` is included in the `fields` list.
 ///
 /// Returns `true`, if `start` is not in the `fields` list and `false` otherwise.
 fn not_in(fields: &'static [&'static str], start: &BytesStart) -> Result<bool, DeError> {

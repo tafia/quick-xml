@@ -1,11 +1,10 @@
 //! Contains high-level interface for a pull-based XML parser.
 
 #[cfg(feature = "encoding")]
-use encoding_rs::Encoding;
+use encoding_rs;
 use std::io;
 use std::ops::Range;
 
-use crate::encoding::Decoder;
 #[cfg(feature = "encoding")]
 use crate::encoding::DetectedEncoding;
 use crate::errors::{Error, IllFormedError, SyntaxError};
@@ -619,21 +618,21 @@ enum ParseState {
 enum EncodingRef {
     /// Encoding was implicitly assumed to have a specified value. It can be refined
     /// using BOM or by the XML declaration event (`<?xml encoding=... ?>`)
-    Implicit(&'static Encoding),
+    Implicit(&'static encoding_rs::Encoding),
     /// Encoding was explicitly set to the desired value. It cannot be changed
     /// nor by BOM, nor by parsing XML declaration (`<?xml encoding=... ?>`)
-    Explicit(&'static Encoding),
+    Explicit(&'static encoding_rs::Encoding),
     /// Encoding was detected from a byte order mark (BOM) or by the first bytes
     /// of the content. It can be refined by the XML declaration event (`<?xml encoding=... ?>`)
-    BomDetected(&'static Encoding),
+    BomDetected(&'static encoding_rs::Encoding),
     /// Encoding was detected using XML declaration event (`<?xml encoding=... ?>`).
     /// It can no longer change
-    XmlDetected(&'static Encoding),
+    XmlDetected(&'static encoding_rs::Encoding),
 }
 #[cfg(feature = "encoding")]
 impl EncodingRef {
     #[inline]
-    const fn encoding(&self) -> &'static Encoding {
+    const fn encoding(&self) -> &'static encoding_rs::Encoding {
         match self {
             Self::Implicit(e) => e,
             Self::Explicit(e) => e,
@@ -902,18 +901,16 @@ impl<R> Reader<R> {
         self.state.last_error_offset
     }
 
-    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    /// Returns the encoding used by this reader.
     ///
-    /// If [`encoding`] feature is enabled, the used encoding may change after
-    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
+    /// The used encoding may change after parsing the XML declaration,
+    /// otherwise encoding is fixed to UTF-8.
     ///
-    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
-    /// defaults to UTF-8.
-    ///
-    /// [`encoding`]: ../index.html#encoding
+    /// If no encoding is specified in the declaration, defaults to UTF-8.
+    #[cfg(feature = "encoding")]
     #[inline]
-    pub const fn decoder(&self) -> Decoder {
-        self.state.decoder()
+    pub const fn encoding(&self) -> &'static encoding_rs::Encoding {
+        self.state.encoding.encoding()
     }
 
     /// Get the direct access to the underlying reader, but tracks the amount of

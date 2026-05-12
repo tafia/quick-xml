@@ -5,7 +5,6 @@ use std::str::from_utf8;
 #[cfg(feature = "encoding")]
 use encoding_rs::UTF_8;
 
-use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use crate::parser::{Parser, PiParser};
@@ -220,15 +219,14 @@ impl ReaderState {
             content
         };
 
-        let decoder = self.decoder();
-
         // Get the index in self.opened_buffer of the name of the last opened tag
         match self.opened_starts.pop() {
             Some(start) => {
                 if self.config.check_end_names {
                     let expected = &self.opened_buffer[start..];
                     if name != expected {
-                        let expected = decoder.decode(expected).unwrap_or_default().into_owned();
+                        // opened_buffer content is valid UTF-8 (validated at the reader boundary)
+                        let expected = from_utf8(expected).unwrap_or_default().to_owned();
                         // #513: In order to allow error recovery we should drop content of the buffer
                         self.opened_buffer.truncate(start);
 
@@ -236,7 +234,7 @@ impl ReaderState {
                         self.last_error_offset = self.offset - buf.len() as u64;
                         return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
-                            found: decoder.decode(name).unwrap_or_default().into_owned(),
+                            found: from_utf8(name).unwrap_or_default().to_owned(),
                         }));
                     }
                 }
@@ -248,7 +246,7 @@ impl ReaderState {
                     // Report error at start of the end tag at `<` character
                     self.last_error_offset = self.offset - buf.len() as u64;
                     return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
-                        decoder.decode(name).unwrap_or_default().into_owned(),
+                        from_utf8(name).unwrap_or_default().to_owned(),
                     )));
                 }
             }
@@ -368,22 +366,6 @@ impl ReaderState {
         // Could use String::from_utf8_unchecked: opened_buffer is populated from validated UTF-8
         let name_str = String::from_utf8(name).expect("opened_buffer contains valid UTF-8");
         BytesEnd::wrap(Cow::Owned(name_str))
-    }
-
-    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
-    ///
-    /// If [`encoding`] feature is enabled, the used encoding may change after
-    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
-    ///
-    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
-    /// defaults to UTF-8.
-    ///
-    /// [`encoding`]: ../../index.html#encoding
-    pub const fn decoder(&self) -> Decoder {
-        Decoder {
-            #[cfg(feature = "encoding")]
-            encoding: self.encoding.encoding(),
-        }
     }
 }
 

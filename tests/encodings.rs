@@ -265,18 +265,18 @@ mod detect {
                 let mut r = Reader::from_reader(
                     include_bytes!(concat!("documents/encoding/", $file, ".xml")).as_ref(),
                 );
-                assert_eq!(r.decoder().encoding(), UTF_8);
+                assert_eq!(r.encoding(), UTF_8);
 
                 let mut buf = Vec::new();
                 // XML declaration with encoding (pure ASCII)
                 assert_matches!(1: r.read_event_into(&mut buf).unwrap(), Decl(_));
-                assert_eq!(r.decoder().encoding(), $enc);
+                assert_eq!(r.encoding(), $enc);
                 assert_matches!(2: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
                 buf.clear();
 
                 // Comment with information that this is generated file (pure ASCII)
                 assert_matches!(3: r.read_event_into(&mut buf).unwrap(), Comment(_));
-                assert_eq!(r.decoder().encoding(), $enc);
+                assert_eq!(r.encoding(), $enc);
                 assert_matches!(4: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
                 buf.clear();
 
@@ -298,7 +298,7 @@ mod detect {
                 let mut r = Reader::from_reader(
                     include_bytes!(concat!("documents/encoding/", $file, ".xml")).as_ref(),
                 );
-                assert_eq!(r.decoder().encoding(), UTF_8);
+                assert_eq!(r.encoding(), UTF_8);
 
                 let mut buf = Vec::new();
                 loop {
@@ -306,7 +306,7 @@ mod detect {
                         Eof => break,
                         _ => {}
                     }
-                    assert_eq!(r.decoder().encoding(), $enc);
+                    assert_eq!(r.encoding(), $enc);
                     buf.clear();
                     $($break)?
                 }
@@ -376,9 +376,9 @@ fn bom_overridden_by_declaration() {
     let mut reader = Reader::from_reader(b"\xFF\xFE<?xml encoding='windows-1251'?>".as_ref());
     let mut buf = Vec::new();
 
-    assert_eq!(reader.decoder().encoding(), UTF_8);
+    assert_eq!(reader.encoding(), UTF_8);
     assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Decl(_)));
-    assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
+    assert_eq!(reader.encoding(), WINDOWS_1251);
 
     assert_eq!(reader.read_event_into(&mut buf).unwrap(), Eof);
 }
@@ -390,12 +390,12 @@ fn only_one_declaration_changes_encoding() {
         Reader::from_reader(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>".as_ref());
     let mut buf = Vec::new();
 
-    assert_eq!(reader.decoder().encoding(), UTF_8);
+    assert_eq!(reader.encoding(), UTF_8);
     assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Decl(_)));
-    assert_eq!(reader.decoder().encoding(), UTF_16LE);
+    assert_eq!(reader.encoding(), UTF_16LE);
 
     assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Decl(_)));
-    assert_eq!(reader.decoder().encoding(), UTF_16LE);
+    assert_eq!(reader.encoding(), UTF_16LE);
 
     assert_eq!(reader.read_event_into(&mut buf).unwrap(), Eof);
 }
@@ -406,9 +406,9 @@ fn only_one_declaration_changes_encoding() {
 fn str_always_has_utf8() {
     let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
 
-    assert_eq!(reader.decoder().encoding(), UTF_8);
+    assert_eq!(reader.encoding(), UTF_8);
     reader.read_event().unwrap();
-    assert_eq!(reader.decoder().encoding(), UTF_8);
+    assert_eq!(reader.encoding(), UTF_8);
 
     assert_eq!(reader.read_event().unwrap(), Eof);
 }
