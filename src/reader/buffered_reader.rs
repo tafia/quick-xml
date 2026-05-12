@@ -64,7 +64,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return ReadTextResult::Err(e);
+                        return ReadTextResult::Err(e.into());
                     }
                 };
 
@@ -83,7 +83,10 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
-                        return ReadTextResult::UpToMarkup(&buf[start..]);
+                        return match std::str::from_utf8(&buf[start..]) {
+                            Ok(s) => ReadTextResult::UpToMarkup(s),
+                            Err(e) => ReadTextResult::Err(e.into()),
+                        };
                     }
                     Some(i) => {
                         buf.extend_from_slice(&available[..i]);
@@ -92,7 +95,10 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
-                        return ReadTextResult::UpToRef(&buf[start..]);
+                        return match std::str::from_utf8(&buf[start..]) {
+                            Ok(s) => ReadTextResult::UpToRef(s),
+                            Err(e) => ReadTextResult::Err(e.into()),
+                        };
                     }
                     None => {
                         buf.extend_from_slice(available);
@@ -105,7 +111,10 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            ReadTextResult::UpToEof(&buf[start..])
+            match std::str::from_utf8(&buf[start..]) {
+                Ok(s) => ReadTextResult::UpToEof(s),
+                Err(e) => ReadTextResult::Err(e.into()),
+            }
         }
 
         #[inline]
@@ -123,7 +132,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return ReadRefResult::Err(e);
+                        return ReadRefResult::Err(e.into());
                     }
                 };
                 // `read_ref` called when the first character is `&`, so we
@@ -154,7 +163,10 @@ macro_rules! impl_buffered_source {
 
                         *position += read;
 
-                        return ReadRefResult::Ref(&buf[start..]);
+                        return match std::str::from_utf8(&buf[start..]) {
+                            Ok(s) => ReadRefResult::Ref(s),
+                            Err(e) => ReadRefResult::Err(e.into()),
+                        };
                     }
                     // Do not consume `&` because it may be lone and we would be need to
                     // return it as part of Text event
@@ -167,10 +179,15 @@ macro_rules! impl_buffered_source {
 
                         *position += read;
 
-                        return if is_amp {
-                            ReadRefResult::UpToRef(&buf[start..])
-                        } else {
-                            ReadRefResult::UpToMarkup(&buf[start..])
+                        return match std::str::from_utf8(&buf[start..]) {
+                            Ok(s) => {
+                                if is_amp {
+                                    ReadRefResult::UpToRef(s)
+                                } else {
+                                    ReadRefResult::UpToMarkup(s)
+                                }
+                            }
+                            Err(e) => ReadRefResult::Err(e.into()),
                         };
                     }
                     None => {
@@ -184,7 +201,10 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            ReadRefResult::UpToEof(&buf[start..])
+            match std::str::from_utf8(&buf[start..]) {
+                Ok(s) => ReadRefResult::UpToEof(s),
+                Err(e) => ReadRefResult::Err(e.into()),
+            }
         }
 
         #[inline]
@@ -193,7 +213,7 @@ macro_rules! impl_buffered_source {
             mut parser: P,
             buf: &'b mut Vec<u8>,
             position: &mut u64,
-        ) -> Result<&'b [u8]> {
+        ) -> Result<&'b str> {
             let mut read = 1;
             let start = buf.len();
             // '<' was consumed in peek_one(), but not placed in buf
@@ -217,7 +237,7 @@ macro_rules! impl_buffered_source {
                     read += used as u64;
 
                     *position += read;
-                    return Ok(&buf[start..]);
+                    return Ok(std::str::from_utf8(&buf[start..])?);
                 }
 
                 // The `>` symbol not yet found, continue reading
@@ -237,7 +257,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut u64,
-        ) -> Result<(BangType, &'b [u8])> {
+        ) -> Result<(BangType, &'b str)> {
             // Peeked '<!' before being called, so it's guaranteed to start with it.
             let start = buf.len();
             let mut read = 2;
@@ -274,7 +294,7 @@ macro_rules! impl_buffered_source {
                     read += consumed as u64;
 
                     *position += read;
-                    return Ok((bang_type, &buf[start..]));
+                    return Ok((bang_type, std::str::from_utf8(&buf[start..])?));
                 }
 
                 // The `>` symbol not yet found, continue reading
