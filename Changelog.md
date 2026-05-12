@@ -114,6 +114,10 @@
   The `From<(&[u8], &[u8])>` impl has been removed.
 - [#963]: `BytesDecl::version()`, `encoding()`, and `standalone()` now return
   `Cow<'_, str>` instead of `Cow<'_, [u8]>`.
+- [#963]: Removed `Reader::decoder()` method. Use `Reader::encoding()` instead
+  (available with the `encoding` feature). Removed `decoder()` from the `XmlRead`
+  serde trait. Removed all methods from `Decoder` (the struct is kept only for
+  backward compatibility with deprecated `Attribute` methods).
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 

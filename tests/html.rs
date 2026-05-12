@@ -1,5 +1,4 @@
 use pretty_assertions::assert_eq;
-use quick_xml::encoding::Decoder;
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
@@ -48,13 +47,9 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
 
     let mut spec_lines = SpecIter(output).enumerate();
 
-    let mut decoder = reader.decoder();
     loop {
         let line = match reader.read_resolved_event() {
             Ok((_, Event::Decl(e))) => {
-                // Declaration could change decoder
-                decoder = reader.decoder();
-
                 let version = e.version().unwrap();
                 let encoding = e.encoding().unwrap().unwrap();
                 format!("StartDocument({}, {})", version, encoding)
@@ -64,23 +59,23 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             }
             Ok((_, Event::DocType(e))) => format!("DocType({})", e.as_ref()),
             Ok((n, Event::Start(e))) => {
-                let name = namespace_name(n, e.name(), decoder);
-                match make_attrs(&e, decoder) {
+                let name = namespace_name(n, e.name());
+                match make_attrs(&e) {
                     Ok(attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                     Ok(attrs) => format!("StartElement({} [{}])", &name, &attrs),
                     Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
                 }
             }
             Ok((n, Event::Empty(e))) => {
-                let name = namespace_name(n, e.name(), decoder);
-                match make_attrs(&e, decoder) {
+                let name = namespace_name(n, e.name());
+                match make_attrs(&e) {
                     Ok(attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                     Ok(attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
                     Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
                 }
             }
             Ok((n, Event::End(e))) => {
-                let name = namespace_name(n, e.name(), decoder);
+                let name = namespace_name(n, e.name());
                 format!("EndElement({})", name)
             }
             Ok((_, Event::Comment(e))) => format!("Comment({})", e.as_ref()),
@@ -115,7 +110,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     }
 }
 
-fn namespace_name(n: ResolveResult, name: QName, _decoder: Decoder) -> String {
+fn namespace_name(n: ResolveResult, name: QName) -> String {
     match n {
         // Produces string '{namespace}prefixed_name'
         ResolveResult::Bound(n) => format!("{{{}}}{}", n.as_ref(), name.as_ref()),
@@ -123,7 +118,7 @@ fn namespace_name(n: ResolveResult, name: QName, _decoder: Decoder) -> String {
     }
 }
 
-fn make_attrs(e: &BytesStart, _decoder: Decoder) -> ::std::result::Result<String, String> {
+fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {

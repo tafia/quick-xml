@@ -270,7 +270,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         // usize (because otherwise we panic at appending to the buffer before that point)
         let end = start + len as usize;
 
-        let text = std::str::from_utf8(&buf[start..end]).expect("read_text buffer is valid UTF-8"); // temporary-#963
+        let text = std::str::from_utf8(&buf[start..end])?;
         Ok(BytesText::wrap(text))
     }
 
