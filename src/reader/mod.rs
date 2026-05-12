@@ -287,9 +287,7 @@ macro_rules! read_event_impl {
                             $self.state.state = ParseState::InsideText;
                             // +1 to skip start `&`
                             // -1 to skip end `;`
-                            // If (once?) input is verified UTF-8, we could use from_utf8_unchecked here
-                            let ref_str = std::str::from_utf8(&bytes[1..bytes.len() - 1])?;
-                            Ok(Event::GeneralRef(BytesRef::wrap(ref_str)))
+                            Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..bytes.len() - 1])))
                         }
                         // Go to Done state
                         ReadRefResult::UpToEof(bytes) if $self.state.config.allow_dangling_amp => {
@@ -319,7 +317,7 @@ macro_rules! read_event_impl {
                             $self.state.last_error_offset = start;
                             Err(Error::IllFormed(IllFormedError::UnclosedReference))
                         }
-                        ReadRefResult::Err(e) => Err(Error::from(e)),
+                        ReadRefResult::Err(e) => Err(e),
                     }
                 }
                 ParseState::InsideText => { // Go to InsideMarkup or Done state
@@ -363,7 +361,7 @@ macro_rules! read_event_impl {
                                 Ok(Event::Text(event))
                             }
                         }
-                        ReadTextResult::Err(e) => Err(Error::from(e)),
+                        ReadTextResult::Err(e) => Err(e),
                     }
                 },
                 // Go to InsideText state in next two arms
@@ -1010,15 +1008,15 @@ enum ReadTextResult<'r, B> {
     /// to satisfy borrow checker requirements.
     Ref(B),
     /// Contains text block up to start of markup (`<` character). `<` was consumed.
-    UpToMarkup(&'r [u8]),
+    UpToMarkup(&'r str),
     /// Contains text block up to start of reference (`&` character).
     /// `&` was not consumed.
-    UpToRef(&'r [u8]),
+    UpToRef(&'r str),
     /// Contains text block up to EOF, neither start of markup (`<` character)
     /// or start of reference (`&` character) was found.
-    UpToEof(&'r [u8]),
+    UpToEof(&'r str),
     /// IO error occurred.
-    Err(io::Error),
+    Err(Error),
 }
 
 /// Result of an attempt to read general reference from the reader.
@@ -1026,19 +1024,19 @@ enum ReadTextResult<'r, B> {
 enum ReadRefResult<'r> {
     /// Contains text block up to end of reference (`;` character).
     /// Result includes start `&`, but not end `;`.
-    Ref(&'r [u8]),
+    Ref(&'r str),
     /// Contains text block up to EOF. Neither end of reference (`;`), start of
     /// another reference (`&`) or start of markup (`<`) characters was found.
     /// Result includes start `&`.
-    UpToEof(&'r [u8]),
+    UpToEof(&'r str),
     /// Contains text block up to next possible reference (`&` character).
     /// Result includes start `&`.
-    UpToRef(&'r [u8]),
+    UpToRef(&'r str),
     /// Contains text block up to start of markup (`<` character).
     /// Result includes start `&`.
-    UpToMarkup(&'r [u8]),
+    UpToMarkup(&'r str),
     /// IO error occurred.
-    Err(io::Error),
+    Err(Error),
 }
 
 /// Represents an input for a reader that can return borrowed data.
@@ -1107,7 +1105,7 @@ trait XmlSource<'r, B> {
     /// reader which provides bytes fed into the parser.
     ///
     /// [events]: crate::events::Event
-    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut u64) -> Result<&'r [u8], Error>
+    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut u64) -> Result<&'r str, Error>
     where
         P: Parser;
 
@@ -1130,7 +1128,7 @@ trait XmlSource<'r, B> {
         &mut self,
         buf: B,
         position: &mut u64,
-    ) -> Result<(BangType, &'r [u8]), Error>;
+    ) -> Result<(BangType, &'r str), Error>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
@@ -1251,7 +1249,7 @@ mod test {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
                 use crate::reader::{BangType, DtdParser};
-                use crate::utils::Bytes;
+
 
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
@@ -1310,8 +1308,8 @@ mod test {
                             $(.$await)?
                             .unwrap();
                         assert_eq!(
-                            (ty, Bytes(bytes)),
-                            (BangType::CData, Bytes(b"<![CDATA[]]>"))
+                            (ty, bytes),
+                            (BangType::CData, "<![CDATA[]]>")
                         );
                         assert_eq!(position, 12);
                     }
@@ -1331,8 +1329,8 @@ mod test {
                             $(.$await)?
                             .unwrap();
                         assert_eq!(
-                            (ty, Bytes(bytes)),
-                            (BangType::CData, Bytes(b"<![CDATA[cdata]] ]>content]]>"))
+                            (ty, bytes),
+                            (BangType::CData, "<![CDATA[cdata]] ]>content]]>")
                         );
                         assert_eq!(position, 29);
                     }
@@ -1456,8 +1454,8 @@ mod test {
                             $(.$await)?
                             .unwrap();
                         assert_eq!(
-                            (ty, Bytes(bytes)),
-                            (BangType::Comment, Bytes(b"<!---->"))
+                            (ty, bytes),
+                            (BangType::Comment, "<!---->")
                         );
                         assert_eq!(position, 7);
                     }
@@ -1474,8 +1472,8 @@ mod test {
                             $(.$await)?
                             .unwrap();
                         assert_eq!(
-                            (ty, Bytes(bytes)),
-                            (BangType::Comment, Bytes(b"<!--->comment<--->"))
+                            (ty, bytes),
+                            (BangType::Comment, "<!--->comment<--->")
                         );
                         assert_eq!(position, 18);
                     }
@@ -1535,8 +1533,8 @@ mod test {
                                 $(.$await)?
                                 .unwrap();
                             assert_eq!(
-                                (ty, Bytes(bytes)),
-                                (BangType::DocType(DtdParser::Finished), Bytes(b"<!DOCTYPE>"))
+                                (ty, bytes),
+                                (BangType::DocType(DtdParser::Finished), "<!DOCTYPE>")
                             );
                             assert_eq!(position, 10);
                         }
@@ -1609,8 +1607,8 @@ mod test {
                                 $(.$await)?
                                 .unwrap();
                             assert_eq!(
-                                (ty, Bytes(bytes)),
-                                (BangType::DocType(DtdParser::Finished), Bytes(b"<!doctype>"))
+                                (ty, bytes),
+                                (BangType::DocType(DtdParser::Finished), "<!doctype>")
                             );
                             assert_eq!(position, 10);
                         }
@@ -1638,7 +1636,7 @@ mod test {
             mod read_text {
                 use super::*;
                 use crate::reader::ReadTextResult;
-                use crate::utils::Bytes;
+
                 use pretty_assertions::assert_eq;
 
                 #[$test]
@@ -1649,7 +1647,7 @@ mod test {
                     //                ^= 1
 
                     match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
-                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"")),
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(bytes, ""),
                         x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 1);
@@ -1691,7 +1689,7 @@ mod test {
                     //                  ^= 2
 
                     match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
-                        ReadTextResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        ReadTextResult::UpToMarkup(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1705,7 +1703,7 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
-                        ReadTextResult::UpToRef(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        ReadTextResult::UpToRef(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1719,7 +1717,7 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
-                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1729,7 +1727,7 @@ mod test {
             mod read_ref {
                 use super::*;
                 use crate::reader::ReadRefResult;
-                use crate::utils::Bytes;
+
                 use pretty_assertions::assert_eq;
 
                 // Empty input is not allowed for `read_ref` so not tested.
@@ -1744,7 +1742,7 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        ReadRefResult::UpToEof(bytes) => assert_eq!(bytes, "&"),
                         x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1758,7 +1756,7 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToRef(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        ReadRefResult::UpToRef(bytes) => assert_eq!(bytes, "&"),
                         x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1772,7 +1770,7 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        ReadRefResult::UpToMarkup(bytes) => assert_eq!(bytes, "&"),
                         x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
@@ -1786,7 +1784,7 @@ mod test {
                     //                  ^= 3
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::Ref(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&;")),
+                        ReadRefResult::Ref(bytes) => assert_eq!(bytes, "&;"),
                         x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 3);
@@ -1800,7 +1798,7 @@ mod test {
                     //                    ^= 5
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::Ref(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&lt;")),
+                        ReadRefResult::Ref(bytes) => assert_eq!(bytes, "&lt;"),
                         x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 5);
@@ -1811,7 +1809,7 @@ mod test {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
                 use crate::parser::ElementParser;
-                use crate::utils::Bytes;
+
                 use pretty_assertions::assert_eq;
 
                 /// Checks that nothing was read from empty buffer
@@ -1846,8 +1844,8 @@ mod test {
                         //                   ^= 2
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<>"
                         );
                         assert_eq!(position, 2);
                     }
@@ -1860,8 +1858,8 @@ mod test {
                         //                      ^= 5
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<tag>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<tag>"
                         );
                         assert_eq!(position, 5);
                     }
@@ -1874,8 +1872,8 @@ mod test {
                         //                    ^= 3
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<:>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<:>"
                         );
                         assert_eq!(position, 3);
                     }
@@ -1888,8 +1886,8 @@ mod test {
                         //                       ^= 6
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<:tag>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<:tag>"
                         );
                         assert_eq!(position, 6);
                     }
@@ -1902,8 +1900,8 @@ mod test {
                         //                                                          ^= 39
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(br#"<tag  attr-1=">"  attr2  =  '>'  3attr>"#)
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            r#"<tag  attr-1=">"  attr2  =  '>'  3attr>"#
                         );
                         assert_eq!(position, 39);
                     }
@@ -1921,8 +1919,8 @@ mod test {
                         //                    ^= 3
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"</>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "</>"
                         );
                         assert_eq!(position, 3);
                     }
@@ -1935,8 +1933,8 @@ mod test {
                         //                       ^= 6
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<tag/>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<tag/>"
                         );
                         assert_eq!(position, 6);
                     }
@@ -1949,8 +1947,8 @@ mod test {
                         //                     ^= 4
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<:/>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<:/>"
                         );
                         assert_eq!(position, 4);
                     }
@@ -1963,8 +1961,8 @@ mod test {
                         //                        ^= 7
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"<:tag/>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "<:tag/>"
                         );
                         assert_eq!(position, 7);
                     }
@@ -1977,8 +1975,8 @@ mod test {
                         //                                                             ^= 42
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(br#"<tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#)
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            r#"<tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#
                         );
                         assert_eq!(position, 42);
                     }
@@ -1996,8 +1994,8 @@ mod test {
                         //                     ^= 4
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"</ >")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "</ >"
                         );
                         assert_eq!(position, 4);
                     }
@@ -2010,8 +2008,8 @@ mod test {
                         //                       ^= 6
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"</tag>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "</tag>"
                         );
                         assert_eq!(position, 6);
                     }
@@ -2024,8 +2022,8 @@ mod test {
                         //                     ^= 4
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"</:>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "</:>"
                         );
                         assert_eq!(position, 4);
                     }
@@ -2038,8 +2036,8 @@ mod test {
                         //                        ^= 7
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(b"</:tag>")
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            "</:tag>"
                         );
                         assert_eq!(position, 7);
                     }
@@ -2052,8 +2050,8 @@ mod test {
                         //                                                           ^= 40
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
-                            Bytes(br#"</tag  attr-1=">"  attr2  =  '>'  3attr>"#)
+                            $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap(),
+                            r#"</tag  attr-1=">"  attr2  =  '>'  3attr>"#
                         );
                         assert_eq!(position, 40);
                     }
