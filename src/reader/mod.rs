@@ -287,9 +287,8 @@ macro_rules! read_event_impl {
                             $self.state.state = ParseState::InsideText;
                             // +1 to skip start `&`
                             // -1 to skip end `;`
-                            // Could use from_utf8_unchecked: refs are ASCII subset, validated by reader
-                            let ref_str = std::str::from_utf8(&bytes[1..bytes.len() - 1])
-                                .expect("entity references are valid UTF-8");
+                            // If (once?) input is verified UTF-8, we could use from_utf8_unchecked here
+                            let ref_str = std::str::from_utf8(&bytes[1..bytes.len() - 1])?;
                             Ok(Event::GeneralRef(BytesRef::wrap(ref_str)))
                         }
                         // Go to Done state
