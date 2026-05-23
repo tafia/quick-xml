@@ -408,10 +408,15 @@ macro_rules! read_until_close {
         $reader:expr
         $(, $await:ident)?
     ) => {{
-        $self.state.state = ParseState::InsideText;
-
         let start = $self.state.offset;
-        match $reader.peek_one() $(.$await)? {
+        // It is important to change state only after .await point, because future
+        // may be cancelled only at .await points
+        //
+        // See https://github.com/tafia/quick-xml/issues/624
+        let lookahead = $reader.peek_one() $(.$await)?;
+
+        $self.state.state = ParseState::InsideText;
+        match lookahead {
             // `<!` - comment, CDATA or DOCTYPE declaration
             Ok(Some(b'!')) => match $reader
                 .read_bang_element($buf, &mut $self.state.offset)

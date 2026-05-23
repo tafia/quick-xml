@@ -18,7 +18,11 @@
 
 ### Bug Fixes
 
+- [#624]: Fix corruption of parser state after cancelling of async reading.
+
 ### Misc Changes
+
+[#624]: https://github.com/tafia/quick-xml/issues/624
 
 
 ## 0.40.1 -- 2026-05-15
