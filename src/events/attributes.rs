@@ -9,7 +9,9 @@ use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
 use crate::utils::{is_whitespace, Bytes};
 use crate::XmlVersion;
 
+use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::hash::{BuildHasherDefault, DefaultHasher, Hasher};
 use std::iter::FusedIterator;
 use std::{borrow::Cow, ops::Range};
 
@@ -964,6 +966,53 @@ enum State {
     SkipEqValue(usize),
 }
 
+/// Number of attributes a start tag may have before the duplicate-name check
+/// switches from a direct linear scan of the previously seen names to a hash
+/// pre-filter (see [`IterState::check_for_duplicates`]).
+///
+/// Real-world start tags carry only a handful of attributes -- the busiest
+/// element in our benchmark corpus (`tests/documents/players.xml`) has 22 --
+/// where the scan is faster than hashing and needs no allocation. Larger tags
+/// are where the scan became the O(N²) CPU-DoS of [#969], so above this count we
+/// pay for a hash set to keep the whole tag O(N). The value sits just above the
+/// measured linear-vs-hash crossover.
+///
+/// [#969]: https://github.com/tafia/quick-xml/issues/969
+const SMALL_ATTRIBUTE_COUNT: usize = 32;
+
+/// A no-op [`Hasher`] for the `key_hashes` set, whose values are already 64-bit
+/// hashes of attribute names; re-hashing them with the default SipHash would be
+/// wasted work. Only `write_u64` is ever exercised (via `u64`'s `Hash` impl).
+#[derive(Default)]
+struct IdentityHasher(u64);
+
+impl Hasher for IdentityHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    fn write(&mut self, _: &[u8]) {
+        // The set only ever stores `u64` keys, which route through `write_u64`.
+        unreachable!("IdentityHasher only supports u64 keys")
+    }
+
+    #[inline]
+    fn write_u64(&mut self, n: u64) {
+        self.0 = n;
+    }
+}
+
+/// Hashes a single attribute name. A fresh [`DefaultHasher`] per name keeps each
+/// hash independent (so it is also DoS-resistant on untrusted input).
+#[inline]
+fn hash_name(name: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    hasher.write(name);
+    hasher.finish()
+}
+
 /// External iterator over spans of attribute key and value
 #[derive(Clone, Debug)]
 pub(crate) struct IterState {
@@ -979,6 +1028,13 @@ pub(crate) struct IterState {
     /// names. We store a ranges instead of slices to able to report a previous
     /// attribute position
     keys: Vec<Range<usize>>,
+    /// 64-bit hashes of the byte content of `keys`, used as an O(1) pre-filter
+    /// once a start tag declares more than `SMALL_ATTRIBUTE_COUNT` attributes, so
+    /// the duplicate check stays O(N) over the whole tag instead of O(N²). The
+    /// values are already hashes, so the set stores them with `IdentityHasher`
+    /// instead of re-hashing. Allocated only when the threshold is crossed, so
+    /// small tags (and [`IterState::new`]) stay allocation-free and `const`.
+    key_hashes: Option<HashSet<u64, BuildHasherDefault<IdentityHasher>>>,
 }
 
 impl IterState {
@@ -988,6 +1044,7 @@ impl IterState {
             html,
             check_duplicates: true,
             keys: Vec::new(),
+            key_hashes: None,
         }
     }
 
@@ -1063,6 +1120,17 @@ impl IterState {
         }
     }
 
+    /// Checks that the attribute name `key` (a range into `slice`) was not seen
+    /// earlier in the same start tag, recording it for subsequent checks.
+    ///
+    /// Small tags use a direct linear scan of [`Self::keys`]: for a handful of
+    /// attributes that beats hashing and needs no allocation, which is the
+    /// overwhelmingly common case. Once a tag declares more than
+    /// `SMALL_ATTRIBUTE_COUNT` attributes -- where the scan would become the
+    /// O(N²) CPU-DoS of [#969] -- it switches to a hash pre-filter that keeps the
+    /// whole tag O(N).
+    ///
+    /// [#969]: https://github.com/tafia/quick-xml/issues/969
     #[inline]
     fn check_for_duplicates(
         &mut self,
@@ -1070,6 +1138,9 @@ impl IterState {
         key: Range<usize>,
     ) -> Result<Range<usize>, AttrError> {
         if self.check_duplicates {
+            if self.keys.len() >= SMALL_ATTRIBUTE_COUNT {
+                return self.check_for_duplicates_hashed(slice, key);
+            }
             if let Some(prev) = self
                 .keys
                 .iter()
@@ -1079,6 +1150,44 @@ impl IterState {
             }
             self.keys.push(key.clone());
         }
+        Ok(key)
+    }
+
+    /// Cold path of [`Self::check_for_duplicates`] for start tags with many
+    /// attributes: a [`HashSet`] of 64-bit name hashes acts as an O(1) pre-filter
+    /// so iterating N attributes is O(N) rather than O(N²).
+    #[cold]
+    fn check_for_duplicates_hashed(
+        &mut self,
+        slice: &[u8],
+        key: Range<usize>,
+    ) -> Result<Range<usize>, AttrError> {
+        let keys = &self.keys;
+        let key_hashes = self.key_hashes.get_or_insert_with(|| {
+            // First time over the threshold: seed the set with the names already
+            // collected during the linear phase so the pre-filter knows them.
+            let mut set = HashSet::with_capacity_and_hasher(
+                keys.len() * 2,
+                BuildHasherDefault::<IdentityHasher>::default(),
+            );
+            for r in keys {
+                set.insert(hash_name(&slice[r.clone()]));
+            }
+            set
+        });
+        // A fresh hash proves the name is new. On a hit (a real duplicate, or the
+        // astronomically rare 64-bit collision) fall back to the linear scan to
+        // recover the exact previous position for `AttrError::Duplicated`.
+        if !key_hashes.insert(hash_name(&slice[key.clone()])) {
+            if let Some(prev) = self
+                .keys
+                .iter()
+                .find(|r| slice[(*r).clone()] == slice[key.clone()])
+            {
+                return Err(AttrError::Duplicated(key.start, prev.start));
+            }
+        }
+        self.keys.push(key.clone());
         Ok(key)
     }
 
@@ -1987,6 +2096,40 @@ mod xml {
                 );
                 assert_eq!(iter.next(), None);
                 assert_eq!(iter.next(), None);
+            }
+
+            /// Once a start tag declares more than `SMALL_ATTRIBUTE_COUNT`
+            /// attributes the duplicate check switches to its hash-based path. A
+            /// duplicate of a name first seen during the earlier linear phase must
+            /// still be detected, with the original position reported. Regression
+            /// cover for the cold path of [#969].
+            ///
+            /// [#969]: https://github.com/tafia/quick-xml/issues/969
+            #[test]
+            fn duplicate_past_hash_threshold() {
+                let dup = SMALL_ATTRIBUTE_COUNT / 2;
+                let n = SMALL_ATTRIBUTE_COUNT + 8;
+
+                let mut source = String::from("tag");
+                let mut positions = Vec::with_capacity(n);
+                for i in 0..n {
+                    source.push(' ');
+                    positions.push(source.len());
+                    source.push_str(&format!("k{:04}=''", i));
+                }
+                // Repeat the name first seen at `positions[dup]` (linear phase).
+                source.push(' ');
+                let dup_pos = source.len();
+                source.push_str(&format!("k{:04}=''", dup));
+
+                let mut iter = Attributes::new(&source, 3);
+                for _ in 0..n {
+                    assert!(matches!(iter.next(), Some(Ok(_))));
+                }
+                assert_eq!(
+                    iter.next(),
+                    Some(Err(AttrError::Duplicated(dup_pos, positions[dup])))
+                );
             }
         }
 

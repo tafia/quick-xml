@@ -68,6 +68,11 @@ harness = false
 path = "benches/encoding.rs"
 required-features = ["encoding"]
 
+[[bench]]
+name = "issue971"
+harness = false
+path = "benches/issue971.rs"
+
 [features]
 default = []
 

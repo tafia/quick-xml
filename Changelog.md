@@ -21,6 +21,11 @@
 
 ### Bug Fixes
 
+- [#969]: `Attributes` (and anything that iterates `BytesStart::attributes()`
+  with the default `with_checks(true)`) no longer takes O(N²) time on a start
+  tag with a large number of attributes. Small tags keep the previous linear
+  scan; larger ones switch to a 64-bit hash pre-filter, so the whole tag is
+  O(N). The exact `AttrError::Duplicated(new, prev)` positions are unchanged.
 - [#970]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
   event) now rejects a start tag that declares more than
   `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256) `xmlns` / `xmlns:*` namespace
@@ -31,9 +36,10 @@
   via `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX`
   to disable).
 
-[#970]: https://github.com/tafia/quick-xml/issues/970
-
 ### Misc Changes
+
+[#969]: https://github.com/tafia/quick-xml/issues/969
+[#970]: https://github.com/tafia/quick-xml/issues/970
 
 
 ## 0.40.1 -- 2026-05-15
