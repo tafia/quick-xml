@@ -16,7 +16,22 @@
 
 ### New Features
 
+- [#970]: Add `NsReader::resolver_mut()` and
+  `NamespaceResolver::{max_declarations_per_element, set_max_declarations_per_element}`.
+
 ### Bug Fixes
+
+- [#970]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
+  event) now rejects a start tag that declares more than
+  `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256) `xmlns` / `xmlns:*` namespace
+  bindings, returning the new `NamespaceError::TooManyDeclarations`. Previously
+  `push` allocated one `NamespaceBinding` per declaration with no upper bound,
+  before the event was returned to the caller, so an `NsReader` consumer could
+  not bound its memory exposure on untrusted input. The limit is configurable
+  via `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX`
+  to disable).
+
+[#970]: https://github.com/tafia/quick-xml/issues/970
 
 ### Misc Changes
 

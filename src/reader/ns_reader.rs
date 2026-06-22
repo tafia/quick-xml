@@ -121,6 +121,16 @@ impl<R> NsReader<R> {
     pub const fn resolver(&self) -> &NamespaceResolver {
         &self.ns_resolver
     }
+
+    /// Returns a mutable reference to the storage of namespace bindings
+    /// associated with this reader.
+    ///
+    /// Useful for configuring the resolver, e.g. to change the
+    /// [per-element namespace-declaration limit](NamespaceResolver::set_max_declarations_per_element).
+    #[inline]
+    pub fn resolver_mut(&mut self) -> &mut NamespaceResolver {
+        &mut self.ns_resolver
+    }
 }
 
 impl<R: BufRead> NsReader<R> {
