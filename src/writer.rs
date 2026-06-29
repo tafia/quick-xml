@@ -262,7 +262,7 @@ impl<W: Write> Writer<W> {
         let mut next_should_line_break = true;
         let result = match event.into() {
             Event::Start(e) => {
-                let result = self.write_wrapped(b"<", e.as_bytes(), b">");
+                let result = self.write_wrapped("<", &e, ">");
                 if let Some(i) = self.indent.as_mut() {
                     i.grow();
                 }
@@ -272,32 +272,32 @@ impl<W: Write> Writer<W> {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
-                self.write_wrapped(b"</", e.as_bytes(), b">")
+                self.write_wrapped("</", &e, ">")
             }
             Event::Empty(e) => self.write_wrapped(
-                b"<",
-                e.as_bytes(),
+                "<",
+                &e,
                 if self.config.add_space_before_slash_in_empty_elements {
-                    b" />"
+                    " />"
                 } else {
-                    b"/>"
+                    "/>"
                 },
             ),
             Event::Text(e) => {
                 next_should_line_break = false;
                 self.write(e.as_bytes())
             }
-            Event::Comment(e) => self.write_wrapped(b"<!--", e.as_bytes(), b"-->"),
+            Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
             Event::CData(e) => {
                 next_should_line_break = false;
                 self.write(b"<![CDATA[")?;
                 self.write(e.as_bytes())?;
                 self.write(b"]]>")
             }
-            Event::Decl(e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
-            Event::PI(e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
-            Event::DocType(e) => self.write_wrapped(b"<!DOCTYPE ", e.as_bytes(), b">"),
-            Event::GeneralRef(e) => self.write_wrapped(b"&", e.as_bytes(), b";"),
+            Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
+            Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
+            Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
+            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
@@ -313,16 +313,16 @@ impl<W: Write> Writer<W> {
     }
 
     #[inline]
-    fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> io::Result<()> {
+    fn write_wrapped(&mut self, before: &str, value: &str, after: &str) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n")?;
                 self.writer.write_all(i.current().as_bytes())?;
             }
         }
-        self.write(before)?;
-        self.write(value)?;
-        self.write(after)?;
+        self.write(before.as_bytes())?;
+        self.write(value.as_bytes())?;
+        self.write(after.as_bytes())?;
         Ok(())
     }
 
