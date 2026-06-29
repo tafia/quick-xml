@@ -15,7 +15,7 @@ use crate::utils::{is_whitespace, name_len};
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct ReaderState {
     /// Number of bytes read from the source of data since the reader was created
     pub offset: u64,
@@ -378,23 +378,5 @@ impl Default for ReaderState {
             #[cfg(feature = "encoding")]
             encoding: EncodingRef::Implicit(UTF_8),
         }
-    }
-}
-
-impl Debug for ReaderState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut d = f.debug_struct("ReaderState");
-
-        d.field("offset", &self.offset);
-        d.field("last_error_offset", &self.last_error_offset);
-        d.field("state", &self.state);
-        d.field("config", &self.config);
-        d.field("opened_buffer", &self.opened_buffer);
-        d.field("opened_starts", &self.opened_starts);
-
-        #[cfg(feature = "encoding")]
-        d.field("encoding", &self.encoding);
-
-        d.finish()
     }
 }
