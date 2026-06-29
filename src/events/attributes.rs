@@ -21,7 +21,7 @@ use std::{borrow::Cow, ops::Range};
 /// Most users will likely want to access the value using the [`normalized_value`] method.
 ///
 /// [`normalized_value`]: Self::normalized_value
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
     ///
@@ -353,15 +353,6 @@ impl<'a> Attribute<'a> {
             "0" | "false" => Some(false),
             _ => None,
         }
-    }
-}
-
-impl<'a> Debug for Attribute<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.debug_struct("Attribute")
-            .field("key", &self.key)
-            .field("value", &self.value)
-            .finish()
     }
 }
 

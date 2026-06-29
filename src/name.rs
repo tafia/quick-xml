@@ -506,7 +506,7 @@ impl NamespaceBinding {
 /// prefixes into namespaces.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
@@ -531,20 +531,6 @@ pub struct NamespaceResolver {
 /// document while bounding the heap allocated for one `<... xmlns:...>` tag to
 /// a few kilobytes regardless of input size.
 pub const DEFAULT_MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
-
-impl Debug for NamespaceResolver {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NamespaceResolver")
-            .field("buffer", &self.buffer)
-            .field("bindings", &self.bindings)
-            .field("nesting_level", &self.nesting_level)
-            .field(
-                "max_declarations_per_element",
-                &self.max_declarations_per_element,
-            )
-            .finish()
-    }
-}
 
 /// That constant define the one of [reserved namespaces] for the xml standard.
 ///
