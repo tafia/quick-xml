@@ -2899,9 +2899,7 @@ where
             // Reached by trivial::{...}::{field, field_nested, field_tag_after, field_tag_before, nested, tag_after, tag_before, wrapped}
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             // TODO: not reached by any tests
-            DeEvent::Start(e) => Err(DeError::UnexpectedStart(
-                e.name().as_ref().as_bytes().to_owned(),
-            )),
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -2924,9 +2922,7 @@ where
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
                 // Reached by trivial::{...}::{field_tag_after, tag_after}
-                DeEvent::Start(e) => Err(DeError::UnexpectedStart(
-                    e.name().as_ref().as_bytes().to_owned(),
-                )),
+                DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
                 // Reached by struct_::non_closed::elements_child
                 DeEvent::Eof => Err(Error::missed_end(name).into()),
             },
@@ -2936,9 +2932,7 @@ where
             // Reached by {...}::xs_list::empty
             DeEvent::End(_) => Ok("".into()),
             // Reached by trivial::{...}::{field_nested, field_tag_before, nested, tag_before}
-            DeEvent::Start(s) => Err(DeError::UnexpectedStart(
-                s.name().as_ref().as_bytes().to_owned(),
-            )),
+            DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
             // Reached by struct_::non_closed::elements_child
             DeEvent::Eof => Err(Error::missed_end(name).into()),
         }
