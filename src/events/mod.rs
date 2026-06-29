@@ -268,21 +268,21 @@ impl<'a> BytesStart<'a> {
         Attributes::wrap(&self.buf, self.name_len, true)
     }
 
-    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
+    /// Gets the undecoded raw string with the attributes of this tag as a `&str`,
     /// including the whitespace after the tag name if there is any.
     #[inline]
-    pub fn attributes_raw(&self) -> &[u8] {
-        self.buf[self.name_len..].as_bytes()
+    pub fn attributes_raw(&self) -> &str {
+        &self.buf[self.name_len..]
     }
 
     /// Try to get an attribute
-    pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
+    pub fn try_get_attribute(
         &'a self,
-        attr_name: N,
+        attr_name: &str,
     ) -> Result<Option<Attribute<'a>>, AttrError> {
         for a in self.attributes().with_checks(false) {
             let a = a?;
-            if a.key.as_ref().as_bytes() == attr_name.as_ref() {
+            if a.key.as_ref() == attr_name {
                 return Ok(Some(a));
             }
         }
@@ -1057,11 +1057,11 @@ impl<'a> BytesPI<'a> {
     /// use quick_xml::events::BytesPI;
     ///
     /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
-    /// assert_eq!(instruction.target(), b"xml-stylesheet");
+    /// assert_eq!(instruction.target(), "xml-stylesheet");
     /// ```
     #[inline]
-    pub fn target(&self) -> &[u8] {
-        self.content.name().0.as_bytes()
+    pub fn target(&self) -> &str {
+        self.content.name().0
     }
 
     /// Content of the processing instruction. Contains everything between target
@@ -1075,10 +1075,10 @@ impl<'a> BytesPI<'a> {
     /// use quick_xml::events::BytesPI;
     ///
     /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
-    /// assert_eq!(instruction.content(), br#" href="style.css""#);
+    /// assert_eq!(instruction.content(), r#" href="style.css""#);
     /// ```
     #[inline]
-    pub fn content(&self) -> &[u8] {
+    pub fn content(&self) -> &str {
         self.content.attributes_raw()
     }
 
@@ -1247,11 +1247,11 @@ impl<'a> BytesDecl<'a> {
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap().as_ref(), "1.1");
+    /// assert_eq!(decl.version().unwrap(), "1.1");
     ///
     /// // <?xml version='1.0' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap().as_ref(), "1.0");
+    /// assert_eq!(decl.version().unwrap(), "1.0");
     ///
     /// // <?xml encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
@@ -1829,10 +1829,10 @@ mod test {
         let mut b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), QName("test"));
-        assert_eq!(b.attributes_raw(), b"");
+        assert_eq!(b.attributes_raw(), "");
         b.push_attribute(("x", "a"));
         assert_eq!(b.len(), 10);
-        assert_eq!(b.attributes_raw(), b" x=\"a\"");
+        assert_eq!(b.attributes_raw(), " x=\"a\"");
         b.set_name("g");
         assert_eq!(b.len(), 7);
         assert_eq!(b.name(), QName("g"));
