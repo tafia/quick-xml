@@ -27,8 +27,10 @@
 
 ### Misc Changes
 
-[#977]: https://github.com/tafia/quick-xml/issues/977
+- [#983]: Adopted an AI use and contribution policy for new upstream contributions.
 
+[#977]: https://github.com/tafia/quick-xml/issues/977
+[#983]: https://github.com/tafia/quick-xml/issues/983
 
 ## 0.41.0 -- 2026-06-29
 
