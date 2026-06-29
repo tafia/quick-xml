@@ -14,76 +14,12 @@
 
 ## Unreleased
 
-### New Features
+This is a large release. The primary change is an ergonomic improvement across the entire API -
+the quick_xml now makes use of `&str` and `String` types where possible instead of
+`&[u8]` and `Vec<u8>`. This requires significant refactoring of downstream code,
+but should result in a net simplification as well as potential performance improvements.
 
-### Bug Fixes
-
-- [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
-  event) now returns the new `NamespaceError::TooDeeplyNested` when a document
-  nests elements deeper than `u16::MAX`, instead of overflowing the internal
-  `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
-  under `overflow-checks` builds and silently wrapped in release, corrupting
-  namespace-scope bookkeeping on deeply nested untrusted input.
-
-### Misc Changes
-
-- [#983]: Adopted an AI use and contribution policy for new upstream contributions.
-
-[#977]: https://github.com/tafia/quick-xml/issues/977
-[#983]: https://github.com/tafia/quick-xml/issues/983
-
-## 0.41.0 -- 2026-06-29
-
-### New Features
-
-- [#970]: Add `NsReader::resolver_mut()` and
-  `NamespaceResolver::{max_declarations_per_element, set_max_declarations_per_element}`.
-
-### Bug Fixes
-
-- [#969]: `Attributes` (and anything that iterates `BytesStart::attributes()`
-  with the default `with_checks(true)`) no longer takes O(N²) time on a start
-  tag with a large number of attributes. Small tags keep the previous linear
-  scan; larger ones switch to a 64-bit hash pre-filter, so the whole tag is
-  O(N). The exact `AttrError::Duplicated(new, prev)` positions are unchanged.
-- [#970]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
-  event) now rejects a start tag that declares more than
-  `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256) `xmlns` / `xmlns:*` namespace
-  bindings, returning the new `NamespaceError::TooManyDeclarations`. Previously
-  `push` allocated one `NamespaceBinding` per declaration with no upper bound,
-  before the event was returned to the caller, so an `NsReader` consumer could
-  not bound its memory exposure on untrusted input. The limit is configurable
-  via `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX`
-  to disable).
-
-[#969]: https://github.com/tafia/quick-xml/issues/969
-[#970]: https://github.com/tafia/quick-xml/issues/970
-
-
-## 0.40.1 -- 2026-05-15
-
-### Bug Fixes
-
-- [#964]: Fix `unreachable!()` panic in the serde deserializer when a DOCTYPE
-  declaration appears between two text runs inside an element (e.g.
-  `<a>x<!DOCTYPE y>z</a>`). The DOCTYPE used to break `drain_text`'s
-  consecutive-text merge, so two `DeEvent::Text` events reached
-  `read_text` and tripped its "Cannot be two consequent Text events"
-  invariant. DOCTYPE is now treated as transparent during text drain —
-  it still goes through the entity resolver, but the surrounding text
-  is merged into one run. Discovered via libFuzzer on a real-world
-  SAML deserializer harness.
-
-[#964]: https://github.com/tafia/quick-xml/pull/964
-
-### Misc Changes
-
-- [#963]: MSRV bumped to 1.86 (April 2025)
-- [#963]: Deprecated `Attribute` methods that take a `Decoder` parameter, since
-  attribute values are now always valid UTF-8: `decoded_and_normalized_value()`,
-  `decoded_and_normalized_value_with()`, `decode_and_unescape_value()`, and
-  `decode_and_unescape_value_with()`. Use `normalized_value()` and
-  `normalized_value_with()` instead.
+The MSRV has been raised to 1.86.
 
 ### Breaking Changes
 
@@ -119,13 +55,77 @@
   serde trait. Removed all methods from `Decoder` (the struct is kept only for
   backward compatibility with deprecated `Attribute` methods).
 
+### Bug Fixes
+
+- [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
+  event) now returns the new `NamespaceError::TooDeeplyNested` when a document
+  nests elements deeper than `u16::MAX`, instead of overflowing the internal
+  `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
+  under `overflow-checks` builds and silently wrapped in release, corrupting
+  namespace-scope bookkeeping on deeply nested untrusted input.
+
+### Misc Changes
+
+- [#983]: Adopted an AI use and contribution policy for new upstream contributions.
+- [#963]: MSRV bumped to 1.86 (April 2025)
+- [#963]: Deprecated `Attribute` methods that take a `Decoder` parameter, since
+  attribute values are now always valid UTF-8: `decoded_and_normalized_value()`,
+  `decoded_and_normalized_value_with()`, `decode_and_unescape_value()`, and
+  `decode_and_unescape_value_with()`. Use `normalized_value()` and
+  `normalized_value_with()` instead.
+
 [#963]: https://github.com/tafia/quick-xml/pull/963
+[#977]: https://github.com/tafia/quick-xml/issues/977
+[#983]: https://github.com/tafia/quick-xml/issues/983
+
+## 0.41.0 -- 2026-06-29
+
+### New Features
+
+- [#970]: Add `NsReader::resolver_mut()` and
+  `NamespaceResolver::{max_declarations_per_element, set_max_declarations_per_element}`.
+
+### Bug Fixes
+
+- [#969]: `Attributes` (and anything that iterates `BytesStart::attributes()`
+  with the default `with_checks(true)`) no longer takes O(N²) time on a start
+  tag with a large number of attributes. Small tags keep the previous linear
+  scan; larger ones switch to a 64-bit hash pre-filter, so the whole tag is
+  O(N). The exact `AttrError::Duplicated(new, prev)` positions are unchanged.
+- [#970]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
+  event) now rejects a start tag that declares more than
+  `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256) `xmlns` / `xmlns:*` namespace
+  bindings, returning the new `NamespaceError::TooManyDeclarations`. Previously
+  `push` allocated one `NamespaceBinding` per declaration with no upper bound,
+  before the event was returned to the caller, so an `NsReader` consumer could
+  not bound its memory exposure on untrusted input. The limit is configurable
+  via `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX`
+  to disable).
+
+[#969]: https://github.com/tafia/quick-xml/issues/969
+[#970]: https://github.com/tafia/quick-xml/issues/970
+
+## 0.40.1 -- 2026-05-15
+
+### Bug Fixes
+
+- [#964]: Fix `unreachable!()` panic in the serde deserializer when a DOCTYPE
+  declaration appears between two text runs inside an element (e.g.
+  `<a>x<!DOCTYPE y>z</a>`). The DOCTYPE used to break `drain_text`'s
+  consecutive-text merge, so two `DeEvent::Text` events reached
+  `read_text` and tripped its "Cannot be two consequent Text events"
+  invariant. DOCTYPE is now treated as transparent during text drain —
+  it still goes through the entity resolver, but the surrounding text
+  is merged into one run. Discovered via libFuzzer on a real-world
+  SAML deserializer harness.
+
+[#964]: https://github.com/tafia/quick-xml/pull/964
 
 ## 0.40.0 -- 2026-05-11
 
 MSRV bumped to 1.79.
 
-Now `quick-xml` supports the UTF-16 encoded documents. See the new `DecodingReader` type.
+Now `quick-xml` supports UTF-16 encoded documents. See the new `DecodingReader` type.
 
 ### New Features
 
