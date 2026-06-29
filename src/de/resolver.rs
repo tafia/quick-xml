@@ -13,9 +13,9 @@ use crate::events::BytesText;
 /// ```
 /// # use serde::Deserialize;
 /// # use pretty_assertions::assert_eq;
-/// use regex::bytes::Regex;
 /// use std::collections::BTreeMap;
-/// use std::string::FromUtf8Error;
+/// use std::convert::Infallible;
+/// use regex::Regex;
 /// use quick_xml::de::{Deserializer, EntityResolver};
 /// use quick_xml::events::BytesText;
 ///
@@ -36,13 +36,13 @@ use crate::events::BytesText;
 /// }
 ///
 /// impl EntityResolver for DocTypeEntityResolver {
-///     type Error = FromUtf8Error;
+///     type Error = Infallible;
 ///
 ///     fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
-///         for cap in self.re.captures_iter(doctype.as_ref().as_bytes()) {
+///         for cap in self.re.captures_iter(doctype.as_ref()) {
 ///             self.map.insert(
-///                 String::from_utf8(cap[1].to_vec())?,
-///                 String::from_utf8(cap[2].to_vec())?,
+///                 cap[1].to_owned(),
+///                 cap[2].to_owned(),
 ///             );
 ///         }
 ///         Ok(())
