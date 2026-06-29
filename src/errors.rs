@@ -317,7 +317,6 @@ pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
     use super::*;
-    use crate::utils::write_byte_string;
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
@@ -339,7 +338,7 @@ pub mod serialize {
         /// Deserializer encounter a start tag with a specified name when it is
         /// not expecting. This happens when you try to deserialize a primitive
         /// value (numbers, strings, booleans) from an XML element.
-        UnexpectedStart(Vec<u8>),
+        UnexpectedStart(String),
         /// The [`Reader`] produced [`Event::Eof`] when it is not expecting,
         /// for example, after producing [`Event::Start`] but before corresponding
         /// [`Event::End`].
@@ -361,11 +360,7 @@ pub mod serialize {
                 Self::Custom(s) => f.write_str(s),
                 Self::InvalidXml(e) => e.fmt(f),
                 Self::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
-                Self::UnexpectedStart(e) => {
-                    f.write_str("unexpected `Event::Start(")?;
-                    write_byte_string(f, e)?;
-                    f.write_str(")`")
-                }
+                Self::UnexpectedStart(e) => write!(f, "unexpected `Event::Start({})", e),
                 Self::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
                 #[cfg(feature = "overlapped-lists")]
                 Self::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),

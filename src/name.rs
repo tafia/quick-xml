@@ -205,6 +205,7 @@ impl<'a> QName<'a> {
         self.0.find(':')
     }
 }
+
 impl<'a> Debug for QName<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "QName({})", self.0)
@@ -233,17 +234,20 @@ impl<'a> LocalName<'a> {
         self.0
     }
 }
+
 impl<'a> Debug for LocalName<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "LocalName({})", self.0)
     }
 }
+
 impl<'a> AsRef<str> for LocalName<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
         self.0
     }
 }
+
 impl<'a> From<QName<'a>> for LocalName<'a> {
     /// Creates `LocalName` from a [`QName`]
     ///
@@ -295,11 +299,13 @@ impl<'a> Prefix<'a> {
         self.0 == "xmlns"
     }
 }
+
 impl<'a> Debug for Prefix<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Prefix({})", self.0)
     }
 }
+
 impl<'a> AsRef<str> for Prefix<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
@@ -319,6 +325,7 @@ pub enum PrefixDeclaration<'a> {
     /// `prefix` in `xmlns:prefix="..."`, which is stored as payload of this variant.
     Named(&'a str),
 }
+
 impl<'a> Debug for PrefixDeclaration<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -369,11 +376,13 @@ impl<'a> Namespace<'a> {
     }
     //TODO: implement value normalization and use it when comparing namespaces
 }
+
 impl<'a> Debug for Namespace<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "Namespace({})", self.0)
     }
 }
+
 impl<'a> AsRef<str> for Namespace<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
@@ -400,6 +409,7 @@ pub enum ResolveResult<'ns> {
     /// Specified prefix was not found in scope
     Unknown(String),
 }
+
 impl<'ns> Debug for ResolveResult<'ns> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
