@@ -1015,7 +1015,7 @@ enum ReadTextResult<'r, B> {
     /// Contains text block up to EOF, neither start of markup (`<` character)
     /// or start of reference (`&` character) was found.
     UpToEof(&'r str),
-    /// IO error occurred.
+    /// IO or decoding error occurred.
     Err(Error),
 }
 
@@ -1035,7 +1035,7 @@ enum ReadRefResult<'r> {
     /// Contains text block up to start of markup (`<` character).
     /// Result includes start `&`.
     UpToMarkup(&'r str),
-    /// IO error occurred.
+    /// IO or decoding error occurred.
     Err(Error),
 }
 
