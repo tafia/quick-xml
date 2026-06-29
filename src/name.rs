@@ -286,17 +286,15 @@ impl<'a> Prefix<'a> {
     }
 
     /// Checks if this prefix is a special prefix `xml`.
-    // TODO: restore const once PartialEq for str is usable in const context (const_trait_impl)
     #[inline(always)]
-    pub fn is_xml(&self) -> bool {
-        self.0 == "xml"
+    pub const fn is_xml(&self) -> bool {
+        matches!(self.0.as_bytes(), b"xml")
     }
 
     /// Checks if this prefix is a special prefix `xmlns`.
-    // TODO: restore const once PartialEq for str is usable in const context (const_trait_impl)
     #[inline(always)]
-    pub fn is_xmlns(&self) -> bool {
-        self.0 == "xmlns"
+    pub const fn is_xmlns(&self) -> bool {
+        matches!(self.0.as_bytes(), b"xmlns")
     }
 }
 
@@ -474,30 +472,35 @@ struct NamespaceBinding {
 }
 
 impl NamespaceBinding {
-    // TODO: restore const once str indexing with Range is usable in const context
     /// Get the namespace prefix, bound to this namespace declaration, or `None`,
     /// if this declaration is for default namespace (`xmlns="..."`).
     #[inline]
-    fn prefix<'b>(&self, ns_buffer: &'b str) -> Option<Prefix<'b>> {
+    const fn prefix<'b>(&self, ns_buffer: &'b str) -> Option<Prefix<'b>> {
         if self.prefix_len == 0 {
             None
         } else {
-            Some(Prefix(&ns_buffer[self.start..self.start + self.prefix_len]))
+            // We use split_at to get [start..start + prefix_len]
+            // in a constant way
+            let (_, prefix) = ns_buffer.split_at(self.start);
+            let (prefix, _) = prefix.split_at(self.prefix_len);
+            Some(Prefix(prefix))
         }
     }
 
-    // TODO: restore const once str indexing with Range is usable in const context
     /// Gets the namespace name (the URI) slice out of namespace buffer
     ///
     /// Returns `None` if namespace for this prefix was explicitly removed from
     /// scope, using `xmlns[:prefix]=""`
     #[inline]
-    fn namespace<'ns>(&self, buffer: &'ns str) -> ResolveResult<'ns> {
+    const fn namespace<'ns>(&self, buffer: &'ns str) -> ResolveResult<'ns> {
         if self.value_len == 0 {
             ResolveResult::Unbound
         } else {
-            let start = self.start + self.prefix_len;
-            ResolveResult::Bound(Namespace(&buffer[start..start + self.value_len]))
+            // We use split_at to get [start + prefix_len..start + prefix_len + value_len]
+            // in a constant way
+            let (_, ns) = buffer.split_at(self.start + self.prefix_len);
+            let (ns, _) = ns.split_at(self.value_len);
+            ResolveResult::Bound(Namespace(ns))
         }
     }
 }
