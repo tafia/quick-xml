@@ -12,7 +12,6 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
-use std::str::from_utf8;
 
 use quick_xml::errors::Error;
 use quick_xml::escape::EscapeError;
@@ -20,7 +19,7 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::XmlVersion;
-use regex::bytes::Regex;
+use regex::Regex;
 
 use pretty_assertions::assert_eq;
 
@@ -30,7 +29,7 @@ struct MyReader<'i> {
     readers: VecDeque<Reader<&'i [u8]>>,
     /// Map of captured internal _parsed general entities_. _Parsed_ means that
     /// value of the entity is parsed by XML reader
-    entities: HashMap<&'i [u8], &'i [u8]>,
+    entities: HashMap<&'i str, &'i str>,
     /// In this example we use simple regular expression to capture entities from DTD.
     /// In real application you should use DTD parser.
     entity_re: Regex,
@@ -70,7 +69,7 @@ impl<'i> MyReader<'i> {
                             self.readers.push_back(reader);
                             return Ok(Event::Text(BytesText::from_escaped(ch.to_string())));
                         }
-                        let mut r = Reader::from_reader(self.resolve(e.as_bytes())?);
+                        let mut r = Reader::from_reader(self.resolve(&e)?.as_bytes());
                         *r.config_mut() = reader.config().clone();
 
                         self.readers.push_back(reader);
@@ -98,30 +97,21 @@ impl<'i> MyReader<'i> {
             Cow::Borrowed(doctype) => doctype,
             Cow::Owned(_) => unreachable!("We are sure that event will be borrowed"),
         };
-        for cap in self.entity_re.captures_iter(doctype.as_bytes()) {
-            self.entities.insert(
-                cap.get(1).unwrap().as_bytes(),
-                cap.get(2).unwrap().as_bytes(),
-            );
+        for cap in self.entity_re.captures_iter(doctype) {
+            self.entities
+                .insert(cap.get(1).unwrap().as_str(), cap.get(2).unwrap().as_str());
         }
     }
 
-    fn resolve(&self, entity: &[u8]) -> Result<&'i [u8], EscapeError> {
+    fn resolve(&self, entity: &str) -> Result<&'i str, EscapeError> {
         match self.entities.get(entity) {
             Some(replacement) => Ok(replacement),
-            None => Err(EscapeError::UnrecognizedEntity(
-                0..0,
-                String::from_utf8_lossy(entity).into_owned(),
-            )),
+            None => Err(EscapeError::UnrecognizedEntity(0..0, entity.to_owned())),
         }
     }
 
     fn get_entity(&self, entity: &str) -> Option<&'i str> {
-        self.entities
-            .get(entity.as_bytes())
-            // SAFETY: We are sure that slices are correct UTF-8 because we get
-            // them from rust string
-            .map(|value| from_utf8(value).unwrap())
+        self.entities.get(entity).copied()
     }
 }
 
