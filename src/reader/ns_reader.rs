@@ -10,7 +10,7 @@ use std::ops::Deref;
 use std::path::Path;
 
 use crate::errors::Result;
-use crate::events::{BytesText, Event};
+use crate::events::{BytesStart, BytesText, Event};
 use crate::name::{NamespaceResolver, QName, ResolveResult};
 use crate::reader::{Config, Reader, Span, XmlSource};
 
@@ -91,6 +91,10 @@ impl<R> NsReader<R> {
                 Ok(Event::Empty(e))
             }
             Ok(Event::End(e)) => {
+                // push a fake element to the `ns_resolver` as the pending pop will remove it again
+                // if we don't push this element we don't increase the level, but the subsequent pending pop will
+                // decrease it anyway.
+                self.ns_resolver.push(&BytesStart::new(""))?;
                 // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;

@@ -702,3 +702,48 @@ mod as_field {
         }
     }
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/953.
+mod issue953 {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    struct BoreholeType {
+        #[serde(rename = "boreholeSegment")]
+        borehole_segment: Vec<()>,
+
+        #[serde(rename = "drillingProcess")]
+        drilling_process: Option<DrillingProcess>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct DrillingProcess {
+        #[serde(rename = "DrillingProcess")]
+        drilling_process: (),
+    }
+
+    // success before 210d3e1d460a4c63e13d455b0b15623b77fa669c
+    // failed since 210d3e1d460a4c63e13d455b0b15623b77fa669c
+    #[test]
+    fn open_close() {
+        let input = r#"
+        <Borehole xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <boreholeSegment> </boreholeSegment>
+          <drillingProcess xsi:nil="true"/>
+        </Borehole>
+        "#;
+        let _: BoreholeType = from_str(&input).unwrap();
+    }
+
+    // failed always
+    #[test]
+    fn self_closed() {
+        let input = r#"
+        <Borehole xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <boreholeSegment/>
+          <drillingProcess xsi:nil="true"/>
+        </Borehole>
+        "#;
+        let _: BoreholeType = from_str(&input).unwrap();
+    }
+}
