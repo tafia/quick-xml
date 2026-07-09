@@ -26,7 +26,7 @@ pub enum DtdParser {
     /// ```
     InElementDecl,
     /// This state handles ATTLIST, ENTITY and NOTATION elements, i.e. all elements that can have
-    /// quotes strings (`'...'` or `"..."`) inside their markup, in which `>` should not be threated
+    /// quotes strings (`'...'` or `"..."`) inside their markup, in which `>` should not be treated
     /// as the end of the markup.
     ///
     /// This state handles the following productions from XML grammar:

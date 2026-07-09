@@ -736,7 +736,7 @@ pub enum AttrError {
     /// ```
     ///
     /// This error can be returned only for the last attribute in the list,
-    /// because otherwise any content after `=` will be threated as a value.
+    /// because otherwise any content after `=` will be treated as a value.
     /// The XML
     ///
     /// ```xml

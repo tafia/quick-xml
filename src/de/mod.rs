@@ -1350,7 +1350,7 @@
 //!   },
 //!   quick_xml::de::from_str("
 //!     <any-tag xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
-//!       <element xsi:nil='true'>Content is skiped because of xsi:nil='true'</element>
+//!       <element xsi:nil='true'>Content is skipped because of xsi:nil='true'</element>
 //!     </any-tag>
 //!   ").unwrap(),
 //! );
@@ -1378,7 +1378,7 @@
 //!   },
 //!   quick_xml::de::from_str("
 //!     <any-tag attribute='42' xsi:nil='true' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
-//!       <element>Content is skiped because of xsi:nil='true'</element>
+//!       <element>Content is skipped because of xsi:nil='true'</element>
 //!       <non_optional>Note, that non-optional fields will be deserialized as usual</non_optional>
 //!     </any-tag>
 //!   ").unwrap(),

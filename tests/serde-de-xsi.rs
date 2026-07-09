@@ -475,7 +475,7 @@ mod as_field {
                 let xml = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo attr="value"/></bar>"#;
 
                 // Without `xsi:nil="true"` <foo> is mapped to `foo` field,
-                // but failed to deserialzie because of missing required <elem> tag
+                // but failed to deserialize because of missing required <elem> tag
                 assert_error_matches!(from_str::<Bar>(xml), DeError::Custom(_));
                 assert_eq!(
                     from_str::<Root>(xml).unwrap(),
@@ -509,7 +509,7 @@ mod as_field {
                 let xml = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="false" attr="value"/></bar>"#;
 
                 // With `xsi:nil="false"` <foo> is mapped to `foo` field,
-                // but failed to deserialzie because of missing required <elem> tag
+                // but failed to deserialize because of missing required <elem> tag
                 assert_error_matches!(from_str::<Bar>(xml), DeError::Custom(_));
                 assert_eq!(
                     from_str::<Root>(xml).unwrap(),
@@ -546,7 +546,7 @@ mod as_field {
                     fn true_() {
                         let value = AnyName {
                             attr: None,
-                            // Becase `nil=true``, element deserialized as `None`
+                            // Because `nil=true``, element deserialized as `None`
                             elem: None,
                         };
 

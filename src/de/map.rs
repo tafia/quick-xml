@@ -217,7 +217,7 @@ where
         }
     }
 
-    /// Determines if subtree started with the specified event shoould be skipped.
+    /// Determines if subtree started with the specified event should be skipped.
     ///
     /// Used to map elements with `xsi:nil` attribute set to true to `None` in optional contexts.
     ///
@@ -896,7 +896,7 @@ impl<'de> TagFilter<'de> {
 /// <>
 ///   ...
 ///   <item>The is the one item</item>
-///   This is <![CDATA[one another]]> item<!-- even when--> it splitted by comments
+///   This is <![CDATA[one another]]> item<!-- even when--> it split by comments
 ///   <tag>...and that is the third!</tag>
 ///   ...
 /// </>

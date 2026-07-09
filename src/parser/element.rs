@@ -30,7 +30,7 @@ use crate::parser::Parser;
 /// let mut parser = ElementParser::default();
 ///
 /// // Parse `<my-element  with = 'some > inside'>and the text follow...`
-/// // splitted into three chunks
+/// // split into three chunks
 /// assert_eq!(parser.feed(b"<my-element"), None);
 /// // ...get new chunk of data
 /// assert_eq!(parser.feed(b" with = 'some >"), None);

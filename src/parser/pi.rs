@@ -25,7 +25,7 @@ use crate::utils::is_whitespace;
 /// let mut parser = PiParser::default();
 ///
 /// // Parse `<?instruction with = 'some > and ?' inside?>and the text follow...`
-/// // splitted into three chunks
+/// // split into three chunks
 /// assert_eq!(parser.feed(b"<?instruction"), None);
 /// // ...get new chunk of data
 /// assert_eq!(parser.feed(b" with = 'some > and ?"), None);

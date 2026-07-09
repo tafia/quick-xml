@@ -719,7 +719,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
 
     /// Enable or disable expansion of empty elements (without adding space before `/>`).
     ///
-    /// This is the historycally first way to configure empty element handling. You can use
+    /// This is the historically first way to configure empty element handling. You can use
     /// [`empty_element_handling`](Self::empty_element_handling) for more control.
     ///
     /// # Examples
