@@ -896,7 +896,7 @@ impl<'de> TagFilter<'de> {
 /// <>
 ///   ...
 ///   <item>The is the one item</item>
-///   This is <![CDATA[one another]]> item<!-- even when--> it split by comments
+///   This is <![CDATA[one another]]> item<!-- even when--> it is split by comments
 ///   <tag>...and that is the third!</tag>
 ///   ...
 /// </>
