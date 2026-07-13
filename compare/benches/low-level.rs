@@ -1,7 +1,7 @@
 use criterion::{self, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
-use quick_xml::reader::Reader;
+use quick_xml::reader::{self, Reader, XmlReader};
 use std::hint::black_box;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -88,6 +88,26 @@ fn low_level_comparison(c: &mut Criterion) {
                             _ => (),
                         }
                         buf.clear();
+                    }
+                    assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("quick_xml:reader", filename),
+            *data,
+            |b, input| {
+                b.iter(|| {
+                    let mut reader = XmlReader::from_str(input);
+                    // TODO: reader.config_mut().check_end_names = false;
+                    let mut count = black_box(0);
+                    loop {
+                        match reader.read_event() {
+                            Ok(reader::Event::Start(_)) | Ok(reader::Event::Empty(_)) => count += 1,
+                            Ok(reader::Event::Eof) => break,
+                            _ => (),
+                        }
                     }
                     assert_eq!(count, total_tags, "Overall tag count in {}", filename);
                 })

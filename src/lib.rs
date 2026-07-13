@@ -10,6 +10,8 @@
 //! The user has to explicitly _ask_ for the next XML event, similar to a database cursor.
 //! This is achieved by the following two structs:
 //!
+//! - [`XmlReader`]: A high level XML pull-reader which resolves entities and can process several
+//!   XML sources if you provide them.
 //! - [`Reader`]: A low level XML pull-reader where buffer allocation/clearing is left to user.
 //! - [`Writer`]: A XML writer. Can be nested with readers if you want to transform XMLs.
 //!
@@ -27,7 +29,8 @@
 //!
 //! # Examples
 //!
-//! - For a reading example see [`Reader`]
+//! - For a reading example see [`XmlReader`]
+//! - For a low-level reading example see [`Reader`]
 //! - For a writing example see [`Writer`]
 //!
 //! # Features
@@ -79,7 +82,7 @@ pub use crate::encoding::Decoder;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::{DeError, SeError};
 pub use crate::errors::{Error, Result};
-pub use crate::reader::{NsReader, Reader};
+pub use crate::reader::{NsReader, Reader, XmlReader};
 pub use crate::writer::{ElementWriter, Writer};
 
 /// Version of XML standard

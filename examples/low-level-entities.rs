@@ -16,7 +16,6 @@ use std::str::from_utf8;
 
 use quick_xml::encoding::Decoder;
 use quick_xml::errors::Error;
-use quick_xml::escape::EscapeError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -107,11 +106,10 @@ impl<'i> MyReader<'i> {
         }
     }
 
-    fn resolve(&self, entity: &[u8]) -> Result<&'i [u8], EscapeError> {
+    fn resolve(&self, entity: &[u8]) -> Result<&'i [u8], Error> {
         match self.entities.get(entity) {
             Some(replacement) => Ok(replacement),
-            None => Err(EscapeError::UnrecognizedEntity(
-                0..0,
+            None => Err(Error::UnrecognizedGeneralEntity(
                 String::from_utf8_lossy(entity).into_owned(),
             )),
         }

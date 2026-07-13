@@ -14,11 +14,21 @@
 
 ## Unreleased
 
+The new `XmlReader` type was added that is automatically resolves general entity references.
+
+`quick_xml::de::resolver` was replaced by `quick_xml::resolver` module.
+
 ### New Features
+
+- [#948]: Add `quick_xml::reader::EntityResolver` which is able to resolve external entities.
+- [#948]: Add `quick_xml::reader::XmlReader`, a new high-level reader which should be preferred
+  over the old `Reader`.
 
 ### Bug Fixes
 
 ### Misc Changes
+
+[#948]: https://github.com/tafia/quick-xml/pull/948
 
 
 ## 0.41.0 -- 2026-06-29

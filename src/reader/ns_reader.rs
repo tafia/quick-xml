@@ -4,6 +4,7 @@
 //! [qualified names]: https://www.w3.org/TR/xml-names11/#dt-qualname
 //! [expanded names]: https://www.w3.org/TR/xml-names11/#dt-expname
 
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::ops::Deref;
@@ -12,7 +13,8 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::{BytesText, Event};
 use crate::name::{NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Config, Reader, Span, XmlSource};
+use crate::reader::{Config, EntityReader, EntityResolver, Reader, Span, StorageUnit, XmlSource};
+use crate::XmlVersion;
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -760,6 +762,42 @@ impl<'i> NsReader<&'i [u8]> {
         // content anymore, we directly pop namespace of the opening tag
         self.ns_resolver.pop();
         Ok(result)
+    }
+
+    /// Converts this reader with its state into the storage unit for the [`XmlReader`](super::XmlReader).
+    pub(super) fn to_borrowed_storage_unit<'e, E>(
+        self,
+        entity_resolver: E,
+    ) -> StorageUnit<'i, 'e, E>
+    where
+        E: EntityResolver<'i>,
+    {
+        StorageUnit {
+            parts: VecDeque::from([EntityReader::InternalBorrowed(self.reader)]),
+            version: XmlVersion::Implicit1_0,
+            ns_resolver: self.ns_resolver,
+            pending_ns_pop: self.pending_pop,
+            entity_resolver,
+        }
+    }
+}
+
+impl<'i> NsReader<Box<dyn BufRead + 'i>> {
+    /// Converts this reader with its state into the storage unit for the [`XmlReader`](super::XmlReader).
+    pub(super) fn to_buffered_storage_unit<'e, E>(
+        self,
+        entity_resolver: E,
+    ) -> StorageUnit<'i, 'e, E>
+    where
+        E: EntityResolver<'i>,
+    {
+        StorageUnit {
+            parts: VecDeque::from([EntityReader::InternalOwned(self.reader)]),
+            version: XmlVersion::Implicit1_0,
+            ns_resolver: self.ns_resolver,
+            pending_ns_pop: self.pending_pop,
+            entity_resolver,
+        }
     }
 }
 
