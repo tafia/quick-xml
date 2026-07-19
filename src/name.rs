@@ -7,6 +7,7 @@ use crate::events::attributes::Attribute;
 use crate::events::{BytesStart, Event};
 use crate::utils::{write_byte_string, Bytes};
 use memchr::memchr;
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::iter::FusedIterator;
 
@@ -528,6 +529,10 @@ pub struct NamespaceResolver {
     /// [`NamespaceError::TooManyDeclarations`]. See
     /// [`set_max_declarations_per_element`](Self::set_max_declarations_per_element).
     max_declarations_per_element: usize,
+    /// An index from prefix bytes (empty slice for the default namespace) to
+    /// ascending positions in [`Self::bindings`]. `None` until the stack grows
+    /// past [`SMALL_BINDING_COUNT`], so shallow documents never build it.
+    prefix_index: Option<HashMap<Vec<u8>, Vec<usize>>>,
 }
 
 /// Default limit on the number of `xmlns` / `xmlns:*` declarations
@@ -539,6 +544,11 @@ pub struct NamespaceResolver {
 /// a few kilobytes regardless of input size.
 pub const DEFAULT_MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
 
+/// Number of [`NamespaceBinding`]s that may sit on [`NamespaceResolver::bindings`]
+/// before [`NamespaceResolver::resolve_prefix`] switches from a direct reverse
+/// linear scan to a `HashMap` index (see [`NamespaceResolver::prefix_index`]).
+const SMALL_BINDING_COUNT: usize = 32;
+
 impl Debug for NamespaceResolver {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("NamespaceResolver")
@@ -549,6 +559,7 @@ impl Debug for NamespaceResolver {
                 "max_declarations_per_element",
                 &self.max_declarations_per_element,
             )
+            .field("prefix_index", &self.prefix_index)
             .finish()
     }
 }
@@ -600,6 +611,7 @@ impl Default for NamespaceResolver {
             bindings,
             nesting_level: 0,
             max_declarations_per_element: DEFAULT_MAX_DECLARATIONS_PER_ELEMENT,
+            prefix_index: None,
         }
     }
 }
@@ -676,6 +688,7 @@ impl NamespaceResolver {
                     value_len: namespace.0.len(),
                     level,
                 });
+                self.index_binding(&[]);
             }
             PrefixDeclaration::Named(b"xml") => {
                 if namespace != RESERVED_NAMESPACE_XML.1 {
@@ -707,9 +720,46 @@ impl NamespaceResolver {
                     value_len: namespace.0.len(),
                     level,
                 });
+                self.index_binding(prefix);
             }
         }
         Ok(())
+    }
+
+    /// Records the binding just pushed onto the back of [`Self::bindings`] in
+    /// [`Self::prefix_index`], keyed by `key` (the prefix bytes, or an empty
+    /// slice for the default namespace).
+    ///
+    /// Below [`SMALL_BINDING_COUNT`] this is a no-op, because a reverse linear
+    /// scan over a handful of bindings beats hashing and allocates nothing.
+    /// The first time the threshold is crossed the index is built from the
+    /// whole stack at once; after that every push extends it here, and every
+    /// pop truncates it in [`Self::set_level`].
+    fn index_binding(&mut self, key: &[u8]) {
+        let index = self.bindings.len() - 1;
+        if self.prefix_index.is_none() {
+            if self.bindings.len() <= SMALL_BINDING_COUNT {
+                return;
+            }
+            let mut map: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
+            for (i, n) in self.bindings.iter().enumerate() {
+                let k: &[u8] = match n.prefix(&self.buffer) {
+                    Some(p) => p.into_inner(),
+                    None => &[],
+                };
+                map.entry(k.to_vec()).or_default().push(i);
+            }
+            self.prefix_index = Some(map);
+            return;
+        }
+        // `unwrap` is safe: the `is_none()` branch above always returns.
+        let map = self.prefix_index.as_mut().unwrap();
+        match map.get_mut(key) {
+            Some(positions) => positions.push(index),
+            None => {
+                map.insert(key.to_vec(), vec![index]);
+            }
+        }
     }
 
     /// Begins a new scope and add to it all [namespace bindings] that found in
@@ -824,10 +874,35 @@ impl NamespaceResolver {
             None => {
                 self.buffer.clear();
                 self.bindings.clear();
+                if let Some(map) = &mut self.prefix_index {
+                    map.clear();
+                }
             }
             // drop all namespaces past the last valid namespace
             Some(last_valid_pos) => {
                 if let Some(len) = self.bindings.get(last_valid_pos + 1).map(|n| n.start) {
+                    // Keep `prefix_index` (if built) in sync with the bindings
+                    // we're about to drop. `bindings` only grows by appending
+                    // and shrinks from the back, so the positions going away
+                    // are always the trailing entries of a prefix's index
+                    // list -- one pop per removed binding is enough.
+                    if let Some(map) = &mut self.prefix_index {
+                        for n in &self.bindings[last_valid_pos + 1..] {
+                            let key: &[u8] = match n.prefix(&self.buffer) {
+                                Some(p) => p.into_inner(),
+                                None => &[],
+                            };
+                            let remove_key = if let Some(positions) = map.get_mut(key) {
+                                positions.pop();
+                                positions.is_empty()
+                            } else {
+                                false
+                            };
+                            if remove_key {
+                                map.remove(key);
+                            }
+                        }
+                    }
                     self.buffer.truncate(len);
                     self.bindings.truncate(last_valid_pos + 1);
                 }
@@ -964,21 +1039,49 @@ impl NamespaceResolver {
     ///   For attribute names this should be set to `false` and for element names to `true`.
     pub fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
         // Find the last defined binding that corresponds to the given prefix
-        let mut iter = self.bindings.iter().rev();
         match (prefix, use_default) {
             // Attribute name has no explicit prefix -> Unbound
             (None, false) => ResolveResult::Unbound,
             // Element name has no explicit prefix -> find nearest xmlns binding
-            (None, true) => match iter.find(|n| n.prefix_len == 0) {
+            (None, true) => match self.last_binding(&[]) {
                 Some(n) => n.namespace(&self.buffer),
                 None => ResolveResult::Unbound,
             },
-            // Attribute or element name with explicit prefix
-            (Some(p), _) => match iter.find(|n| n.prefix(&self.buffer) == prefix) {
+            // An explicit but empty prefix (from a malformed name like
+            // `:local`) can never match: `NamespaceBinding::prefix` uses
+            // `prefix_len == 0` to mean the default namespace, not an empty
+            // prefix. Skip the lookup and report `Unknown` directly.
+            (Some(p), _) if p.into_inner().is_empty() => ResolveResult::Unknown(Vec::new()),
+            (Some(p), _) => match self.last_binding(p.into_inner()) {
                 Some(n) if n.value_len != 0 => n.namespace(&self.buffer),
                 // Not found or binding reset (corresponds to `xmlns:p=""`)
                 _ => ResolveResult::Unknown(p.into_inner().to_vec()),
             },
+        }
+    }
+
+    /// Finds the most recently pushed [`NamespaceBinding`] for `key` (prefix
+    /// bytes, or an empty slice for the default namespace) that is still in
+    /// scope.
+    ///
+    /// Once [`Self::prefix_index`] exists this is an O(1) average lookup;
+    /// below [`SMALL_BINDING_COUNT`] it is the reverse linear scan the
+    /// resolver has always done.
+    #[inline]
+    fn last_binding(&self, key: &[u8]) -> Option<&NamespaceBinding> {
+        if let Some(map) = &self.prefix_index {
+            return map
+                .get(key)
+                .and_then(|positions| positions.last())
+                .and_then(|&i| self.bindings.get(i));
+        }
+        if key.is_empty() {
+            self.bindings.iter().rev().find(|n| n.prefix_len == 0)
+        } else {
+            self.bindings
+                .iter()
+                .rev()
+                .find(|n| n.prefix(&self.buffer) == Some(Prefix(key)))
         }
     }
 
@@ -1335,6 +1438,153 @@ mod namespaces {
             resolver.push(&tag),
             Err(NamespaceError::TooDeeplyNested(u16::MAX as usize)),
         );
+    }
+
+    /// `resolve_prefix` has two implementations, picked by the number of
+    /// namespace bindings on the stack. This checks the indexed one, used
+    /// above `SMALL_BINDING_COUNT`; the tests above cover the linear scan
+    /// used below it. See <https://github.com/tafia/quick-xml/issues/980>.
+    #[test]
+    fn resolve_prefix_past_index_threshold() {
+        let depth = SMALL_BINDING_COUNT * 3;
+        let mut resolver = NamespaceResolver::default();
+
+        // One distinct `xmlns:pN` binding per nesting level, well past the
+        // point where the index must exist.
+        for level in 0..depth {
+            let tag = format!("e xmlns:p{level}='ns{level}'");
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+        }
+        assert!(
+            resolver.bindings.len() > SMALL_BINDING_COUNT,
+            "test should exercise the indexed path"
+        );
+        assert!(resolver.prefix_index.is_some());
+
+        // A prefix declared near the bottom of the stack.
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"p0")), false),
+            Bound(Namespace(b"ns0")),
+        );
+        // A prefix declared at the very top.
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(format!("p{}", depth - 1).as_bytes())), false),
+            Bound(Namespace(format!("ns{}", depth - 1).as_bytes())),
+        );
+        // A prefix that was never declared.
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"never-declared")), false),
+            Unknown(b"never-declared".to_vec()),
+        );
+        // No default namespace was declared anywhere on the stack.
+        assert_eq!(resolver.resolve_prefix(None, true), Unbound);
+
+        // A default namespace declared at the deepest level.
+        resolver
+            .push(&BytesStart::from_content("e xmlns='default-ns'", 1))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve_prefix(None, true),
+            Bound(Namespace(b"default-ns")),
+        );
+
+        // Popping that scope must un-resolve it, so the index is maintained
+        // on pop and not just on push.
+        resolver.pop();
+        assert_eq!(resolver.resolve_prefix(None, true), Unbound);
+
+        // Pop back past `p{depth-1}`: it must stop resolving while `p0`, still
+        // in scope, keeps resolving. A stale index entry pointing past the
+        // truncated stack would panic or resolve an out-of-scope prefix here.
+        resolver.set_level((depth - 1) as u16);
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(format!("p{}", depth - 1).as_bytes())), false),
+            Unknown(format!("p{}", depth - 1).into_bytes()),
+        );
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"p0")), false),
+            Bound(Namespace(b"ns0")),
+        );
+    }
+
+    /// An explicit but empty prefix (from a malformed name like `:local`) must
+    /// never resolve, even with a default namespace in scope. Checked against
+    /// both `resolve_prefix` implementations.
+    #[test]
+    fn resolve_prefix_with_empty_prefix_never_resolves() {
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content(" xmlns='default'", 0))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"")), false),
+            Unknown(Vec::new()),
+        );
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"")), true),
+            Unknown(Vec::new()),
+        );
+
+        // Same check once the stack is large enough to have switched to the
+        // `HashMap`-indexed lookup path.
+        for level in 0..(SMALL_BINDING_COUNT * 2) {
+            let tag = format!("e xmlns:p{level}='ns{level}'");
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+        }
+        assert!(resolver.prefix_index.is_some());
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"")), false),
+            Unknown(Vec::new()),
+        );
+        assert_eq!(
+            resolver.resolve_prefix(Some(Prefix(b"")), true),
+            Unknown(Vec::new()),
+        );
+    }
+
+    /// Prefixes that leave scope must not accumulate as empty entries in the
+    /// index. Long-lived readers can otherwise retain one allocation for every
+    /// distinct prefix ever observed, even though none of those bindings remain
+    /// resolvable.
+    #[test]
+    fn prefix_index_drops_keys_when_bindings_leave_scope() {
+        let mut resolver = NamespaceResolver::default();
+        for level in 0..=SMALL_BINDING_COUNT {
+            let tag = format!("e xmlns:seed{level}='ns{level}'");
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+        }
+        assert!(resolver.prefix_index.is_some());
+
+        resolver.set_level(0);
+        let baseline_keys = resolver.prefix_index.as_ref().unwrap().len();
+        for level in 0..128 {
+            let tag = format!("e xmlns:transient{level}='ns{level}'");
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+            resolver.pop();
+        }
+
+        assert_eq!(resolver.prefix_index.as_ref().unwrap().len(), baseline_keys,);
+    }
+
+    /// The nesting-depth guard runs before parsing declarations, so rejecting
+    /// one more scope must leave an already-built prefix index untouched.
+    #[test]
+    fn rejected_push_does_not_change_prefix_index() {
+        let mut resolver = NamespaceResolver::default();
+        for level in 0..=SMALL_BINDING_COUNT {
+            let tag = format!("e xmlns:p{level}='ns{level}'");
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+        }
+        resolver.set_level(u16::MAX);
+        let bindings_before = resolver.bindings.len();
+        let index_before = resolver.prefix_index.clone();
+
+        assert_eq!(
+            resolver.push(&BytesStart::from_content("e xmlns:new='new'", 1)),
+            Err(NamespaceError::TooDeeplyNested(u16::MAX as usize)),
+        );
+        assert_eq!(resolver.bindings.len(), bindings_before);
+        assert_eq!(resolver.prefix_index, index_before);
     }
 
     /// Unprefixed attribute names (resolved with `false` flag) never have a namespace

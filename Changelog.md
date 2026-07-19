@@ -24,10 +24,14 @@
   `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
   under `overflow-checks` builds and silently wrapped in release, corrupting
   namespace-scope bookkeeping on deeply nested untrusted input.
+- [#980]: `NamespaceResolver::resolve_prefix` (and hence every `NsReader`
+  `Start`/`Empty`/`End` event resolved through `read_resolved_event*`) no
+  longer takes O(depth) time per lookup on deeply nested documents.
 
 ### Misc Changes
 
 [#977]: https://github.com/tafia/quick-xml/issues/977
+[#980]: https://github.com/tafia/quick-xml/issues/980
 
 
 ## 0.41.0 -- 2026-06-29
