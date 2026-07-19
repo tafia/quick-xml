@@ -47,6 +47,10 @@ pub enum NamespaceError {
     /// This bounds the heap allocated by [`NamespaceResolver::push`] (and hence
     /// by [`NsReader`](crate::reader::NsReader)) on untrusted input.
     TooManyDeclarations(usize),
+    /// The document nested elements more deeply than the namespace resolver's
+    /// depth counter (a `u16`) can track. This bounds stack / scope-bookkeeping
+    /// work on untrusted input. Contains the depth limit that was exceeded.
+    TooDeeplyNested(usize),
 }
 
 impl fmt::Display for NamespaceError {
@@ -84,6 +88,9 @@ impl fmt::Display for NamespaceError {
                      raise the limit with NamespaceResolver::set_max_declarations_per_element",
                     limit,
                 )
+            }
+            Self::TooDeeplyNested(limit) => {
+                write!(f, "document nests elements deeper than the supported limit of {}", limit)
             }
         }
     }
@@ -706,7 +713,9 @@ impl NamespaceResolver {
     ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
-        self.nesting_level += 1;
+        self.nesting_level = self.nesting_level
+            .checked_add(1)
+            .ok_or(NamespaceError::TooDeeplyNested(u16::MAX as usize))?;
         let mut count = 0usize;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
@@ -1301,6 +1310,25 @@ mod namespaces {
                 1,
             )),
             Ok(()),
+        );
+    }
+
+    /// Regression test for <https://github.com/tafia/quick-xml/issues/977>:
+    /// `push()` previously incremented a `u16` depth counter with an unguarded
+    /// `+= 1`, so a document nested past `u16::MAX` panicked under
+    /// `overflow-checks` or silently wrapped the counter and corrupted namespace
+    /// scoping in release. It now returns `TooDeeplyNested` at the boundary.
+    #[test]
+    fn push_rejects_pathological_nesting_depth() {
+        let mut resolver = NamespaceResolver::default();
+        let tag = BytesStart::from_content("a", 1);
+        // `u16::MAX` successful pushes, then the next is rejected cleanly.
+        for _ in 0..u16::MAX {
+            assert_eq!(resolver.push(&tag), Ok(()));
+        }
+        assert_eq!(
+            resolver.push(&tag),
+            Err(NamespaceError::TooDeeplyNested(u16::MAX as usize)),
         );
     }
 
