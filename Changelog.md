@@ -27,6 +27,8 @@
 
 ### Misc Changes
 
+[#977]: https://github.com/tafia/quick-xml/issues/977
+
 
 ## 0.41.0 -- 2026-06-29
 
@@ -54,7 +56,6 @@
 
 [#969]: https://github.com/tafia/quick-xml/issues/969
 [#970]: https://github.com/tafia/quick-xml/issues/970
-[#977]: https://github.com/tafia/quick-xml/issues/977
 
 
 ## 0.40.1 -- 2026-05-15
