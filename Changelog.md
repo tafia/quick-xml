@@ -16,6 +16,9 @@
 
 ### New Features
 
+- [#978]: Add `Deserializer::recursion_limit` to bound the recursion depth
+  of the serde `Deserializer` (defaults to 128, matching `serde_json`).
+
 ### Bug Fixes
 
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
@@ -24,10 +27,21 @@
   `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
   under `overflow-checks` builds and silently wrapped in release, corrupting
   namespace-scope bookkeeping on deeply nested untrusted input.
+- [#978]: The serde `Deserializer` now returns the new
+  `DeError::TooDeeplyNested` instead of overflowing the native call stack
+  and aborting the process when deserializing a struct, a `Vec<T>`-shaped
+  sequence of structs, or an enum variant nested deeper than the configured
+  recursion limit. Previously none of `deserialize_struct`, `deserialize_seq`,
+  or `deserialize_enum` bounded the recursion depth of their respective
+  re-entrant `MapAccess`/`SeqAccess`/`EnumAccess`/`VariantAccess`
+  implementations, so a maliciously deeply nested (but otherwise
+  well-formed) untrusted XML document could crash the whole process in a
+  way that could not be caught as a `Result::Err`.
 
 ### Misc Changes
 
 [#977]: https://github.com/tafia/quick-xml/issues/977
+[#978]: https://github.com/tafia/quick-xml/issues/978
 
 
 ## 0.41.0 -- 2026-06-29

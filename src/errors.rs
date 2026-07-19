@@ -349,6 +349,18 @@ pub mod serialize {
         /// exceeded. The limit was provided as an argument
         #[cfg(feature = "overlapped-lists")]
         TooManyEvents(NonZeroUsize),
+        /// The document nests structs, sequences-of-structs, or enum variants
+        /// more deeply than the configured recursion limit allows.
+        ///
+        /// Each level of such nesting adds native call-stack frames while
+        /// deserializing (through `MapAccess`/`EnumAccess`/`VariantAccess`
+        /// re-entering the deserializer), which are not otherwise bounded.
+        /// Without this limit, a sufficiently deeply nested untrusted document
+        /// can overflow the native stack, aborting the process in a way that
+        /// cannot be caught as a [`Result::Err`]. The contained value is the
+        /// limit that was exceeded; see
+        /// [`Deserializer::recursion_limit`](crate::de::Deserializer::recursion_limit).
+        TooDeeplyNested(usize),
     }
 
     impl fmt::Display for DeError {
@@ -365,6 +377,11 @@ pub mod serialize {
                 Self::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
                 #[cfg(feature = "overlapped-lists")]
                 Self::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
+                Self::TooDeeplyNested(limit) => write!(
+                    f,
+                    "input document is nested too deeply, recursion limit ({}) exceeded",
+                    limit
+                ),
             }
         }
     }

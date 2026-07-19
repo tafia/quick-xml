@@ -2128,7 +2128,7 @@ use std::io::BufRead;
 use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
-use std::ops::{Deref, Range};
+use std::ops::{Deref, DerefMut, Range};
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
@@ -2574,6 +2574,63 @@ where
 
     /// Buffer to store attribute name as a field name exposed to serde consumers
     key_buf: String,
+
+    /// Current recursion depth of nested structs, sequences-of-structs and
+    /// enum variants. Every level of such nesting adds native call-stack
+    /// frames that are not otherwise bounded (see [`Self::max_depth`] and
+    /// <https://github.com/tafia/quick-xml/issues/978>).
+    depth: usize,
+    /// Maximum allowed value of [`Self::depth`] before [`DeError::TooDeeplyNested`]
+    /// is returned. Configurable via [`Self::recursion_limit`].
+    max_depth: usize,
+}
+
+/// Default value of [`Deserializer::max_depth`], matching `serde_json`'s
+/// default recursion limit.
+const DEFAULT_RECURSION_LIMIT: usize = 128;
+
+/// RAII guard that decrements [`Deserializer::depth`] when dropped. Ensures
+/// the recursion-depth counter stays balanced across early returns (`?`) and
+/// panics unwinding through the guarded recursive call, not just the
+/// successful-return path.
+struct DepthGuard<'a, 'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    de: &'a mut Deserializer<'de, R, E>,
+}
+
+impl<'a, 'de, R, E> Drop for DepthGuard<'a, 'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    fn drop(&mut self) {
+        self.de.depth -= 1;
+    }
+}
+
+impl<'a, 'de, R, E> Deref for DepthGuard<'a, 'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Target = Deserializer<'de, R, E>;
+
+    fn deref(&self) -> &Self::Target {
+        self.de
+    }
+}
+
+impl<'a, 'de, R, E> DerefMut for DepthGuard<'a, 'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.de
+    }
 }
 
 impl<'de, R, E> Deserializer<'de, R, E>
@@ -2602,7 +2659,26 @@ where
             peek: None,
 
             key_buf: String::new(),
+
+            depth: 0,
+            max_depth: DEFAULT_RECURSION_LIMIT,
         }
+    }
+
+    /// Checks and increments the recursion-depth counter, returning a
+    /// [`DepthGuard`] that decrements it again when dropped. Returns
+    /// [`DeError::TooDeeplyNested`] (without incrementing) if the configured
+    /// [`Self::max_depth`] (see [`Self::recursion_limit`]) would be exceeded.
+    ///
+    /// Must be called once per level of struct/sequence/enum nesting that
+    /// re-enters the deserializer, so that sibling (as opposed to nested)
+    /// elements do not spuriously accumulate depth.
+    fn enter_depth(&mut self) -> Result<DepthGuard<'_, 'de, R, E>, DeError> {
+        if self.depth >= self.max_depth {
+            return Err(DeError::TooDeeplyNested(self.max_depth));
+        }
+        self.depth += 1;
+        Ok(DepthGuard { de: self })
     }
 
     /// Returns `true` if all events was consumed.
@@ -2713,6 +2789,46 @@ where
     #[cfg(feature = "overlapped-lists")]
     pub fn event_buffer_size(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.limit = limit;
+        self
+    }
+
+    /// Set the maximum recursion depth allowed while deserializing nested
+    /// structs, sequences of structs (`Vec<T>` where `T` is a struct), and
+    /// enum variants.
+    ///
+    /// Each level of such nesting re-enters the deserializer and adds native
+    /// call-stack frames that are not otherwise bounded. Deserializing a
+    /// maliciously deeply nested untrusted XML document can overflow the
+    /// native stack, which aborts the process -- this is a [DoS] that cannot
+    /// be caught as a [`Result::Err`], unlike ordinary parse errors. This
+    /// limit turns that abort into a clean [`DeError::TooDeeplyNested`].
+    ///
+    /// Defaults to 128, matching `serde_json`'s default recursion limit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quick_xml::de::Deserializer;
+    /// use quick_xml::DeError;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Deserialize)]
+    /// struct Node {
+    ///     #[serde(default, rename = "Node")]
+    ///     node: Vec<Node>,
+    /// }
+    ///
+    /// let xml = "<Node>".repeat(1000) + &"</Node>".repeat(1000);
+    /// let mut de = Deserializer::from_str(&xml);
+    /// de.recursion_limit(100);
+    ///
+    /// let result = Node::deserialize(&mut de);
+    /// assert!(matches!(result, Err(DeError::TooDeeplyNested(100))));
+    /// ```
+    ///
+    /// [DoS]: https://en.wikipedia.org/wiki/Denial-of-service_attack
+    pub fn recursion_limit(&mut self, limit: usize) -> &mut Self {
+        self.max_depth = limit;
         self
     }
 
@@ -3230,7 +3346,7 @@ where
         // When document is pretty-printed there could be whitespaces before the root element
         self.skip_whitespaces()?;
         match self.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -3305,7 +3421,13 @@ where
         // which represents the enum variant
         // Checked by `top_level::list_of_enum` test in serde-de-seq
         self.skip_whitespaces()?;
-        visitor.visit_enum(var::EnumAccess::new(self))
+        // Bounds recursion depth: a newtype variant wrapping the same enum
+        // type (`enum E { Wrap(Box<E>) }`) re-enters this method through
+        // `VariantAccess::newtype_variant_seed`, adding native call-stack
+        // frames per level of XML nesting with no other bound.
+        // See https://github.com/tafia/quick-xml/issues/978
+        let mut guard = self.enter_depth()?;
+        visitor.visit_enum(var::EnumAccess::new(&mut *guard))
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>

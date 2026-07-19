@@ -867,3 +867,156 @@ fn issue928() {
         },
     );
 }
+
+/// Regression tests for https://github.com/tafia/quick-xml/issues/978.
+///
+/// The serde `Deserializer` had no recursion-depth cap on any of its
+/// internal recursive re-entry points, so a sufficiently deeply nested
+/// (but otherwise well-formed) XML document would overflow the native
+/// call stack and abort the whole process -- a DoS that, unlike an
+/// ordinary parse error, cannot be caught as a `Result::Err`.
+///
+/// Variant analysis (see the issue comments) found three independent
+/// re-entry points sharing this root cause:
+/// 1. the struct/map cycle described in the issue body itself -- a
+///    `$value` field holding a `Vec` of the same struct
+///    (`deserialize_struct` -> `ElementMapAccess` -> `next_value_seed`);
+/// 2. `deserialize_seq` for an ordinary (non-`$value`) `Vec<Self>` field
+///    (`MapValueSeqAccess::next_element_seed` -> `ElementDeserializer::deserialize_struct`);
+/// 3. enum `newtype_variant` re-entry
+///    (`VariantAccess::newtype_variant_seed` re-entering `Deserializer::deserialize_enum`).
+///
+/// All three are exercised here with a small `recursion_limit()` so the
+/// test stays fast; the default limit (128, matching `serde_json`) is
+/// checked separately in `default_limit_is_128`.
+mod issue978 {
+    use super::*;
+    use quick_xml::de::Deserializer as XmlDeserializer;
+    use quick_xml::DeError;
+
+    /// Cycle 1: a struct whose `$value` field is a `Vec` of itself -- the
+    /// "struct-variant" shape that #819 says works correctly at shallow
+    /// depth, but which (before this fix) had no depth cap at all.
+    #[test]
+    fn cycle1_struct_value_vec_self() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct S {
+            #[serde(default, rename = "$value")]
+            v: Vec<S>,
+        }
+
+        // Within the limit: deserializes successfully, same as before this fix.
+        let xml = "<a>".repeat(5) + &"</a>".repeat(5);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(8);
+        assert!(S::deserialize(&mut de).is_ok());
+
+        // Past the limit: a clean, catchable error -- before this fix, a
+        // sufficiently large depth here aborted the process instead
+        // (confirmed on master with depth 20_000).
+        let xml = "<a>".repeat(50) + &"</a>".repeat(50);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(8);
+        assert!(matches!(
+            S::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(8))
+        ));
+    }
+
+    /// Cycle 2 (from the variant-analysis comment): a plain (non-`$value`)
+    /// `Vec<Self>` field, which recurses through `deserialize_seq` and
+    /// `ElementDeserializer::deserialize_struct` -- a different code path
+    /// than cycle 1, so it needs its own guard.
+    #[test]
+    fn cycle2_deserialize_seq_vec_self() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct Node {
+            #[serde(default, rename = "Node")]
+            node: Vec<Node>,
+        }
+
+        let xml = "<Node>".repeat(5) + &"</Node>".repeat(5);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(8);
+        assert!(Node::deserialize(&mut de).is_ok());
+
+        // Before this fix, a sufficiently large depth here aborted the
+        // process instead (confirmed on master with depth 10_000).
+        let xml = "<Node>".repeat(50) + &"</Node>".repeat(50);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(8);
+        assert!(matches!(
+            Node::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(8))
+        ));
+    }
+
+    /// Cycle 3 (from the variant-analysis comment): an enum newtype variant
+    /// wrapping itself.
+    ///
+    /// Note this shares its root cause with the already-filed #819: because
+    /// `EnumAccess::variant_seed` only *peeks* the `Start` event and
+    /// `VariantAccess::newtype_variant_seed` re-enters `deserialize_enum`
+    /// without consuming it either, the reader position never advances
+    /// across the recursive call. That means this shape does not actually
+    /// need *deep* nesting to blow the stack: it fails to terminate at
+    /// *any* depth, including a single `<Wrap></Wrap>` pair (independently
+    /// confirmed on master: still overflows with `RUST_MIN_STACK=1073741824`,
+    /// i.e. a 1 GiB stack). So this specific cycle is not a distinct,
+    /// attacker-controlled-depth DoS the way cycles 1 and 2 are -- it is
+    /// #819 exhibited through a bigger document. The guard added for this
+    /// issue still converts that non-termination from an uncatchable abort
+    /// into a clean, catchable error, which is why it is kept and tested
+    /// here.
+    #[test]
+    fn cycle3_enum_newtype_variant_self() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum E {
+            Leaf(bool),
+            Wrap(Box<E>),
+        }
+
+        // A shallow, non-recursive variant still deserializes normally.
+        let xml = "<Leaf>true</Leaf>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(8);
+        assert!(E::deserialize(&mut de).is_ok());
+
+        // A *single* level of the self-referential newtype variant already
+        // never terminates (see doc comment above) -- before this fix, this
+        // aborted the process even with a 1 GiB stack.
+        let xml = "<Wrap></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(8);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(8))
+        ));
+    }
+
+    /// The default recursion limit (128, matching `serde_json`'s default)
+    /// applies even without calling `recursion_limit()` explicitly.
+    #[test]
+    fn default_limit_is_128() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct Node {
+            #[serde(default, rename = "Node")]
+            node: Vec<Node>,
+        }
+
+        let xml = "<Node>".repeat(128) + &"</Node>".repeat(128);
+        let mut de = XmlDeserializer::from_str(&xml);
+        assert!(Node::deserialize(&mut de).is_ok());
+
+        let xml = "<Node>".repeat(1000) + &"</Node>".repeat(1000);
+        let mut de = XmlDeserializer::from_str(&xml);
+        assert!(matches!(
+            Node::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(128))
+        ));
+    }
+}

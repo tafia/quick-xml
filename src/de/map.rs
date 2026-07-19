@@ -5,7 +5,7 @@ use crate::{
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::text::TextDeserializer,
-    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
+    de::{DeEvent, DepthGuard, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     errors::serialize::DeError,
     errors::Error,
     events::attributes::IterState,
@@ -173,7 +173,13 @@ where
 {
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
-    de: &'d mut Deserializer<'de, R, E>,
+    /// A guard that both grants access to the deserializer and bounds the
+    /// recursion depth for as long as this element's map/struct scope is
+    /// alive (dropping it, e.g. when this `ElementMapAccess` is dropped,
+    /// releases one level of the recursion-depth budget). See
+    /// [`Deserializer::recursion_limit`] and
+    /// <https://github.com/tafia/quick-xml/issues/978>.
+    de: DepthGuard<'d, 'de, R, E>,
     /// State of the iterator over attributes. Contains the next position in the
     /// inner `start` slice, from which next attribute should be parsed.
     iter: IterState,
@@ -200,13 +206,21 @@ where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    /// Create a new ElementMapAccess
+    /// Create a new ElementMapAccess.
+    ///
+    /// Returns [`DeError::TooDeeplyNested`] instead of constructing the
+    /// accessor if doing so would exceed the deserializer's configured
+    /// recursion-depth limit -- every struct/map scope opened here can, via
+    /// a recursive user type, re-enter this constructor, and each level adds
+    /// unbounded native call-stack frames otherwise (see
+    /// <https://github.com/tafia/quick-xml/issues/978>).
     pub fn new(
         de: &'d mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
-    ) -> Self {
-        Self {
+    ) -> Result<Self, DeError> {
+        let de = de.enter_depth()?;
+        Ok(Self {
             de,
             iter: IterState::new(start.name().as_ref().len(), false),
             start,
@@ -214,7 +228,7 @@ where
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
             has_text_field: fields.contains(&TEXT_KEY),
-        }
+        })
     }
 
     /// Determines if subtree started with the specified event should be skipped.
@@ -800,7 +814,9 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)),
+            DeEvent::Start(e) => {
+                visitor.visit_map(ElementMapAccess::new(&mut *self.map.de, e, fields)?)
+            }
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }
@@ -997,7 +1013,7 @@ where
                     DeEvent::Start(start) => seed
                         .deserialize(ElementDeserializer {
                             start,
-                            de: self.map.de,
+                            de: &mut *self.map.de,
                         })
                         .map(Some),
                     // SAFETY: we just checked that the next event is Start
@@ -1143,7 +1159,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields))
+        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
     }
 
     fn deserialize_enum<V>(
