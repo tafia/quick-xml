@@ -90,7 +90,11 @@ impl fmt::Display for NamespaceError {
                 )
             }
             Self::TooDeeplyNested(limit) => {
-                write!(f, "document nests elements deeper than the supported limit of {}", limit)
+                write!(
+                    f,
+                    "document nests elements deeper than the supported limit of {}",
+                    limit
+                )
             }
         }
     }
@@ -713,7 +717,8 @@ impl NamespaceResolver {
     ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
-        self.nesting_level = self.nesting_level
+        self.nesting_level = self
+            .nesting_level
             .checked_add(1)
             .ok_or(NamespaceError::TooDeeplyNested(u16::MAX as usize))?;
         let mut count = 0usize;
