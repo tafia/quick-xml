@@ -18,7 +18,16 @@
 
 ### Bug Fixes
 
+- [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
+  event) now returns the new `NamespaceError::TooDeeplyNested` when a document
+  nests elements deeper than `u16::MAX`, instead of overflowing the internal
+  `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
+  under `overflow-checks` builds and silently wrapped in release, corrupting
+  namespace-scope bookkeeping on deeply nested untrusted input.
+
 ### Misc Changes
+
+[#977]: https://github.com/tafia/quick-xml/issues/977
 
 
 ## 0.41.0 -- 2026-06-29
