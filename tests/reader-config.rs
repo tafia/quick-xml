@@ -895,9 +895,7 @@ mod trim_text_end {
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
     }
 
-    // TODO: Enable test after rewriting parser
     #[test]
-    #[ignore = "currently it is hard to fix incorrect behavior, but this will much easy after parser rewrite"]
     fn true_() {
         let mut reader = Reader::from_str(XML);
         reader.config_mut().trim_text_end = true;

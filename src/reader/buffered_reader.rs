@@ -54,6 +54,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut u64,
+            trim_text_end: bool,
         ) -> ReadTextResult<'b, &'b mut Vec<u8>> {
             let mut read = 0;
             let start = buf.len();
@@ -83,7 +84,13 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
-                        return ReadTextResult::UpToMarkup(&buf[start..]);
+                        return if trim_text_end
+                            && buf[start..].iter().all(|&b| is_whitespace(b))
+                        {
+                            ReadTextResult::Markup(buf)
+                        } else {
+                            ReadTextResult::UpToMarkup(&buf[start..])
+                        };
                     }
                     Some(i) => {
                         buf.extend_from_slice(&available[..i]);
@@ -92,7 +99,13 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
-                        return ReadTextResult::UpToRef(&buf[start..]);
+                        return if trim_text_end
+                            && buf[start..].iter().all(|&b| is_whitespace(b))
+                        {
+                            ReadTextResult::Ref(buf)
+                        } else {
+                            ReadTextResult::UpToRef(&buf[start..])
+                        };
                     }
                     None => {
                         buf.extend_from_slice(available);

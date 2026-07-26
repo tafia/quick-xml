@@ -18,6 +18,8 @@
 
 ### Bug Fixes
 
+- [#984]: Readers no longer emit empty `Text` events when `trim_text_end`
+  removes whitespace-only text before markup or a general reference.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
   event) now returns the new `NamespaceError::TooDeeplyNested` when a document
   nests elements deeper than `u16::MAX`, instead of overflowing the internal
@@ -29,6 +31,7 @@
 
 - [#983]: Adopted an AI use and contribution policy for new upstream contributions.
 
+[#984]: https://github.com/tafia/quick-xml/issues/984
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#983]: https://github.com/tafia/quick-xml/issues/983
 

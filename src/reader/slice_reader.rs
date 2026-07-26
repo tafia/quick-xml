@@ -264,7 +264,12 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_text(&mut self, _buf: (), position: &mut u64) -> ReadTextResult<'a, ()> {
+    fn read_text(
+        &mut self,
+        _buf: (),
+        position: &mut u64,
+        trim_text_end: bool,
+    ) -> ReadTextResult<'a, ()> {
         // Search for start of markup or an entity or character reference
         match memchr::memchr2(b'<', b'&', self) {
             Some(0) if self[0] == b'<' => ReadTextResult::Markup(()),
@@ -275,13 +280,21 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
                 let (bytes, rest) = self.split_at(i);
                 *self = rest;
                 *position += i as u64;
-                ReadTextResult::UpToMarkup(bytes)
+                if trim_text_end && bytes.iter().all(|&b| is_whitespace(b)) {
+                    ReadTextResult::Markup(())
+                } else {
+                    ReadTextResult::UpToMarkup(bytes)
+                }
             }
             Some(i) => {
                 let (bytes, rest) = self.split_at(i);
                 *self = rest;
                 *position += i as u64;
-                ReadTextResult::UpToRef(bytes)
+                if trim_text_end && bytes.iter().all(|&b| is_whitespace(b)) {
+                    ReadTextResult::Ref(())
+                } else {
+                    ReadTextResult::UpToRef(bytes)
+                }
             }
             None => {
                 let bytes = &self[..];
