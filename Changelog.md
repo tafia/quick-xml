@@ -54,6 +54,10 @@ The MSRV has been raised to 1.86.
   (available with the `encoding` feature). Removed `decoder()` from the `XmlRead`
   serde trait. Removed all methods from `Decoder` (the struct is kept only for
   backward compatibility with deprecated `Attribute` methods).
+- [#980]: `NamespaceError::TooManyDeclarations` has been renamed to `TooManyBindings`,
+  and `NamespaceResolver::set_max_declarations_per_element` has been renamed to
+  `NamespaceResolver::set_max_namespace_bindings`, and the semantic behavior has
+  changed slightly. The default maximum has also been reduced from 256 to 128.
 
 ### Bug Fixes
 
@@ -63,6 +67,9 @@ The MSRV has been raised to 1.86.
   `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
   under `overflow-checks` builds and silently wrapped in release, corrupting
   namespace-scope bookkeeping on deeply nested untrusted input.
+- [#980]: `NamespaceResolver` now caps the total number of in-scope namespace
+  bindings (default 128, configurable via `set_max_namespace_bindings`),
+  replacing the previous per-element `max_declarations_per_element` limit.
 
 ### Misc Changes
 
@@ -76,6 +83,7 @@ The MSRV has been raised to 1.86.
 
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
+[#980]: https://github.com/tafia/quick-xml/issues/980
 [#983]: https://github.com/tafia/quick-xml/issues/983
 
 ## 0.41.0 -- 2026-06-29
@@ -93,12 +101,11 @@ The MSRV has been raised to 1.86.
   scan; larger ones switch to a 64-bit hash pre-filter, so the whole tag is
   O(N). The exact `AttrError::Duplicated(new, prev)` positions are unchanged.
 - [#970]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
-  event) now rejects a start tag that declares more than
-  `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256) `xmlns` / `xmlns:*` namespace
-  bindings, returning the new `NamespaceError::TooManyDeclarations`. Previously
-  `push` allocated one `NamespaceBinding` per declaration with no upper bound,
-  before the event was returned to the caller, so an `NsReader` consumer could
-  not bound its memory exposure on untrusted input. The limit is configurable
+  event) now rejects a start tag that declares more than 256 `xmlns` / `xmlns:*`
+  namespace bindings, returning the new `NamespaceError::TooManyDeclarations`.
+  Previously `push` allocated one `NamespaceBinding` per declaration with no upper
+  bound, before the event was returned to the caller, so an `NsReader` consumer
+  could not bound its memory exposure on untrusted input. The limit is configurable
   via `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX`
   to disable).
 
