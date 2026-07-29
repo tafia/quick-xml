@@ -38,13 +38,14 @@ pub enum NamespaceError {
     ///
     /// Contains the prefix that is tried to be bound.
     InvalidPrefixForXmlns(String),
-    /// A single start tag declared more `xmlns` / `xmlns:*` namespace bindings
-    /// than the configured [`NamespaceResolver::max_declarations_per_element`]
-    /// limit. Contains the configured limit.
+    /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
+    /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
+    /// the configured limit.
     ///
-    /// This bounds the heap allocated by [`NamespaceResolver::push`] (and hence
-    /// by [`NsReader`](crate::reader::NsReader)) on untrusted input.
-    TooManyDeclarations(usize),
+    /// This bounds the work done by [`NamespaceResolver`] (and hence by [`NsReader`](crate::reader::NsReader))
+    /// on untrusted input by capping both the heap allocated and the cost of prefix
+    /// resolution (which scans the binding stack).
+    TooManyBindings(usize),
     /// The document nested elements more deeply than the namespace resolver's
     /// depth counter (a `u16`) can track. This bounds stack / scope-bookkeeping
     /// work on untrusted input. Contains the depth limit that was exceeded.
@@ -81,11 +82,11 @@ impl fmt::Display for NamespaceError {
                     prefix
                 )
             }
-            Self::TooManyDeclarations(limit) => {
+            Self::TooManyBindings(limit) => {
                 write!(
                     f,
-                    "start tag declares more than {} namespace bindings; \
-                     raise the limit with NamespaceResolver::set_max_declarations_per_element",
+                    "more than {} namespace bindings in scope; \
+                     raise the limit with NamespaceResolver::set_max_namespace_bindings",
                     limit,
                 )
             }
@@ -346,10 +347,10 @@ pub struct Namespace<'a>(pub &'a str);
 impl<'a> Namespace<'a> {
     /// Converts this namespace to an internal slice representation.
     ///
-    /// This is [non-normalized] attribute value, i.e. any entity references is
-    /// not expanded and space characters are not removed. This means, that
-    /// different string slices, returned from this method, can represent the same
-    /// namespace and would be treated by parser as identical.
+    /// This is [non-normalized] attribute value, i.e. any entity references is not
+    /// expanded and space characters are not removed. This means, that different
+    /// string slices, returned from this method, can represent the same namespace
+    /// and would be treated by parser as identical.
     ///
     /// For example, if the entity **eacute** has been defined to be **é**,
     /// the empty tags below all contain namespace declarations binding the
@@ -519,23 +520,29 @@ pub struct NamespaceResolver {
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: u16,
-    /// Maximum number of `xmlns` / `xmlns:*` declarations [`push`](Self::push)
-    /// will accept on a single start tag before returning
-    /// [`NamespaceError::TooManyDeclarations`]. See
-    /// [`set_max_declarations_per_element`](Self::set_max_declarations_per_element).
-    max_declarations_per_element: usize,
+    /// Maximum number of user-declared `xmlns` / `xmlns:*` namespace bindings
+    /// allowed in scope at once, not counting the two reserved bindings for
+    /// `xml` and `xmlns`. See [`set_max_namespace_bindings`](Self::set_max_namespace_bindings).
+    max_namespace_bindings: usize,
 }
 
-/// Default limit on the number of `xmlns` / `xmlns:*` declarations
-/// [`NamespaceResolver::push`] will accept on a single start tag.
+/// Default limit on the number of `xmlns` / `xmlns:*` namespace bindings allowed in scope at
+/// once in a [`NamespaceResolver`], not counting the two reserved bindings (`xml` and `xmlns`)
+/// that are always present.
 ///
-/// Real-world XML dialects (XHTML, SVG, SOAP, RSS, RRDP, ...) declare a handful
-/// of namespaces per element; 256 is orders of magnitude above any legitimate
-/// document while bounding the heap allocated for one `<... xmlns:...>` tag to
-/// a few kilobytes regardless of input size.
-pub const DEFAULT_MAX_DECLARATIONS_PER_ELEMENT: usize = 256;
+/// Real-world XML dialects (XHTML, SVG, SOAP, RSS, RRDP, ...) declare a handful of namespaces,
+/// almost always on the root element; 128 is significantly more than what most legitimate documents
+/// would declare, while bounding both the heap allocated and the cost of prefix resolution
+/// (which scans the binding stack).
+pub const DEFAULT_MAX_NAMESPACE_BINDINGS: usize = 128;
 
-/// That constant define the one of [reserved namespaces] for the xml standard.
+/// The number of namespace bindings pre-loaded by [`NamespaceResolver::default()`]
+/// (`xml` and `xmlns`). Subtracted from `bindings.len()` when checking against
+/// the user-facing [`max_namespace_bindings`](NamespaceResolver::max_namespace_bindings)
+/// limit, so these built-in bindings don't count against the user's limit.
+const BUILTIN_NAMESPACE_BINDINGS: usize = 2;
+
+/// This constant defines one the of [reserved namespaces] for the xml standard.
 ///
 /// The prefix `xml` is by definition bound to the namespace name
 /// `http://www.w3.org/XML/1998/namespace`. It may, but need not, be declared, and must not be
@@ -547,7 +554,7 @@ const RESERVED_NAMESPACE_XML: (Prefix, Namespace) = (
     Prefix("xml"),
     Namespace("http://www.w3.org/XML/1998/namespace"),
 );
-/// That constant define the one of [reserved namespaces] for the xml standard.
+/// This constant defines one of the [reserved namespaces] for the xml standard.
 ///
 /// The prefix `xmlns` is used only to declare namespace bindings and is by definition bound
 /// to the namespace name `http://www.w3.org/2000/xmlns/`. It must not be declared or
@@ -579,7 +586,7 @@ impl Default for NamespaceResolver {
             buffer,
             bindings,
             nesting_level: 0,
-            max_declarations_per_element: DEFAULT_MAX_DECLARATIONS_PER_ELEMENT,
+            max_namespace_bindings: DEFAULT_MAX_NAMESPACE_BINDINGS,
         }
     }
 }
@@ -648,6 +655,14 @@ impl NamespaceResolver {
         let level = self.nesting_level;
         match prefix {
             PrefixDeclaration::Default => {
+                if self
+                    .bindings
+                    .len()
+                    .saturating_sub(BUILTIN_NAMESPACE_BINDINGS)
+                    >= self.max_namespace_bindings
+                {
+                    return Err(NamespaceError::TooManyBindings(self.max_namespace_bindings));
+                }
                 let start = self.buffer.len();
                 self.buffer.push_str(namespace.0);
                 self.bindings.push(NamespaceBinding {
@@ -673,15 +688,22 @@ impl NamespaceResolver {
                 ));
             }
             PrefixDeclaration::Named(prefix) => {
-                // error, non-`xml` prefix set to xml uri
                 if namespace == RESERVED_NAMESPACE_XML.1 {
+                    // error, non-`xml` prefix set to xml uri
                     return Err(NamespaceError::InvalidPrefixForXml(prefix.to_string()));
-                } else
-                // error, non-`xmlns` prefix set to xmlns uri
-                if namespace == RESERVED_NAMESPACE_XMLNS.1 {
+                } else if namespace == RESERVED_NAMESPACE_XMLNS.1 {
+                    // error, non-`xmlns` prefix set to xmlns uri
                     return Err(NamespaceError::InvalidPrefixForXmlns(prefix.to_string()));
                 }
 
+                if self
+                    .bindings
+                    .len()
+                    .saturating_sub(BUILTIN_NAMESPACE_BINDINGS)
+                    >= self.max_namespace_bindings
+                {
+                    return Err(NamespaceError::TooManyBindings(self.max_namespace_bindings));
+                }
                 let start = self.buffer.len();
                 self.buffer.push_str(prefix);
                 self.buffer.push_str(namespace.0);
@@ -705,18 +727,11 @@ impl NamespaceResolver {
             .nesting_level
             .checked_add(1)
             .ok_or(NamespaceError::TooDeeplyNested(u16::MAX as usize))?;
-        let mut count = 0usize;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
                 if let Some(prefix) = k.as_namespace_binding() {
-                    if count >= self.max_declarations_per_element {
-                        return Err(NamespaceError::TooManyDeclarations(
-                            self.max_declarations_per_element,
-                        ));
-                    }
-                    count += 1;
                     self.add(prefix, Namespace(&v))?;
                 }
             } else {
@@ -726,29 +741,30 @@ impl NamespaceResolver {
         Ok(())
     }
 
-    /// Returns the maximum number of `xmlns` / `xmlns:*` declarations that
-    /// [`push`](Self::push) will accept on a single start tag before returning
-    /// [`NamespaceError::TooManyDeclarations`].
+    /// Returns the maximum number of user-declared `xmlns` / `xmlns:*` namespace
+    /// bindings allowed in scope at once (not counting the two reserved bindings
+    /// for `xml` and `xmlns`).
     ///
-    /// Defaults to [`DEFAULT_MAX_DECLARATIONS_PER_ELEMENT`].
+    /// Defaults to [`DEFAULT_MAX_NAMESPACE_BINDINGS`].
     #[inline]
-    pub const fn max_declarations_per_element(&self) -> usize {
-        self.max_declarations_per_element
+    pub const fn max_namespace_bindings(&self) -> usize {
+        self.max_namespace_bindings
     }
 
-    /// Sets the maximum number of `xmlns` / `xmlns:*` declarations that
-    /// [`push`](Self::push) will accept on a single start tag.
+    /// Sets the maximum number of user-declared `xmlns` / `xmlns:*` namespace bindings
+    /// allowed in scope at once. The two reserved bindings (`xml` and `xmlns`) do not
+    /// count toward this limit.
     ///
-    /// `push` is called by [`NsReader`](crate::reader::NsReader) for every
-    /// `Start`/`Empty` event *before* the event is returned to the caller, so
-    /// without this limit a start tag with many `xmlns:*` attributes drives
-    /// unbounded heap allocation that the caller cannot intercept. See
-    /// <https://github.com/tafia/quick-xml/issues/970>.
+    /// [`add`](Self::add) is called by [`push`](Self::push), which is called by
+    /// [`NsReader`](crate::reader::NsReader) for every `Start`/`Empty` event *before* the event
+    /// is returned to the caller. This limit bounds both the heap allocated for namespace
+    /// bindings and the cost of prefix resolution (which scans the binding stack). See
+    /// <https://github.com/tafia/quick-xml/issues/970> and <https://github.com/tafia/quick-xml/issues/980>.
     ///
     /// Pass `usize::MAX` to disable the limit.
     #[inline]
-    pub fn set_max_declarations_per_element(&mut self, limit: usize) -> &mut Self {
-        self.max_declarations_per_element = limit;
+    pub fn set_max_namespace_bindings(&mut self, limit: usize) -> &mut Self {
+        self.max_namespace_bindings = limit;
         self
     }
 
@@ -1256,26 +1272,26 @@ mod namespaces {
     use pretty_assertions::assert_eq;
     use ResolveResult::*;
 
-    /// Regression test for <https://github.com/tafia/quick-xml/issues/970>:
-    /// `push()` previously allocated one `NamespaceBinding` per `xmlns:*`
-    /// attribute with no upper bound, before the caller ever sees the event.
+    /// Regression test for <https://github.com/tafia/quick-xml/issues/970>: a single element with
+    /// many `xmlns:*` declarations must be rejected once the total binding count exceeds the limit.
     #[test]
-    fn push_rejects_too_many_declarations() {
+    fn rejects_too_many_bindings_on_single_element() {
+        let limit = DEFAULT_MAX_NAMESPACE_BINDINGS;
+
+        // One more than the limit triggers the error.
         let mut tag = String::from("e");
-        for i in 0..=DEFAULT_MAX_DECLARATIONS_PER_ELEMENT {
+        for i in 0..=limit {
             tag.push_str(&format!(" xmlns:p{}=''", i));
         }
         let mut resolver = NamespaceResolver::default();
         assert_eq!(
             resolver.push(&BytesStart::from_content(&tag, 1)),
-            Err(NamespaceError::TooManyDeclarations(
-                DEFAULT_MAX_DECLARATIONS_PER_ELEMENT
-            )),
+            Err(NamespaceError::TooManyBindings(limit)),
         );
 
         // Exactly at the limit is accepted.
         let mut tag = String::from("e");
-        for i in 0..DEFAULT_MAX_DECLARATIONS_PER_ELEMENT {
+        for i in 0..limit {
             tag.push_str(&format!(" xmlns:p{}=''", i));
         }
         let mut resolver = NamespaceResolver::default();
@@ -1283,21 +1299,75 @@ mod namespaces {
 
         // The limit is configurable, and `usize::MAX` disables it.
         let mut resolver = NamespaceResolver::default();
-        resolver.set_max_declarations_per_element(2);
+        resolver.set_max_namespace_bindings(2);
         assert_eq!(
             resolver.push(&BytesStart::from_content(
                 "e xmlns:a='' xmlns:b='' xmlns:c=''",
                 1,
             )),
-            Err(NamespaceError::TooManyDeclarations(2)),
+            Err(NamespaceError::TooManyBindings(2)),
         );
         let mut resolver = NamespaceResolver::default();
-        resolver.set_max_declarations_per_element(usize::MAX);
+        resolver.set_max_namespace_bindings(usize::MAX);
         assert_eq!(
             resolver.push(&BytesStart::from_content(
                 "e xmlns:a='' xmlns:b='' xmlns:c=''",
                 1,
             )),
+            Ok(()),
+        );
+    }
+
+    /// Regression test for <https://github.com/tafia/quick-xml/issues/980>:
+    /// deeply nested documents where each level declares one `xmlns:*`
+    /// binding must be rejected once the total binding count exceeds the
+    /// limit, preventing O(depth²) CPU exhaustion in `resolve_prefix`.
+    #[test]
+    fn rejects_too_many_bindings_across_elements() {
+        let limit = 10;
+        let mut resolver = NamespaceResolver::default();
+        resolver.set_max_namespace_bindings(limit);
+
+        // Push elements, each declaring one new namespace binding.
+        for i in 0..limit {
+            let tag = format!("e xmlns:p{}='ns{}'", i, i);
+            assert_eq!(
+                resolver.push(&BytesStart::from_content(&tag, 1)),
+                Ok(()),
+                "push {} should succeed",
+                i,
+            );
+        }
+
+        // The next binding (on a new element) exceeds the limit.
+        assert_eq!(
+            resolver.push(&BytesStart::from_content("e xmlns:extra='ns'", 1)),
+            Err(NamespaceError::TooManyBindings(limit)),
+        );
+
+        // An element without namespace declarations is still fine.
+        assert_eq!(resolver.push(&BytesStart::from_content("e", 1)), Ok(()),);
+    }
+
+    /// Popping scopes makes room for new bindings under the limit.
+    #[test]
+    fn popping_frees_room_for_bindings() {
+        let limit = 10;
+        let mut resolver = NamespaceResolver::default();
+        resolver.set_max_namespace_bindings(limit);
+
+        // Fill to the limit.
+        for i in 0..limit {
+            let tag = format!("e xmlns:p{}='ns{}'", i, i);
+            resolver.push(&BytesStart::from_content(&tag, 1)).unwrap();
+        }
+
+        // Pop the last element's scope — frees one binding slot.
+        resolver.pop();
+
+        // Now a new binding fits.
+        assert_eq!(
+            resolver.push(&BytesStart::from_content("e xmlns:new='ns'", 1)),
             Ok(()),
         );
     }

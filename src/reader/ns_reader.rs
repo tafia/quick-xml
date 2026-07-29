@@ -126,7 +126,7 @@ impl<R> NsReader<R> {
     /// associated with this reader.
     ///
     /// Useful for configuring the resolver, e.g. to change the
-    /// [per-element namespace-declaration limit](NamespaceResolver::set_max_declarations_per_element).
+    /// [namespace-binding limit](NamespaceResolver::set_max_namespace_bindings).
     #[inline]
     pub fn resolver_mut(&mut self) -> &mut NamespaceResolver {
         &mut self.ns_resolver
