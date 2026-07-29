@@ -15,7 +15,7 @@
 ## Unreleased
 
 This is a large release. The primary change is an ergonomic improvement across the entire API -
-the quick_xml now makes use of `&str` and `String` types where possible instead of
+quick_xml now makes use of `&str` and `String` types where possible instead of
 `&[u8]` and `Vec<u8>`. This requires significant refactoring of downstream code,
 but should result in a net simplification as well as potential performance improvements.
 
@@ -70,6 +70,10 @@ The MSRV has been raised to 1.86.
 - [#980]: `NamespaceResolver` now caps the total number of in-scope namespace
   bindings (default 128, configurable via `set_max_namespace_bindings`),
   replacing the previous per-element `max_declarations_per_element` limit.
+- [#978]: The serde `Deserializer` now enforces a configurable recursion-depth
+  limit (default 128, matching `serde_json`). Deeply nested XML returns
+  `DeError::TooDeeplyNested` instead of overflowing the native call stack.
+  Use `Deserializer::recursion_limit()` to adjust.
 
 ### Misc Changes
 
@@ -84,6 +88,7 @@ The MSRV has been raised to 1.86.
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#980]: https://github.com/tafia/quick-xml/issues/980
+[#978]: https://github.com/tafia/quick-xml/issues/978
 [#983]: https://github.com/tafia/quick-xml/issues/983
 
 ## 0.41.0 -- 2026-06-29

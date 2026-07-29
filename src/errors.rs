@@ -348,6 +348,12 @@ pub mod serialize {
         /// [`Event::Start`]: crate::events::Event::Start
         /// [`Event::End`]: crate::events::Event::End
         UnexpectedEof,
+        /// The XML input exceeds the configured recursion limit.
+        ///
+        /// The contained value is the limit that was exceeded. This error is
+        /// returned when deserializing deeply nested XML structures to prevent
+        /// stack overflows.
+        TooDeeplyNested(usize),
         /// Too many events were skipped while deserializing a sequence, event limit
         /// exceeded. The limit was provided as an argument
         #[cfg(feature = "overlapped-lists")]
@@ -362,6 +368,7 @@ pub mod serialize {
                 Self::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 Self::UnexpectedStart(e) => write!(f, "unexpected `Event::Start({})", e),
                 Self::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
+                Self::TooDeeplyNested(limit) => write!(f, "XML is too deeply nested, recursion limit of {} exceeded", limit),
                 #[cfg(feature = "overlapped-lists")]
                 Self::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
             }
