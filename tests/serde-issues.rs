@@ -871,3 +871,370 @@ fn issue928() {
         },
     );
 }
+
+/// Regression tests for https://github.com/tafia/quick-xml/issues/978.
+///
+/// Deeply nested XML should produce `DeError::TooDeeplyNested` instead of
+/// a stack overflow. Tests are ordered: struct (general, then `$value`),
+/// enum (newtype, tuple, struct variant), then siblings.
+mod issue978 {
+    use quick_xml::de::Deserializer as XmlDeserializer;
+    use quick_xml::DeError;
+    use serde::Deserialize;
+
+    /// Generate XML like `<S><field><field>...</field></field></S>`.
+    ///
+    /// In quick-xml's serde, the field element IS the container for nested
+    /// structs (there is no inner `<S>` wrapper).
+    fn nested_struct_field(depth: usize) -> String {
+        let mut xml = String::from("<S>");
+        for _ in 0..depth.saturating_sub(1) {
+            xml.push_str("<field>");
+        }
+        for _ in 0..depth.saturating_sub(1) {
+            xml.push_str("</field>");
+        }
+        xml.push_str("</S>");
+        xml
+    }
+
+    /// Generate XML like `<S><S>...<S></S>...</S></S>`.
+    fn nested_struct_value(depth: usize) -> String {
+        let mut xml = String::new();
+        for _ in 0..depth {
+            xml.push_str("<S>");
+        }
+        for _ in 0..depth {
+            xml.push_str("</S>");
+        }
+        xml
+    }
+
+    /// Generate XML like `<Wrap><Wrap>...<Leaf/>...</Wrap></Wrap>`.
+    fn nested_enum_value(depth: usize) -> String {
+        let mut xml = String::new();
+        for _ in 0..depth.saturating_sub(1) {
+            xml.push_str("<Wrap>");
+        }
+        xml.push_str("<Leaf/>");
+        for _ in 0..depth.saturating_sub(1) {
+            xml.push_str("</Wrap>");
+        }
+        xml
+    }
+
+    // struct field
+
+    #[test]
+    fn struct_field_box() {
+        #[derive(Debug, Deserialize)]
+        struct S {
+            field: Option<Box<S>>,
+        }
+
+        let limit = 3;
+
+        // Within the limit: deserializes successfully
+        let xml = nested_struct_field(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(S::deserialize(&mut de).is_ok());
+
+        // Exceeds the limit
+        let xml = nested_struct_field(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            S::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    #[test]
+    fn struct_field_vec() {
+        #[derive(Debug, Deserialize)]
+        struct S {
+            #[serde(default)]
+            field: Vec<S>,
+        }
+
+        let limit = 3;
+
+        let xml = nested_struct_field(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(S::deserialize(&mut de).is_ok());
+
+        let xml = nested_struct_field(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            S::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    // struct $value field
+
+    #[test]
+    fn struct_value_field_box() {
+        #[derive(Debug, Deserialize)]
+        struct S {
+            #[serde(rename = "$value")]
+            v: Option<Box<S>>,
+        }
+
+        let limit = 3;
+
+        let xml = nested_struct_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(S::deserialize(&mut de).is_ok());
+
+        let xml = nested_struct_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            S::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    #[test]
+    fn struct_value_field_vec() {
+        #[derive(Debug, Deserialize)]
+        struct S {
+            #[serde(rename = "$value")]
+            #[serde(default)]
+            v: Vec<S>,
+        }
+
+        let limit = 3;
+
+        let xml = nested_struct_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(S::deserialize(&mut de).is_ok());
+
+        let xml = nested_struct_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            S::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    // enum newtype variant
+
+    #[test]
+    fn newtype_variant_box() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap(Box<E>),
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        // FIXME: #819 — the deserializer re-enters `deserialize_enum` without
+        // consuming the end event, so even a single `<Wrap></Wrap>` triggers
+        // infinite re-entry. The recursion limit catches this and returns a
+        // clean error instead of a stack overflow.
+        let xml = "<Wrap></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(3);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    #[test]
+    fn newtype_variant_vec() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap(Vec<E>),
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        // FIXME: #819 — same re-entry issue as newtype_variant_box
+        let xml = "<Wrap></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(3);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    // enum tuple variant
+
+    #[test]
+    fn tuple_variant_box() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap(Box<E>, String),
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        // FIXME: #819 — same re-entry issue as newtype variants
+        let xml = "<Wrap></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(3);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    #[test]
+    fn tuple_variant_vec() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap(Vec<E>, String),
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        // FIXME: #819 — same re-entry issue as newtype variants
+        let xml = "<Wrap></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(3);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    // enum struct variant
+
+    #[test]
+    fn struct_variant_field_box() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap {
+                f: Box<E>,
+            },
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        // Depth limit catches deeply nested input before it reaches
+        // pre-existing deserialization issues with enum fields
+        let xml = "<Wrap><f><Wrap><f><Leaf/></f></Wrap></f></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(1);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    #[test]
+    fn struct_variant_field_vec() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap {
+                #[serde(default)]
+                f: Vec<E>,
+            },
+            #[allow(dead_code)]
+            Leaf,
+        }
+
+        let xml = "<Wrap><f><Wrap><f><Leaf/></f></Wrap></f></Wrap>";
+        let mut de = XmlDeserializer::from_str(xml);
+        de.recursion_limit(1);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(_))
+        ));
+    }
+
+    #[test]
+    fn struct_variant_value_field_box() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap {
+                #[serde(rename = "$value")]
+                v: Box<E>,
+            },
+            Leaf,
+        }
+
+        let limit = 3;
+
+        // Within the limit: deserializes successfully
+        let xml = nested_enum_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(E::deserialize(&mut de).is_ok());
+
+        // Exceeds the limit
+        let xml = nested_enum_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    #[test]
+    fn struct_variant_value_field_vec() {
+        #[derive(Debug, Deserialize)]
+        enum E {
+            Wrap {
+                #[serde(rename = "$value")]
+                #[serde(default)]
+                v: Vec<E>,
+            },
+            Leaf,
+        }
+
+        let limit = 3;
+
+        let xml = nested_enum_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(E::deserialize(&mut de).is_ok());
+
+        let xml = nested_enum_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(matches!(
+            E::deserialize(&mut de),
+            Err(DeError::TooDeeplyNested(n)) if n == limit
+        ));
+    }
+
+    // siblings
+
+    #[test]
+    fn siblings_do_not_increase_depth() {
+        #[derive(Debug, Deserialize)]
+        struct Root {
+            item: Vec<Item>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct Item {
+            #[serde(rename = "$text")]
+            name: String,
+        }
+
+        let mut xml = String::from("<Root>");
+        for i in 0..200 {
+            xml.push_str(&format!("<item>{}</item>", i));
+        }
+        xml.push_str("</Root>");
+
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(3);
+        let result = Root::deserialize(&mut de);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().item.len(), 200);
+    }
+}

@@ -205,8 +205,12 @@ where
         de: &'d mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
-    ) -> Self {
-        Self {
+    ) -> Result<Self, DeError> {
+        if de.depth >= de.max_depth {
+            return Err(DeError::TooDeeplyNested(de.max_depth));
+        }
+        de.depth += 1;
+        Ok(Self {
             de,
             iter: IterState::new(start.name().as_ref().len(), false),
             start,
@@ -214,7 +218,7 @@ where
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
             has_text_field: fields.contains(&TEXT_KEY),
-        }
+        })
     }
 
     /// Determines if subtree started with the specified event should be skipped.
@@ -237,6 +241,16 @@ where
     fn skip_whitespaces(&mut self) -> Result<(), DeError> {
         // TODO: respect the `xml:space` attribute and probably some deserialized type sign
         self.de.skip_whitespaces()
+    }
+}
+
+impl<'de, 'd, R, E> Drop for ElementMapAccess<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    fn drop(&mut self) {
+        self.de.depth -= 1;
     }
 }
 
@@ -794,7 +808,7 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }
@@ -1134,7 +1148,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields))
+        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
     }
 
     fn deserialize_enum<V>(

@@ -2566,6 +2566,12 @@ where
 
     /// Buffer to store attribute name as a field name exposed to serde consumers
     key_buf: String,
+
+    /// Current recursion depth (number of nested `ElementMapAccess` and `EnumAccess`
+    /// instances on the call stack).
+    depth: usize,
+    /// Maximum allowed recursion depth. Defaults to 128.
+    max_depth: usize,
 }
 
 impl<'de, R, E> Deserializer<'de, R, E>
@@ -2594,6 +2600,9 @@ where
             peek: None,
 
             key_buf: String::new(),
+
+            depth: 0,
+            max_depth: 128,
         }
     }
 
@@ -2705,6 +2714,50 @@ where
     #[cfg(feature = "overlapped-lists")]
     pub fn event_buffer_size(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.limit = limit;
+        self
+    }
+
+    /// Set the maximum recursion depth for deserialization of nested structures.
+    ///
+    /// If the XML nesting exceeds this limit, [`DeError::TooDeeplyNested`] will
+    /// be returned. The default limit is 128, matching `serde_json`.
+    ///
+    /// This method can be used to prevent stack overflow from a [DoS] attack
+    /// when parsing untrusted XML with deep nesting.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::de::Deserializer;
+    /// use quick_xml::errors::serialize::DeError;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, Deserialize)]
+    /// struct Nested {
+    ///     inner: Option<Box<Nested>>,
+    /// }
+    ///
+    /// // 3 levels of nesting: <Nested><inner><inner></inner></inner></Nested>
+    /// let xml = "<Nested><inner><inner></inner></inner></Nested>";
+    ///
+    /// // With sufficient limit, deserialization succeeds
+    /// let mut de = Deserializer::from_str(xml);
+    /// de.recursion_limit(3);
+    /// assert!(Nested::deserialize(&mut de).is_ok());
+    ///
+    /// // With a low limit, deserialization fails
+    /// let mut de = Deserializer::from_str(xml);
+    /// de.recursion_limit(2);
+    /// assert!(matches!(
+    ///     Nested::deserialize(&mut de),
+    ///     Err(DeError::TooDeeplyNested(2))
+    /// ));
+    /// ```
+    ///
+    /// [DoS]: https://en.wikipedia.org/wiki/Denial-of-service_attack
+    pub fn recursion_limit(&mut self, limit: usize) -> &mut Self {
+        self.max_depth = limit;
         self
     }
 
@@ -3222,7 +3275,7 @@ where
         // When document is pretty-printed there could be whitespaces before the root element
         self.skip_whitespaces()?;
         match self.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)),
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -3297,7 +3350,13 @@ where
         // which represents the enum variant
         // Checked by `top_level::list_of_enum` test in serde-de-seq
         self.skip_whitespaces()?;
-        visitor.visit_enum(var::EnumAccess::new(self))
+        if self.depth >= self.max_depth {
+            return Err(DeError::TooDeeplyNested(self.max_depth));
+        }
+        self.depth += 1;
+        let result = visitor.visit_enum(var::EnumAccess::new(self));
+        self.depth -= 1;
+        result
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>
