@@ -50,6 +50,16 @@
 
 ### Bug Fixes
 
+- [#276]: Fixed `Writer::new_with_indent` producing misaligned closing tags
+  when an element contained a non-text child (e.g. a comment) followed by a
+  text node. The `</tag>` was appended directly after the text instead of
+  starting on a new line at the correct indentation level.
+- [#276]: The indented `Writer` no longer treats a general entity reference
+  (`&name;`) as block content; it is now written inline like text, so it no
+  longer forces a spurious line break before the enclosing closing tag.
+- The async `Writer::write_event_async` now honours
+  `add_space_before_slash_in_empty_elements` for empty elements, matching the
+  synchronous writer.
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
 - [#1017]: Fix panic and wrong output when the indent character is not ASCII.

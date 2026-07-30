@@ -258,20 +258,52 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
+    ///
+    /// Pretty-printing model (only active when the writer was built with
+    /// [`new_with_indent`](Self::new_with_indent)):
+    ///
+    /// * Block-level markup — start/end tags, empty elements, comments, PIs,
+    ///   the declaration and doctype — is written on its own indented line.
+    ///   [`write_wrapped`](Self::write_wrapped) emits the leading newline plus
+    ///   indent whenever `should_line_break` is set.
+    /// * Character data — `Text`, `CData` and general entity references
+    ///   (`&name;`) — is written verbatim, inline with the surrounding markup,
+    ///   and suppresses the break before whatever follows (e.g. `<a>text</a>`).
+    ///
+    /// Each arm reports two things about the event it just wrote, which the
+    /// indenter then uses to lay out the next event:
+    ///
+    /// * `break_after` — should the *next* event start on a fresh line? True
+    ///   for block markup, false for inline character data.
+    /// * `is_block` — was this block-level content? If so it is recorded via
+    ///   [`record_block`](Indentation::record_block) so a later closing tag can
+    ///   tell whether its element held children and must return to its own
+    ///   line, even when the last child was character data (issue #276).
     pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
-        let mut next_should_line_break = true;
+        let mut break_after = true;
+        let mut is_block = true;
         let result = match event.into() {
             Event::Start(e) => {
                 let result = self.write_wrapped("<", &e, ">");
                 if let Some(i) = self.indent.as_mut() {
+                    // Record the start tag as block content of its parent, i.e.
+                    // at the current level *before* descending a level. This is
+                    // why `Start` records here rather than via `is_block` below.
+                    i.record_block();
                     i.grow();
                 }
+                is_block = false;
                 result
             }
             Event::End(e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
+                    if i.end_needs_line_break() {
+                        i.should_line_break = true;
+                    }
                 }
+                // A closing tag is not itself tracked as block content.
+                is_block = false;
                 self.write_wrapped("</", &e, ">")
             }
             Event::Empty(e) => self.write_wrapped(
@@ -284,12 +316,14 @@ impl<W: Write> Writer<W> {
                 },
             ),
             Event::Text(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(e.as_bytes())
             }
             Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
             Event::CData(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(b"<![CDATA[")?;
                 self.writer.write_all(e.as_bytes())?;
                 self.writer.write_all(b"]]>")
@@ -297,11 +331,25 @@ impl<W: Write> Writer<W> {
             Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
             Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
             Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
-            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
-            Event::Eof => Ok(()),
+            // A general entity reference is character data that appears inline
+            // within text, so it is written like `Text`, not as block markup.
+            Event::GeneralRef(e) => {
+                break_after = false;
+                is_block = false;
+                self.writer.write_all(b"&")?;
+                self.writer.write_all(e.as_bytes())?;
+                self.writer.write_all(b";")
+            }
+            Event::Eof => {
+                is_block = false;
+                Ok(())
+            }
         };
         if let Some(i) = self.indent.as_mut() {
-            i.should_line_break = next_should_line_break;
+            if is_block {
+                i.record_block();
+            }
+            i.should_line_break = break_after;
         }
         result
     }
@@ -660,6 +708,16 @@ pub(crate) struct Indentation {
     indents: String,
     /// The current amount of indentation, in bytes of `indents`
     current_indent_len: usize,
+    /// Indentation level at which the most recent block-level (i.e. non
+    /// character-data) item was written — a start/empty tag, comment, PI, etc.
+    ///
+    /// A closing tag consults this to decide whether the element it closes
+    /// actually contained block children and must therefore return to its own
+    /// line, even when the element's final child was character data (a `Text`
+    /// node, or a comment immediately followed by text). See
+    /// [`Indentation::end_needs_line_break`] and
+    /// <https://github.com/tafia/quick-xml/issues/276>.
+    last_block_level: usize,
 }
 
 impl Indentation {
@@ -670,6 +728,7 @@ impl Indentation {
             indent_size,
             indents: std::iter::repeat(indent_char).take(128).collect(),
             current_indent_len: 0,
+            last_block_level: 0,
         }
     }
 
@@ -708,5 +767,21 @@ impl Indentation {
         while self.indents.len() < new_len {
             self.indents.push(self.indent_char);
         }
+    }
+
+    /// Record that block-level content was just written at the current level.
+    fn record_block(&mut self) {
+        self.last_block_level = self.current_indent_len;
+    }
+
+    /// Whether a closing tag that has just [`shrink`](Self::shrink)ed back to
+    /// its own level must start on a fresh line.
+    ///
+    /// This is the case when block content was recorded *deeper* than the
+    /// current level, i.e. inside the element now being closed — even if that
+    /// element's last child was character data. Without it,
+    /// `<a><!--c-->text</a>` would glue `</a>` onto `text`.
+    fn end_needs_line_break(&self) -> bool {
+        self.last_block_level > self.current_indent_len
     }
 }

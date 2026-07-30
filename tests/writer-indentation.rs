@@ -1,4 +1,4 @@
-use quick_xml::events::{BytesStart, BytesText, Event};
+use quick_xml::events::{BytesComment, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
 
 use pretty_assertions::assert_eq;
@@ -714,4 +714,130 @@ mod multi_byte_indent_char {
             "<response>\n\u{3000}\u{3000}<message>Success</message>\n</response>"
         );
     }
+}
+
+// Regression test for https://github.com/tafia/quick-xml/issues/276
+// Elements containing both a comment and a text node should not produce
+// misaligned closing tags.
+#[test]
+fn issue_276_comment_then_text_indent() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    writer
+        .write_event(Event::Start(BytesStart::new("tag2")))
+        .unwrap();
+    writer
+        .write_event(Event::Comment(BytesComment::new("Test comment").unwrap()))
+        .unwrap();
+    writer
+        .write_event(Event::Text(BytesText::new("Test")))
+        .unwrap();
+    writer
+        .write_event(Event::End(BytesEnd::new("tag2")))
+        .unwrap();
+
+    let output = std::str::from_utf8(&buffer).unwrap();
+    // The closing </tag2> must start on a new line at the same indentation
+    // level as <tag2>, not immediately after the text node.
+    //
+    // NOTE: because `Writer` is a single-pass streaming writer it treats a
+    // comment as block content and indents it, so the text ends up on its own
+    // line. A DOM-based pretty printer (libxml2/lxml) instead keeps the whole
+    // mixed-content element inline: `<tag2><!--Test comment-->Test</tag2>`.
+    // Matching that would require buffering an element's children before
+    // committing to a layout. See https://github.com/tafia/quick-xml/issues/276.
+    assert_eq!(output, "<tag2>\n    <!--Test comment-->Test\n</tag2>");
+}
+
+// The whole issue #276 document, nested. Confirms the closing tags at every
+// level land on their own correctly-indented lines.
+#[test]
+fn issue_276_nested_comment_text() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    for event in [
+        Event::Start(BytesStart::new("tag1")),
+        Event::Start(BytesStart::new("tag2")),
+        Event::Comment(BytesComment::new("Test comment").unwrap()),
+        Event::Text(BytesText::new("Test")),
+        Event::End(BytesEnd::new("tag2")),
+        Event::End(BytesEnd::new("tag1")),
+    ] {
+        writer.write_event(event).unwrap();
+    }
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        "<tag1>\n    <tag2>\n        <!--Test comment-->Test\n    </tag2>\n</tag1>",
+    );
+}
+
+// A text-only element that follows a sibling containing block content must not
+// inherit that sibling's deeper indent level: `<b>t</b>` stays inline.
+#[test]
+fn text_only_sibling_after_block_child_stays_inline() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    for event in [
+        Event::Start(BytesStart::new("root")),
+        Event::Start(BytesStart::new("a")),
+        Event::Comment(BytesComment::new("c").unwrap()),
+        Event::Text(BytesText::new("t")),
+        Event::End(BytesEnd::new("a")),
+        Event::Start(BytesStart::new("b")),
+        Event::Text(BytesText::new("t")),
+        Event::End(BytesEnd::new("b")),
+        Event::End(BytesEnd::new("root")),
+    ] {
+        writer.write_event(event).unwrap();
+    }
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        "<root>\n    <a>\n        <!--c-->t\n    </a>\n    <b>t</b>\n</root>",
+    );
+}
+
+// A general entity reference (`&name;`) is inline character data and must not
+// force a line break before the closing tag. Regression test for a bug where
+// `GeneralRef` was treated as block content.
+#[test]
+fn general_ref_is_inline() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    for event in [
+        Event::Start(BytesStart::new("p")),
+        Event::Text(BytesText::from_escaped("Hello ")),
+        Event::GeneralRef(quick_xml::events::BytesRef::new("amp")),
+        Event::Text(BytesText::from_escaped(" world")),
+        Event::End(BytesEnd::new("p")),
+    ] {
+        writer.write_event(event).unwrap();
+    }
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        "<p>Hello &amp; world</p>",
+    );
+}
+
+// A general reference as the sole child likewise stays inline.
+#[test]
+fn general_ref_only_child_is_inline() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    for event in [
+        Event::Start(BytesStart::new("a")),
+        Event::GeneralRef(quick_xml::events::BytesRef::new("amp")),
+        Event::End(BytesEnd::new("a")),
+    ] {
+        writer.write_event(event).unwrap();
+    }
+
+    assert_eq!(std::str::from_utf8(&buffer).unwrap(), "<a>&amp;</a>");
 }
