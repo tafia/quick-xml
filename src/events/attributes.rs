@@ -946,7 +946,8 @@ impl IterState {
     fn recover(&self, slice: &[u8]) -> Option<usize> {
         match self.state {
             State::Done => None,
-            State::Next(offset) => Some(offset),
+            State::Next(offset) if offset < slice.len() => Some(offset),
+            State::Next(_) => None,
             State::SkipValue(offset) => self.skip_value(slice, offset),
             State::SkipEqValue(offset) => self.skip_eq_value(slice, offset),
         }
@@ -1260,6 +1261,20 @@ impl IterState {
 mod xml {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn next_with_out_of_bounds_position() {
+        let mut iter = Attributes::new("a", 2);
+
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn has_nil_with_out_of_bounds_position() {
+        let mut iter = Attributes::new("a", 2);
+
+        assert!(!iter.has_nil(&NamespaceResolver::default()));
+    }
 
     mod attribute_value_normalization {
         use super::*;

@@ -61,6 +61,8 @@ The MSRV has been raised to 1.86.
 
 ### Bug Fixes
 
+- [#989]: Attribute iterators whose start position is beyond the input now
+  terminate instead of panicking.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
   event) now returns the new `NamespaceError::TooDeeplyNested` when a document
   nests elements deeper than `u16::MAX`, instead of overflowing the internal
@@ -85,6 +87,7 @@ The MSRV has been raised to 1.86.
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#980]: https://github.com/tafia/quick-xml/issues/980
 [#983]: https://github.com/tafia/quick-xml/issues/983
+[#989]: https://github.com/tafia/quick-xml/issues/989
 
 ## 0.41.0 -- 2026-06-29
 
