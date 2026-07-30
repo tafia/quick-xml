@@ -57,6 +57,8 @@ The MSRV has been raised to 1.86.
 
 ### Bug Fixes
 
+- [#984]: `Reader` no longer emits an empty `Text` event when `trim_text_end`
+  removes whitespace-only text immediately before markup.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
   event) now returns the new `NamespaceError::TooDeeplyNested` when a document
   nests elements deeper than `u16::MAX`, instead of overflowing the internal
@@ -77,6 +79,7 @@ The MSRV has been raised to 1.86.
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#983]: https://github.com/tafia/quick-xml/issues/983
+[#984]: https://github.com/tafia/quick-xml/issues/984
 
 ## 0.41.0 -- 2026-06-29
 

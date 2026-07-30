@@ -820,6 +820,29 @@ mod trim_text_end {
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn skips_whitespace_only_text_before_markup() {
+        let mut reader = Reader::from_str(" <a/>");
+        reader.config_mut().trim_text_end = true;
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+
+        let mut reader = Reader::from_reader(" <a/>".as_bytes());
+        reader.config_mut().trim_text_end = true;
+        let mut buffer = Vec::new();
+
+        assert_eq!(
+            reader.read_event_into(&mut buffer).unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        buffer.clear();
+        assert_eq!(reader.read_event_into(&mut buffer).unwrap(), Event::Eof);
+    }
+
+    #[test]
     fn false_() {
         let mut reader = Reader::from_str(XML);
         reader.config_mut().trim_text_end = false;
