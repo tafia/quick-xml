@@ -11,12 +11,12 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     /// Writes the given event to the underlying writer. Async version of [`Writer::write_event`].
     pub async fn write_event_async<'a, E: Into<Event<'a>>>(&mut self, event: E) -> Result<()> {
         let mut next_should_line_break = true;
-        let mut mark_non_text = false;
+        let mut should_mark_non_text = true;
         let result = match event.into() {
             Event::Start(e) => {
+                should_mark_non_text = false;
                 let result = self.write_wrapped_async("<", &e, ">").await;
                 if let Some(i) = self.indent.as_mut() {
-                    i.mark_non_text_content();
                     i.grow();
                 }
                 result
@@ -30,44 +30,28 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 }
                 self.write_wrapped_async("</", &e, ">").await
             }
-            Event::Empty(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("<", &e, "/>").await
-            }
+            Event::Empty(e) => self.write_wrapped_async("<", &e, "/>").await,
             Event::Text(e) => {
                 next_should_line_break = false;
+                should_mark_non_text = false;
                 self.write_async(e.as_bytes()).await
             }
-            Event::Comment(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("<!--", &e, "-->").await
-            }
+            Event::Comment(e) => self.write_wrapped_async("<!--", &e, "-->").await,
             Event::CData(e) => {
                 next_should_line_break = false;
+                should_mark_non_text = false;
                 self.write_async(b"<![CDATA[").await?;
                 self.write_async(e.as_bytes()).await?;
                 self.write_async(b"]]>").await
             }
-            Event::Decl(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("<?", &e, "?>").await
-            }
-            Event::PI(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("<?", &e, "?>").await
-            }
-            Event::DocType(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("<!DOCTYPE ", &e, ">").await
-            }
-            Event::GeneralRef(e) => {
-                mark_non_text = true;
-                self.write_wrapped_async("&", &e, ";").await
-            }
+            Event::Decl(e) => self.write_wrapped_async("<?", &e, "?>").await,
+            Event::PI(e) => self.write_wrapped_async("<?", &e, "?>").await,
+            Event::DocType(e) => self.write_wrapped_async("<!DOCTYPE ", &e, ">").await,
+            Event::GeneralRef(e) => self.write_wrapped_async("&", &e, ";").await,
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
-            if mark_non_text {
+            if should_mark_non_text {
                 i.mark_non_text_content();
             }
             i.should_line_break = next_should_line_break;
