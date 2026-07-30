@@ -1029,42 +1029,51 @@ mod issue978 {
 
     #[test]
     fn newtype_variant_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Deserialize, PartialEq)]
         enum E {
             Wrap(Box<E>),
-            #[allow(dead_code)]
             Leaf,
         }
 
-        // FIXME: #819 — the deserializer re-enters `deserialize_enum` without
-        // consuming the end event, so even a single `<Wrap></Wrap>` triggers
-        // infinite re-entry. The recursion limit catches this and returns a
-        // clean error instead of a stack overflow.
-        let xml = "<Wrap></Wrap>";
-        let mut de = XmlDeserializer::from_str(xml);
-        de.recursion_limit(3);
+        let limit = 3;
+
+        // Within the limit: deserializes successfully
+        let xml = nested_enum_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(E::deserialize(&mut de).is_ok());
+
+        // Exceeds the limit
+        let xml = nested_enum_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
         assert!(matches!(
             E::deserialize(&mut de),
-            Err(DeError::TooDeeplyNested(_))
+            Err(DeError::TooDeeplyNested(n)) if n == limit
         ));
     }
 
     #[test]
     fn newtype_variant_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Deserialize, PartialEq)]
         enum E {
             Wrap(Vec<E>),
-            #[allow(dead_code)]
             Leaf,
         }
 
-        // FIXME: #819 — same re-entry issue as newtype_variant_box
-        let xml = "<Wrap></Wrap>";
-        let mut de = XmlDeserializer::from_str(xml);
-        de.recursion_limit(3);
+        let limit = 3;
+
+        let xml = nested_enum_value(limit);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
+        assert!(E::deserialize(&mut de).is_ok());
+
+        let xml = nested_enum_value(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
         assert!(matches!(
             E::deserialize(&mut de),
-            Err(DeError::TooDeeplyNested(_))
+            Err(DeError::TooDeeplyNested(n)) if n == limit
         ));
     }
 
@@ -1074,13 +1083,15 @@ mod issue978 {
     fn tuple_variant_box() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap(Box<E>, String),
+            Parent(Box<E>, String),
             #[allow(dead_code)]
             Leaf,
         }
 
-        // FIXME: #819 — same re-entry issue as newtype variants
-        let xml = "<Wrap></Wrap>";
+        // Tuple variants use repeated elements (<V>f1</V><V>f2</V>),
+        // so the Start event cannot be consumed the way newtype
+        // variants do. Recursive tuple variants still hit re-entry.
+        let xml = "<Parent></Parent>";
         let mut de = XmlDeserializer::from_str(xml);
         de.recursion_limit(3);
         assert!(matches!(
@@ -1093,13 +1104,13 @@ mod issue978 {
     fn tuple_variant_vec() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap(Vec<E>, String),
+            Parent(Vec<E>, String),
             #[allow(dead_code)]
             Leaf,
         }
 
-        // FIXME: #819 — same re-entry issue as newtype variants
-        let xml = "<Wrap></Wrap>";
+        // Same re-entry issue as tuple_variant_box.
+        let xml = "<Parent></Parent>";
         let mut de = XmlDeserializer::from_str(xml);
         de.recursion_limit(3);
         assert!(matches!(
@@ -1237,4 +1248,33 @@ mod issue978 {
         assert!(result.is_ok());
         assert_eq!(result.unwrap().item.len(), 200);
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/819.
+///
+/// Enum newtype variants with recursive inner enum types should deserialize
+/// correctly instead of causing infinite re-entry / stack overflow.
+#[test]
+fn issue819() {
+    use quick_xml::de::from_str;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    enum MathNode {
+        Apply(Vec<MathNode>),
+        Ci(Vec<MathNode>),
+        #[serde(rename = "$text")]
+        Text(String),
+        #[serde(rename = "math")]
+        Root(Vec<MathNode>),
+    }
+
+    let xml = r#"<math><apply><ci>5</ci></apply></math>"#;
+    let result: MathNode = from_str(xml).unwrap();
+    assert_eq!(
+        result,
+        MathNode::Root(vec![MathNode::Apply(vec![MathNode::Ci(vec![
+            MathNode::Text("5".into())
+        ])])])
+    );
 }

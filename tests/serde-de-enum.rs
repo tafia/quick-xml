@@ -81,6 +81,88 @@ mod externally_tagged {
         assert_eq!(data, Node::Newtype(true));
     }
 
+    mod newtype_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn struct_elements() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Inner {
+                x: i32,
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                Variant(Inner),
+            }
+
+            let result: E = from_str("<Variant><x>42</x></Variant>").unwrap();
+            assert_eq!(result, E::Variant(Inner { x: 42 }));
+        }
+
+        #[test]
+        fn struct_attributes() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Inner {
+                #[serde(rename = "@x")]
+                x: i32,
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                Variant(Inner),
+            }
+
+            let result: E = from_str("<Variant x='42'/>").unwrap();
+            assert_eq!(result, E::Variant(Inner { x: 42 }));
+        }
+
+        #[test]
+        fn seq() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                Parent(Vec<E>),
+                Leaf,
+            }
+
+            let result: E = from_str("<Parent><Leaf/><Leaf/><Leaf/></Parent>").unwrap();
+            assert_eq!(result, E::Parent(vec![E::Leaf, E::Leaf, E::Leaf]));
+        }
+
+        #[test]
+        fn seq_boundary() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                Parent(Vec<E>),
+                Leaf,
+            }
+
+            let result: Vec<E> =
+                from_str("<Parent><Leaf/><Leaf/></Parent><Parent><Leaf/></Parent>").unwrap();
+            assert_eq!(
+                result,
+                vec![E::Parent(vec![E::Leaf, E::Leaf]), E::Parent(vec![E::Leaf]),]
+            );
+        }
+
+        #[test]
+        fn seq_eof_is_error() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                Parent(Vec<E>),
+                #[allow(dead_code)]
+                Leaf,
+            }
+
+            let err = from_str::<E>("<Parent><Leaf/>").unwrap_err();
+            assert!(
+                matches!(err, DeError::InvalidXml(_)),
+                "expected InvalidXml error for truncated input, got: {err:?}"
+            );
+        }
+    }
+
     #[test]
     fn tuple_struct() {
         let data: Node = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
