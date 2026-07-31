@@ -260,12 +260,12 @@ impl<W: Write> Writer<W> {
     /// Writes the given event to the underlying writer.
     pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
         let mut next_should_line_break = true;
-        let mut should_mark_non_text = true;
+        let mut mark_non_text = false;
         let result = match event.into() {
             Event::Start(e) => {
-                should_mark_non_text = false;
                 let result = self.write_wrapped("<", &e, ">");
                 if let Some(i) = self.indent.as_mut() {
+                    i.mark_non_text_content();
                     i.grow();
                 }
                 result
@@ -279,36 +279,52 @@ impl<W: Write> Writer<W> {
                 }
                 self.write_wrapped("</", &e, ">")
             }
-            Event::Empty(e) => self.write_wrapped(
-                "<",
-                &e,
-                if self.config.add_space_before_slash_in_empty_elements {
-                    " />"
-                } else {
-                    "/>"
-                },
-            ),
+            Event::Empty(e) => {
+                mark_non_text = true;
+                self.write_wrapped(
+                    "<",
+                    &e,
+                    if self.config.add_space_before_slash_in_empty_elements {
+                        " />"
+                    } else {
+                        "/>"
+                    },
+                )
+            }
             Event::Text(e) => {
                 next_should_line_break = false;
-                should_mark_non_text = false;
                 self.write(e.as_bytes())
             }
-            Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
+            Event::Comment(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<!--", &e, "-->")
+            }
             Event::CData(e) => {
                 next_should_line_break = false;
-                should_mark_non_text = false;
                 self.write(b"<![CDATA[")?;
                 self.write(e.as_bytes())?;
                 self.write(b"]]>")
             }
-            Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
-            Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
-            Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
-            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
+            Event::Decl(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<?", &e, "?>")
+            }
+            Event::PI(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<?", &e, "?>")
+            }
+            Event::DocType(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<!DOCTYPE ", &e, ">")
+            }
+            Event::GeneralRef(e) => {
+                mark_non_text = true;
+                self.write_wrapped("&", &e, ";")
+            }
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
-            if should_mark_non_text {
+            if mark_non_text {
                 i.mark_non_text_content();
             }
             i.should_line_break = next_should_line_break;
