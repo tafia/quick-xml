@@ -79,6 +79,7 @@ The MSRV has been raised to 1.86.
 
 ### Misc Changes
 
+- [#859]: Added an example showing how to pretty-print serialized XML.
 - [#983]: Adopted an AI use and contribution policy for new upstream contributions.
 - [#963]: MSRV bumped to 1.86 (April 2025)
 - [#963]: Deprecated `Attribute` methods that take a `Decoder` parameter, since
@@ -90,6 +91,7 @@ The MSRV has been raised to 1.86.
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#980]: https://github.com/tafia/quick-xml/issues/980
+[#859]: https://github.com/tafia/quick-xml/issues/859
 [#978]: https://github.com/tafia/quick-xml/issues/978
 [#983]: https://github.com/tafia/quick-xml/issues/983
 [#989]: https://github.com/tafia/quick-xml/issues/989
