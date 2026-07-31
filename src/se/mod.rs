@@ -789,7 +789,33 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         self
     }
 
-    /// Configure indent for a serializer
+    /// Configure indent for a serializer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::se::Serializer;
+    /// use serde::Serialize;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Response {
+    ///     message: &'static str,
+    /// }
+    ///
+    /// let mut output = String::new();
+    /// let mut serializer = Serializer::with_root(&mut output, Some("response")).unwrap();
+    /// serializer.indent(' ', 4);
+    ///
+    /// Response { message: "Success" }
+    ///     .serialize(serializer)
+    ///     .unwrap();
+    ///
+    /// assert_eq!(
+    ///     output,
+    ///     "<response>\n    <message>Success</message>\n</response>"
+    /// );
+    /// ```
     pub fn indent(&mut self, indent_char: char, indent_size: usize) -> &mut Self {
         self.ser.indent = Indent::Owned(Indentation::new(indent_char as u8, indent_size));
         self
