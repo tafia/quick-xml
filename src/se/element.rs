@@ -743,7 +743,7 @@ mod tests {
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
         serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
-                <root>with\t\n\r spaces</root>\
+                <root>with\t\n&#13; spaces</root>\
                 <root>3</root>");
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\
@@ -1457,7 +1457,7 @@ mod tests {
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
         serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "<root>&lt;&quot;&amp;&apos;&gt;</root>\n\
-                <root>with\t\n\r spaces</root>\n\
+                <root>with\t\n&#13; spaces</root>\n\
                 <root>3</root>");
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\n\

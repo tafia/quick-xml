@@ -130,6 +130,12 @@ where
 }
 
 /// Escapes XSD simple type value
+///
+/// Escaping \r (and \n, \t in attributes) as character references is not
+/// required by the XML specification, but is necessary for lossless round-trip
+/// preservation because XML parsers normalize these characters on input
+/// (Section 2.11, Section 3.3.3). Character references bypass normalization.
+/// This matches the behavior of libxml2.
 fn escape_list<W>(mut writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
 where
     W: Write,
@@ -146,24 +152,40 @@ where
             }
             Ok(())
         }
-        (_, Full) => escape_into(writer, value, |ch| match ch {
+        (Text, Full) => escape_into(writer, value, |ch| match ch {
+            // XML EOL normalization (Section 2.11) would convert \r to \n
+            b'\r' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
             _ => false,
         }),
-        //----------------------------------------------------------------------
         (Text, Partial) => escape_into(writer, value, |ch| match ch {
+            // XML EOL normalization (Section 2.11) would convert \r to \n
+            b'\r' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
         (Text, Minimal) => escape_into(writer, value, |ch| match ch {
+            // XML EOL normalization (Section 2.11) would convert \r to \n
+            b'\r' => true,
             // Required characters to escape
             b'&' | b'<' => true,
             _ => false,
         }),
         //----------------------------------------------------------------------
+        (_, Full) => escape_into(writer, value, |ch| match ch {
+            // XML EOL normalization (Section 2.11) and attribute-value normalization
+            // (Section 3.3.3) would convert these to \n and space respectively
+            b'\r' | b'\n' | b'\t' => true,
+            // Required characters to escape
+            b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
+            _ => false,
+        }),
+        //----------------------------------------------------------------------
         (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+            // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
+            b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Double quoted attribute should escape quote
@@ -171,6 +193,8 @@ where
             _ => false,
         }),
         (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+            // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
+            b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' => true,
             // Double quoted attribute should escape quote
@@ -179,6 +203,8 @@ where
         }),
         //----------------------------------------------------------------------
         (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+            // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
+            b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             // Single quoted attribute should escape quote
@@ -186,6 +212,8 @@ where
             _ => false,
         }),
         (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+            // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
+            b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' => true,
             // Single quoted attribute should escape quote
@@ -893,7 +921,7 @@ mod tests {
             fn text() {
                 assert_eq!(
                     escape_list("text<\"'&> \t\n\rtext", QuoteTarget::Text, QuoteLevel::Full),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
+                    "text&lt;&quot;&apos;&amp;&gt; \t\n&#13;text"
                 );
             }
 
@@ -905,7 +933,7 @@ mod tests {
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Full
                     ),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
+                    "text&lt;&quot;&apos;&amp;&gt; &#9;&#10;&#13;text"
                 );
             }
 
@@ -917,7 +945,7 @@ mod tests {
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Full
                     ),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
+                    "text&lt;&quot;&apos;&amp;&gt; &#9;&#10;&#13;text"
                 );
             }
         }
@@ -934,7 +962,7 @@ mod tests {
                         QuoteTarget::Text,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;\"'&amp;&gt; \t\n\rtext"
+                    "text&lt;\"'&amp;&gt; \t\n&#13;text"
                 );
             }
 
@@ -946,7 +974,7 @@ mod tests {
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;&quot;'&amp;&gt; \t\n\rtext"
+                    "text&lt;&quot;'&amp;&gt; &#9;&#10;&#13;text"
                 );
             }
 
@@ -958,7 +986,7 @@ mod tests {
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;\"&apos;&amp;&gt; \t\n\rtext"
+                    "text&lt;\"&apos;&amp;&gt; &#9;&#10;&#13;text"
                 );
             }
         }
@@ -975,7 +1003,7 @@ mod tests {
                         QuoteTarget::Text,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;\"'&amp;> \t\n\rtext"
+                    "text&lt;\"'&amp;> \t\n&#13;text"
                 );
             }
 
@@ -987,7 +1015,7 @@ mod tests {
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;&quot;'&amp;> \t\n\rtext"
+                    "text&lt;&quot;'&amp;> &#9;&#10;&#13;text"
                 );
             }
 
@@ -999,7 +1027,7 @@ mod tests {
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;\"&apos;&amp;> \t\n\rtext"
+                    "text&lt;\"&apos;&amp;> &#9;&#10;&#13;text"
                 );
             }
         }

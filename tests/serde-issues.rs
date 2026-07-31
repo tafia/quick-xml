@@ -539,6 +539,65 @@ fn issue655() {
     );
 }
 
+/// Regression tests for https://github.com/tafia/quick-xml/issues/670.
+///
+/// The serde serializer must escape `\r`, `\n`, and `\t` in attribute values so
+/// they survive XML attribute-value normalization (Section 3.3.3) on round-trip.
+mod issue670 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Root {
+        #[serde(rename = "@value")]
+        value: String,
+    }
+
+    #[test]
+    fn cr_lf_in_attribute() {
+        let value = Root {
+            value: "new\r\nline".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, r#"<Root value="new&#13;&#10;line"/>"#);
+        let roundtripped: Root = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    #[test]
+    fn cr_in_attribute() {
+        let value = Root {
+            value: "new\rline".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, r#"<Root value="new&#13;line"/>"#);
+        let roundtripped: Root = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    #[test]
+    fn lf_in_attribute() {
+        let value = Root {
+            value: "new\nline".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, r#"<Root value="new&#10;line"/>"#);
+        let roundtripped: Root = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    #[test]
+    fn tab_in_attribute() {
+        let value = Root {
+            value: "col1\tcol2".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, r#"<Root value="col1&#9;col2"/>"#);
+        let roundtripped: Root = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/674
 #[test]
 fn issue674() {
@@ -1236,5 +1295,101 @@ mod issue978 {
         let result = Root::deserialize(&mut de);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().item.len(), 200);
+    }
+}
+
+/// Regression tests for https://github.com/tafia/quick-xml/issues/990.
+///
+/// The serde serializer must escape `\r` in text content so it survives
+/// XML end-of-line normalization (Section 2.11) on round-trip.
+///
+/// This behavior is not stated directly in the spec, but it is exhibited
+/// by implementations such as libxml2.
+mod issue990 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[serde(rename = "value")]
+    struct Value {
+        #[serde(rename = "$value")]
+        value: String,
+    }
+
+    #[test]
+    fn cr_in_text_content() {
+        let value = Value {
+            value: "hello\rworld".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, "<value>hello&#13;world</value>");
+        let roundtripped: Value = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    #[test]
+    fn cr_lf_in_text_content() {
+        let value = Value {
+            value: "hello\r\nworld".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        assert_eq!(xml, "<value>hello&#13;\nworld</value>");
+        let roundtripped: Value = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    #[test]
+    fn lf_in_text_content_not_escaped() {
+        let value = Value {
+            value: "hello\nworld".into(),
+        };
+        let xml = to_string(&value).unwrap();
+        // \n is valid in text content and not subject to EOL normalization,
+        // so it should NOT be escaped
+        assert_eq!(xml, "<value>hello\nworld</value>");
+        let roundtripped: Value = from_str(&xml).unwrap();
+        assert_eq!(roundtripped, value);
+    }
+
+    /// CDATA sections cannot preserve `\r` because character references are
+    /// not permitted inside CDATA. This is an inherent XML limitation, the
+    /// round-trip is lossy in this case.
+    #[test]
+    fn cdata_cr_is_lossy() {
+        let mut buffer = String::new();
+        let mut ser = Serializer::with_root(&mut buffer, Some("value")).unwrap();
+        ser.text_format(quick_xml::se::TextFormat::CData);
+
+        let value = Value {
+            value: "hello\rworld".into(),
+        };
+        value.serialize(ser).unwrap();
+
+        // The serializer writes \r literally inside CDATA (it cannot escape it)
+        assert_eq!(buffer, "<value><![CDATA[hello\rworld]]></value>");
+
+        // But XML EOL normalization converts \r to \n on parse, so round-trip
+        // produces \n instead of \r
+        let parsed: Value = from_str(&buffer).unwrap();
+        assert_eq!(parsed.value, "hello\nworld");
+        assert_ne!(parsed, value);
+    }
+
+    /// CDATA with CRLF is also lossy: \r\n becomes \n.
+    #[test]
+    fn cdata_cr_lf_is_lossy() {
+        let mut buffer = String::new();
+        let mut ser = Serializer::with_root(&mut buffer, Some("value")).unwrap();
+        ser.text_format(quick_xml::se::TextFormat::CData);
+
+        let value = Value {
+            value: "hello\r\nworld".into(),
+        };
+        value.serialize(ser).unwrap();
+
+        assert_eq!(buffer, "<value><![CDATA[hello\r\nworld]]></value>");
+
+        let parsed: Value = from_str(&buffer).unwrap();
+        assert_eq!(parsed.value, "hello\nworld");
     }
 }

@@ -64,6 +64,9 @@ The MSRV has been raised to 1.86.
 
 ### Bug Fixes
 
+- [#670]: Serde serializer now escapes `\r`, `\n`, and `\t` in attribute values
+  as `&#13;`, `&#10;`, and `&#9;` respectively, preventing silent data loss from
+  XML attribute-value normalization on round-trip.
 - [#989]: `Attributes::new` and `Attributes::html` now return empty iterators when
   their starting position is past the end of the input instead of panicking.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
@@ -79,6 +82,8 @@ The MSRV has been raised to 1.86.
   limit (default 128, matching `serde_json`). Deeply nested XML returns
   `DeError::TooDeeplyNested` instead of overflowing the native call stack.
   Use `Deserializer::recursion_limit()` to adjust.
+- [#990]: Serde serializer now escapes `\r` in text content as `&#13;`, preventing
+  silent conversion to `\n` from XML end-of-line normalization on round-trip.
 
 ### Misc Changes
 
@@ -91,6 +96,7 @@ The MSRV has been raised to 1.86.
   `decode_and_unescape_value_with()`. Use `normalized_value()` and
   `normalized_value_with()` instead.
 
+[#670]: https://github.com/tafia/quick-xml/issues/670
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#980]: https://github.com/tafia/quick-xml/issues/980
@@ -98,6 +104,7 @@ The MSRV has been raised to 1.86.
 [#978]: https://github.com/tafia/quick-xml/issues/978
 [#983]: https://github.com/tafia/quick-xml/issues/983
 [#989]: https://github.com/tafia/quick-xml/issues/989
+[#990]: https://github.com/tafia/quick-xml/issues/990
 [#1000]: https://github.com/tafia/quick-xml/pull/1000
 
 ## 0.41.0 -- 2026-06-29
