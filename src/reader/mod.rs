@@ -1017,7 +1017,7 @@ enum ReadTextResult<'r, B> {
     /// discarded). Contains buffer that should be returned back to the next
     /// iteration cycle to satisfy borrow checker requirements.
     Ref(B),
-    /// Contains text block up to start of markup (`<` character). `<` was consumed.
+    /// Contains text block up to start of markup (`<` character). `<` was not consumed.
     UpToMarkup(&'r str),
     /// Contains text block up to start of reference (`&` character).
     /// `&` was not consumed.
