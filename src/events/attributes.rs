@@ -1,6 +1,13 @@
 //! Xml Attributes module
 //!
 //! Provides an iterator over attributes key/value pairs
+//!
+//! When using Serde instead of the event API, map a named struct field to an XML
+//! attribute with `#[serde(rename = "@name")]`. The same mapping works for both
+//! serialization and deserialization; see the [Serde mapping basics] for examples.
+//! A flattened map can capture attributes whose names are not known in advance.
+//!
+//! [Serde mapping basics]: ../../de/index.html#basics
 
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;

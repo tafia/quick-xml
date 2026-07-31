@@ -80,6 +80,7 @@ The MSRV has been raised to 1.86.
 ### Misc Changes
 
 - [#859]: Added an example showing how to pretty-print serialized XML.
+- [#804]: Linked the serializer and attribute documentation to the Serde XML mapping guide.
 - [#983]: Adopted an AI use and contribution policy for new upstream contributions.
 - [#963]: MSRV bumped to 1.86 (April 2025)
 - [#963]: Deprecated `Attribute` methods that take a `Decoder` parameter, since
@@ -88,6 +89,7 @@ The MSRV has been raised to 1.86.
   `decode_and_unescape_value_with()`. Use `normalized_value()` and
   `normalized_value_with()` instead.
 
+[#804]: https://github.com/tafia/quick-xml/issues/804
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#980]: https://github.com/tafia/quick-xml/issues/980

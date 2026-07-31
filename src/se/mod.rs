@@ -1,4 +1,8 @@
-//! Module to handle custom serde `Serializer`
+//! Module to handle custom serde `Serializer`.
+//!
+//! Serde uses the same XML data-model mapping for serialization and deserialization.
+//! See the [mapping basics](../de/index.html#basics) for examples of fields mapped to
+//! attributes with `#[serde(rename = "@name")]`, text with `$text`, and elements.
 
 /// Implements writing primitives to the underlying writer.
 /// Implementor must provide `write_str(self, &str) -> Result<(), DeError>` method
