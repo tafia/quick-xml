@@ -325,7 +325,11 @@ macro_rules! read_event_impl {
                         $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
                     }
 
-                    match $reader.read_text($buf, &mut $self.state.offset) $(.$await)? {
+                    match $reader.read_text(
+                        $buf,
+                        &mut $self.state.offset,
+                        $self.state.config.trim_text_end,
+                    ) $(.$await)? {
                         ReadTextResult::Markup(buf) => {
                             $self.state.state = ParseState::InsideMarkup;
                             // Pass `buf` to the next next iteration of parsing loop
@@ -340,15 +344,10 @@ macro_rules! read_event_impl {
                         }
                         ReadTextResult::UpToMarkup(bytes) => {
                             $self.state.state = ParseState::InsideMarkup;
-                            // FIXME: Can produce an empty event if:
-                            // - event contains only spaces
-                            // - trim_text_start = false
-                            // - trim_text_end = true
                             Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadTextResult::UpToRef(bytes) => {
                             $self.state.state = ParseState::InsideRef;
-                            // Return Text event with `bytes` content or Eof if bytes is empty
                             Ok(Event::Text($self.state.emit_text(bytes)?))
                         }
                         ReadTextResult::UpToEof(bytes) => {
@@ -493,8 +492,8 @@ macro_rules! read_to_end {
         // it is important that this position indicates beginning of the End event.
         // If between last event and the End event would be only spaces, then we
         // take position before the spaces, but spaces would be skipped without
-        // generating event if `trim_text_start` is set to `true`. To prevent that
-        // we temporary disable start text trimming.
+        // generating an event if text trimming is enabled. To prevent that we
+        // temporarily disable text trimming.
         //
         // We also cannot take position after getting End event, because if
         // `trim_markup_names_in_closing_tags` is set to `true` (which is the default),
@@ -502,8 +501,10 @@ macro_rules! read_to_end {
         // the source and cannot correct the position after the End event.
         // So, we in any case should tweak parser configuration.
         let config = $self.config_mut();
-        let trim = config.trim_text_start;
+        let trim_start = config.trim_text_start;
+        let trim_end = config.trim_text_end;
         config.trim_text_start = false;
+        config.trim_text_end = false;
 
         let start = $self.buffer_position();
         let mut depth = 0;
@@ -512,20 +513,26 @@ macro_rules! read_to_end {
             let end = $self.buffer_position();
             match $self.$read_event($buf) $(.$await)? {
                 Err(e) => {
-                    $self.config_mut().trim_text_start = trim;
+                    let config = $self.config_mut();
+                    config.trim_text_start = trim_start;
+                    config.trim_text_end = trim_end;
                     return Err(e);
                 }
 
                 Ok(Event::Start(e)) if e.name() == $end => depth += 1,
                 Ok(Event::End(e)) if e.name() == $end => {
                     if depth == 0 {
-                        $self.config_mut().trim_text_start = trim;
+                        let config = $self.config_mut();
+                        config.trim_text_start = trim_start;
+                        config.trim_text_end = trim_end;
                         break start..end;
                     }
                     depth -= 1;
                 }
                 Ok(Event::Eof) => {
-                    $self.config_mut().trim_text_start = trim;
+                    let config = $self.config_mut();
+                    config.trim_text_start = trim_start;
+                    config.trim_text_end = trim_end;
                     return Err(Error::missed_end($end));
                 }
                 _ => (),
@@ -998,14 +1005,17 @@ impl<R> Reader<R> {
 /// Result of an attempt to read XML textual data from the source.
 #[derive(Debug)]
 enum ReadTextResult<'r, B> {
-    /// Start of markup (`<` character) was found in the first byte. `<` was consumed.
-    /// Contains buffer that should be returned back to the next iteration cycle
-    /// to satisfy borrow checker requirements.
+    /// The reader is positioned at `<` (start of markup). `<` was not consumed.
+    /// Returned either when `<` was the first byte, or when `trim_text_end` is
+    /// enabled and only whitespace preceded it (that whitespace was consumed and
+    /// discarded). Contains buffer that should be returned back to the next
+    /// iteration cycle to satisfy borrow checker requirements.
     Markup(B),
-    /// Start of reference (`&` character) was found in the first byte.
-    /// `&` was not consumed.
-    /// Contains buffer that should be returned back to the next iteration cycle
-    /// to satisfy borrow checker requirements.
+    /// The reader is positioned at `&` (start of a reference). `&` was not consumed.
+    /// Returned either when `&` was the first byte, or when `trim_text_end` is
+    /// enabled and only whitespace preceded it (that whitespace was consumed and
+    /// discarded). Contains buffer that should be returned back to the next
+    /// iteration cycle to satisfy borrow checker requirements.
     Ref(B),
     /// Contains text block up to start of markup (`<` character). `<` was consumed.
     UpToMarkup(&'r str),
@@ -1069,9 +1079,16 @@ trait XmlSource<'r, B> {
     /// - `buf`: Buffer that could be filled from an input (`Self`) and
     ///   from which [events] could borrow their data
     /// - `position`: Will be increased by amount of bytes consumed
+    /// - `trim_text_end`: When true, a whitespace-only text block is suppressed
+    ///   (returns [`ReadTextResult::Markup`] or [`ReadTextResult::Ref`] instead)
     ///
     /// [events]: crate::events::Event
-    fn read_text(&mut self, buf: B, position: &mut u64) -> ReadTextResult<'r, B>;
+    fn read_text(
+        &mut self,
+        buf: B,
+        position: &mut u64,
+        trim_text_end: bool,
+    ) -> ReadTextResult<'r, B>;
 
     /// Read input until end of general reference (the `;`) is found, start of
     /// another general reference (the `&`) is found or end of input is reached.
@@ -1646,7 +1663,7 @@ mod test {
                     let mut input = b"".as_ref();
                     //                ^= 1
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::UpToEof(bytes) => assert_eq!(bytes, ""),
                         x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
@@ -1660,7 +1677,7 @@ mod test {
                     let mut input = b"<".as_ref();
                     //                 ^= 1
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::Markup(b) => assert_eq!(b, $buf),
                         x => panic!("Expected `Markup(_)`, but got `{:?}`", x),
                     }
@@ -1674,7 +1691,7 @@ mod test {
                     let mut input = b"&".as_ref();
                     //                ^= 1
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::Ref(b) => assert_eq!(b, $buf),
                         x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
                     }
@@ -1688,7 +1705,7 @@ mod test {
                     let mut input = b"a<".as_ref();
                     //                  ^= 2
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::UpToMarkup(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
                     }
@@ -1702,7 +1719,7 @@ mod test {
                     let mut input = b"a&".as_ref();
                     //                 ^= 2
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::UpToRef(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
                     }
@@ -1716,7 +1733,7 @@ mod test {
                     let mut input = b"a".as_ref();
                     //                 ^= 2
 
-                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_text(buf, &mut position, false) $(.$await)? {
                         ReadTextResult::UpToEof(bytes) => assert_eq!(bytes, "a"),
                         x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
@@ -2060,7 +2077,7 @@ mod test {
 
             /// Ensures, that no empty `Text` events are generated
             mod $read_event {
-                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -2147,6 +2164,55 @@ mod test {
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
                         Event::End(BytesEnd::new("tag"))
+                    );
+                }
+
+                #[$test]
+                $($async)? fn trim_text_end_skips_empty_text_before_markup() {
+                    let mut reader = Reader::from_str(" <tag/>");
+                    reader.config_mut().trim_text_end = true;
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Empty(BytesStart::new("tag"))
+                    );
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn trim_text_end_skips_empty_text_before_reference() {
+                    let mut reader = Reader::from_str(" &amp;");
+                    reader.config_mut().trim_text_end = true;
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::GeneralRef(BytesRef::new("amp"))
+                    );
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn trim_text_end_preserves_non_empty_text() {
+                    let mut reader = Reader::from_str(" text <tag/>");
+                    reader.config_mut().trim_text_end = true;
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Text(BytesText::new(" text"))
+                    );
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Empty(BytesStart::new("tag"))
+                    );
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Eof
                     );
                 }
 

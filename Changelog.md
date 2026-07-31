@@ -76,13 +76,15 @@ The MSRV has been raised to 1.86.
   `u16` depth counter. Previously the unguarded `nesting_level += 1` panicked
   under `overflow-checks` builds and silently wrapped in release, corrupting
   namespace-scope bookkeeping on deeply nested untrusted input.
-- [#980]: `NamespaceResolver` now caps the total number of in-scope namespace
-  bindings (default 128, configurable via `set_max_namespace_bindings`),
-  replacing the previous per-element `max_declarations_per_element` limit.
 - [#978]: The serde `Deserializer` now enforces a configurable recursion-depth
   limit (default 128, matching `serde_json`). Deeply nested XML returns
   `DeError::TooDeeplyNested` instead of overflowing the native call stack.
   Use `Deserializer::recursion_limit()` to adjust.
+- [#980]: `NamespaceResolver` now caps the total number of in-scope namespace
+  bindings (default 128, configurable via `set_max_namespace_bindings`),
+  replacing the previous per-element `max_declarations_per_element` limit.
+- [#984]: `Reader` no longer emits an empty `Text` event when `trim_text_end`
+  removes whitespace-only text immediately before markup or a reference.
 - [#990]: `\r` in text content is now escaped as `&#13;` by the serde serializer,
   `BytesText::new()`, `escape()`, `partial_escape()`, and `minimal_escape()`,
   preventing silent conversion to `\n` from XML end-of-line normalization on
@@ -107,6 +109,7 @@ The MSRV has been raised to 1.86.
 [#859]: https://github.com/tafia/quick-xml/issues/859
 [#978]: https://github.com/tafia/quick-xml/issues/978
 [#983]: https://github.com/tafia/quick-xml/issues/983
+[#984]: https://github.com/tafia/quick-xml/issues/984
 [#989]: https://github.com/tafia/quick-xml/issues/989
 [#990]: https://github.com/tafia/quick-xml/issues/990
 [#1000]: https://github.com/tafia/quick-xml/pull/1000

@@ -54,6 +54,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut u64,
+            trim_text_end: bool,
         ) -> ReadTextResult<'b, &'b mut Vec<u8>> {
             let mut read = 0;
             let start = buf.len();
@@ -83,6 +84,9 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
+                        if trim_text_end && buf[start..].iter().all(|&b| is_whitespace(b)) {
+                            return ReadTextResult::Markup(buf);
+                        }
                         return match std::str::from_utf8(&buf[start..]) {
                             Ok(s) => ReadTextResult::UpToMarkup(s),
                             Err(e) => ReadTextResult::Err(e.into()),
@@ -95,6 +99,9 @@ macro_rules! impl_buffered_source {
                         read += i as u64;
 
                         *position += read;
+                        if trim_text_end && buf[start..].iter().all(|&b| is_whitespace(b)) {
+                            return ReadTextResult::Ref(buf);
+                        }
                         return match std::str::from_utf8(&buf[start..]) {
                             Ok(s) => ReadTextResult::UpToRef(s),
                             Err(e) => ReadTextResult::Err(e.into()),
