@@ -64,10 +64,8 @@ The MSRV has been raised to 1.86.
 - [#819]: Fixed infinite recursion (stack overflow) when deserializing enum
   newtype variants whose inner type is also an enum (e.g. `Apply(Vec<MathNode>)`).
   The variant's Start event is now consumed before deserializing the inner type,
-  which also fixes deserialization of newtype variants containing sequences of
-  child elements (e.g. `Variant(Vec<i32>)` with `<Variant><x>1</x><x>2</x></Variant>`),
-  which previously failed with `UnexpectedStart`, and corrects sequence boundary
-  handling so that sequences no longer consume past the enclosing variant's end tag.
+  and sequence boundary handling is corrected so that sequences no longer consume
+  past the enclosing variant's end tag.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
   event) now returns the new `NamespaceError::TooDeeplyNested` when a document
   nests elements deeper than `u16::MAX`, instead of overflowing the internal

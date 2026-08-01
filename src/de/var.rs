@@ -200,13 +200,12 @@ where
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let mut this = self;
-        let result = visitor.visit_seq(&mut this)?;
-        this.de.read_to_end(this.start.name())?;
+        let result = visitor.visit_seq(&mut self)?;
+        self.de.read_to_end(self.start.name())?;
         Ok(result)
     }
 

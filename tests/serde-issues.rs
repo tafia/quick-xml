@@ -910,15 +910,15 @@ mod issue978 {
         xml
     }
 
-    /// Generate XML like `<Wrap><Wrap>...<Leaf/>...</Wrap></Wrap>`.
+    /// Generate XML like `<Parent><Parent>...<Leaf/>...</Parent></Parent>`.
     fn nested_enum_value(depth: usize) -> String {
         let mut xml = String::new();
         for _ in 0..depth.saturating_sub(1) {
-            xml.push_str("<Wrap>");
+            xml.push_str("<Parent>");
         }
         xml.push_str("<Leaf/>");
         for _ in 0..depth.saturating_sub(1) {
-            xml.push_str("</Wrap>");
+            xml.push_str("</Parent>");
         }
         xml
     }
@@ -1031,7 +1031,7 @@ mod issue978 {
     fn newtype_variant_box() {
         #[derive(Debug, Deserialize, PartialEq)]
         enum E {
-            Wrap(Box<E>),
+            Parent(Box<E>),
             Leaf,
         }
 
@@ -1057,7 +1057,7 @@ mod issue978 {
     fn newtype_variant_vec() {
         #[derive(Debug, Deserialize, PartialEq)]
         enum E {
-            Wrap(Vec<E>),
+            Parent(Vec<E>),
             Leaf,
         }
 
@@ -1125,7 +1125,7 @@ mod issue978 {
     fn struct_variant_field_box() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap {
+            Parent {
                 f: Box<E>,
             },
             #[allow(dead_code)]
@@ -1134,7 +1134,7 @@ mod issue978 {
 
         // Depth limit catches deeply nested input before it reaches
         // pre-existing deserialization issues with enum fields
-        let xml = "<Wrap><f><Wrap><f><Leaf/></f></Wrap></f></Wrap>";
+        let xml = "<Parent><f><Parent><f><Leaf/></f></Parent></f></Parent>";
         let mut de = XmlDeserializer::from_str(xml);
         de.recursion_limit(1);
         assert!(matches!(
@@ -1147,7 +1147,7 @@ mod issue978 {
     fn struct_variant_field_vec() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap {
+            Parent {
                 #[serde(default)]
                 f: Vec<E>,
             },
@@ -1155,7 +1155,7 @@ mod issue978 {
             Leaf,
         }
 
-        let xml = "<Wrap><f><Wrap><f><Leaf/></f></Wrap></f></Wrap>";
+        let xml = "<Parent><f><Parent><f><Leaf/></f></Parent></f></Parent>";
         let mut de = XmlDeserializer::from_str(xml);
         de.recursion_limit(1);
         assert!(matches!(
@@ -1168,7 +1168,7 @@ mod issue978 {
     fn struct_variant_value_field_box() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap {
+            Parent {
                 #[serde(rename = "$value")]
                 v: Box<E>,
             },
@@ -1197,7 +1197,7 @@ mod issue978 {
     fn struct_variant_value_field_vec() {
         #[derive(Debug, Deserialize)]
         enum E {
-            Wrap {
+            Parent {
                 #[serde(rename = "$value")]
                 #[serde(default)]
                 v: Vec<E>,
