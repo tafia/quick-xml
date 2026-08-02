@@ -331,9 +331,9 @@ mod trivial {
                 fn nested() {
                     match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
                         // Expected unexpected start element `<nested>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "nested"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "nested"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -343,9 +343,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<nested>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "nested"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "nested"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -356,9 +356,9 @@ mod trivial {
                 fn tag_after() {
                     match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -368,9 +368,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -381,9 +381,9 @@ mod trivial {
                 fn tag_before() {
                     match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -393,9 +393,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -420,9 +420,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<nested>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "nested"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "nested"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -432,9 +432,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<nested>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "nested"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "nested"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -447,9 +447,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -459,9 +459,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -474,9 +474,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -486,9 +486,9 @@ mod trivial {
                         $value
                     )) {
                         // Expected unexpected start element `<something-else>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, "something-else"),
+                        Err(DeError::MixedContent(tag)) => assert_eq!(tag, "something-else"),
                         x => panic!(
-                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(MixedContent("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
