@@ -58,6 +58,9 @@ The MSRV has been raised to 1.86.
   and `NamespaceResolver::set_max_declarations_per_element` has been renamed to
   `NamespaceResolver::set_max_namespace_bindings`, and the semantic behavior has
   changed slightly. The default maximum has also been reduced from 256 to 128.
+- [#1000]: `DeError::UnexpectedStart` renamed to `DeError::MixedContent`. That error
+  is emitted when you try to deserialize boolean, number or string `field` from
+  something like `<field>text <tag/> another text</field>`.
 
 ### Bug Fixes
 
@@ -95,6 +98,7 @@ The MSRV has been raised to 1.86.
 [#978]: https://github.com/tafia/quick-xml/issues/978
 [#983]: https://github.com/tafia/quick-xml/issues/983
 [#989]: https://github.com/tafia/quick-xml/issues/989
+[#1000]: https://github.com/tafia/quick-xml/pull/1000
 
 ## 0.41.0 -- 2026-06-29
 

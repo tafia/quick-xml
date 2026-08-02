@@ -2928,7 +2928,7 @@ where
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------
-    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`MixedContent("tag")`](DeError::MixedContent)
     /// |[`DeEvent::End`]  |`</any-tag>`               |This is impossible situation, the method will panic if it happens
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
@@ -2937,7 +2937,7 @@ where
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------------------------------------------------
-    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
+    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`MixedContent("any-tag")`](DeError::MixedContent)
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice. The reader guarantee that tag will match the open one
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, expects the `</tag>` after that
     /// |[`DeEvent::Eof`]  |                           |Emits [`InvalidXml(IllFormed(MissingEndTag))`](DeError::InvalidXml)
@@ -2952,7 +2952,7 @@ where
             // Reached by trivial::{...}::{field, field_nested, field_tag_after, field_tag_before, nested, tag_after, tag_before, wrapped}
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             // TODO: not reached by any tests
-            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+            DeEvent::Start(e) => Err(DeError::MixedContent(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -2975,7 +2975,7 @@ where
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
                 // Reached by trivial::{...}::{field_tag_after, tag_after}
-                DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+                DeEvent::Start(e) => Err(DeError::MixedContent(e.name().as_ref().to_owned())),
                 // Reached by struct_::non_closed::elements_child
                 DeEvent::Eof => Err(Error::missed_end(name).into()),
             },
@@ -2985,7 +2985,7 @@ where
             // Reached by {...}::xs_list::empty
             DeEvent::End(_) => Ok("".into()),
             // Reached by trivial::{...}::{field_nested, field_tag_before, nested, tag_before}
-            DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
+            DeEvent::Start(s) => Err(DeError::MixedContent(s.name().as_ref().to_owned())),
             // Reached by struct_::non_closed::elements_child
             DeEvent::Eof => Err(Error::missed_end(name).into()),
         }
