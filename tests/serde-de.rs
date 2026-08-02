@@ -1427,6 +1427,93 @@ mod nested_struct {
     }
 }
 
+mod recursive_struct {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn box_field() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct S {
+            field: Option<Box<S>>,
+        }
+
+        let data: S = from_str("<S><field><field></field></field></S>").unwrap();
+        assert_eq!(
+            data,
+            S {
+                field: Some(Box::new(S {
+                    field: Some(Box::new(S { field: None })),
+                })),
+            }
+        );
+    }
+
+    #[test]
+    fn vec_field() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct S {
+            #[serde(default)]
+            field: Vec<S>,
+        }
+
+        let data: S = from_str("<S><field/><field><field/></field></S>").unwrap();
+        assert_eq!(
+            data,
+            S {
+                field: vec![
+                    S { field: vec![] },
+                    S {
+                        field: vec![S { field: vec![] }],
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn value_box_field() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct S {
+            #[serde(rename = "$value")]
+            value: Option<Box<S>>,
+        }
+
+        let data: S = from_str("<a><b><c/></b></a>").unwrap();
+        assert_eq!(
+            data,
+            S {
+                value: Some(Box::new(S {
+                    value: Some(Box::new(S { value: None })),
+                })),
+            }
+        );
+    }
+
+    #[test]
+    fn value_vec_field() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct S {
+            #[serde(rename = "$value")]
+            #[serde(default)]
+            value: Vec<S>,
+        }
+
+        let data: S = from_str("<root><a/><b><c/></b></root>").unwrap();
+        assert_eq!(
+            data,
+            S {
+                value: vec![
+                    S { value: vec![] },
+                    S {
+                        value: vec![S { value: vec![] }],
+                    },
+                ],
+            }
+        );
+    }
+}
+
 mod flatten_struct {
     use super::*;
     use pretty_assertions::assert_eq;
