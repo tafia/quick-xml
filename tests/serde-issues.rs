@@ -1079,43 +1079,70 @@ mod issue978 {
 
     // enum tuple variant
 
+    /// Generate nested tuple-variant XML for `Parent(Box<E>, String)`.
+    ///
+    /// - depth=1: `<Leaf/>`
+    /// - depth=2: `<Parent><Leaf/></Parent><Parent>s</Parent>`
+    /// - depth=3: `<Parent><Parent><Leaf/></Parent><Parent>s</Parent></Parent><Parent>s</Parent>`
+    fn nested_tuple_enum(depth: usize) -> String {
+        if depth <= 1 {
+            return "<Leaf/>".to_string();
+        }
+        let inner = nested_tuple_enum(depth - 1);
+        format!("<Parent>{inner}</Parent><Parent>s</Parent>")
+    }
+
     #[test]
     fn tuple_variant_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Deserialize, PartialEq)]
         enum E {
             Parent(Box<E>, String),
-            #[allow(dead_code)]
             Leaf,
         }
 
-        // Tuple variants use repeated elements (<V>f1</V><V>f2</V>),
-        // so the Start event cannot be consumed the way newtype
-        // variants do. Recursive tuple variants still hit re-entry.
-        let xml = "<Parent></Parent>";
+        let limit = 3;
+
+        let xml = "<Parent><Leaf/></Parent><Parent>hello</Parent>";
         let mut de = XmlDeserializer::from_str(xml);
-        de.recursion_limit(3);
+        de.recursion_limit(limit);
+        assert_eq!(
+            E::deserialize(&mut de).unwrap(),
+            E::Parent(Box::new(E::Leaf), "hello".into())
+        );
+
+        let xml = nested_tuple_enum(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
         assert!(matches!(
             E::deserialize(&mut de),
-            Err(DeError::TooDeeplyNested(_))
+            Err(DeError::TooDeeplyNested(n)) if n == limit
         ));
     }
 
     #[test]
     fn tuple_variant_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Deserialize, PartialEq)]
         enum E {
             Parent(Vec<E>, String),
-            #[allow(dead_code)]
             Leaf,
         }
 
-        // Same re-entry issue as tuple_variant_box.
-        let xml = "<Parent></Parent>";
+        let limit = 3;
+
+        let xml = "<Parent><Leaf/></Parent><Parent>hello</Parent>";
         let mut de = XmlDeserializer::from_str(xml);
-        de.recursion_limit(3);
+        de.recursion_limit(limit);
+        assert_eq!(
+            E::deserialize(&mut de).unwrap(),
+            E::Parent(vec![E::Leaf], "hello".into())
+        );
+
+        let xml = nested_tuple_enum(limit + 1);
+        let mut de = XmlDeserializer::from_str(&xml);
+        de.recursion_limit(limit);
         assert!(matches!(
             E::deserialize(&mut de),
-            Err(DeError::TooDeeplyNested(_))
+            Err(DeError::TooDeeplyNested(n)) if n == limit
         ));
     }
 
