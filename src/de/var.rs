@@ -311,7 +311,110 @@ where
         match self.de.peek()? {
             DeEvent::End(_) => Ok(None),
             DeEvent::Eof => Err(Error::missed_end(self.start.name()).into()),
-            _ => seed.deserialize(&mut *self.de).map(Some),
+            _ => seed
+                .deserialize(InTreeDeserializer { de: &mut *self.de })
+                .map(Some),
         }
+    }
+}
+
+/// A wrapper around [`Deserializer`] that rejects `Start` events when
+/// deserializing primitive types. Used by [`VariantContentDeserializer`]'s
+/// [`SeqAccess`](de::SeqAccess) impl so that `Variant(Vec<i32>)` cannot be
+/// deserialized from child elements like `<Variant><x>1</x></Variant>` —
+/// only from xs:list text content like `<Variant>1 2 3</Variant>`.
+///
+/// Non-primitive methods (enum, struct, seq, etc.) delegate directly to the
+/// underlying [`Deserializer`], so `Vec<MathNode>` from child elements still
+/// works: `<Apply><Ci>x</Ci><Cn>5</Cn></Apply>`.
+pub(crate) struct InTreeDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    de: &'d mut Deserializer<'de, R, E>,
+}
+
+impl<'de, 'd, R, E> InTreeDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    #[inline]
+    fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
+        self.de.read_string_in_tree()
+    }
+}
+
+impl<'de, 'd, R, E> de::Deserializer<'de> for InTreeDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    deserialize_primitives!(mut);
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_unit(visitor)
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_option(visitor)
+    }
+
+    fn deserialize_newtype_struct<V>(
+        self,
+        name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_newtype_struct(name, visitor)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_seq(visitor)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_struct(name, fields, visitor)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_enum(name, variants, visitor)
+    }
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.de.deserialize_any(visitor)
     }
 }

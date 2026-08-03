@@ -2908,6 +2908,14 @@ where
         self.read_string_impl(true)
     }
 
+    /// Like [`read_string`](Self::read_string) but rejects `Start` events for
+    /// primitive types. Used by [`InTreeDeserializer`](var::InTreeDeserializer)
+    /// to prevent `<tag>text</tag>` from being accepted as a primitive value.
+    #[inline]
+    pub(crate) fn read_string_in_tree(&mut self) -> Result<Cow<'de, str>, DeError> {
+        self.read_string_impl(false)
+    }
+
     /// Consumes consequent [`Text`] and [`CData`] (both a referred below as a _text_)
     /// events, merge them into one string. If there are no such events, returns
     /// an empty string.

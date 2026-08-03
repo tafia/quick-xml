@@ -161,6 +161,23 @@ mod externally_tagged {
                 "expected InvalidXml error for truncated input, got: {err:?}"
             );
         }
+
+        /// Primitives inside a variant sequence cannot be deserialized from
+        /// child elements — only from text content (xs:list format).
+        #[test]
+        fn primitives_reject_child_elements() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum E {
+                #[allow(dead_code)]
+                Variant(Vec<i32>),
+            }
+
+            let err = from_str::<E>("<Variant><x>1</x><x>2</x></Variant>").unwrap_err();
+            assert!(
+                matches!(err, DeError::UnexpectedStart(ref tag) if tag == "x"),
+                "expected UnexpectedStart for child elements with primitive types, got: {err:?}"
+            );
+        }
     }
 
     #[test]
