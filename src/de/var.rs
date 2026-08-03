@@ -103,7 +103,7 @@ where
         V: Visitor<'de>,
     {
         match self.de.peek()? {
-            DeEvent::Start(_) => self.de.deserialize_tuple(len, visitor),
+            DeEvent::Start(_) => visitor.visit_seq(TupleVariantSeqAccess { de: self.de }),
             _ => match self.de.next()? {
                 DeEvent::Text(e) => {
                     SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
@@ -129,6 +129,53 @@ where
             }
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),
+        }
+    }
+}
+
+/// [`SeqAccess`](de::SeqAccess) for tuple variants that consumes each repeated
+/// element's Start event before deserializing the field, preventing re-entry for
+/// recursive enum types.
+///
+/// Tuple variants use repeated sibling elements, one per field:
+/// `Tuple(f64, String)` serializes as `<Tuple>42</Tuple><Tuple>answer</Tuple>`.
+/// Each call to [`next_element_seed`] consumes the next Start event and creates
+/// a [`VariantContentDeserializer`] to deserialize the field value within that
+/// element (including its End tag).
+///
+/// [`next_element_seed`]: de::SeqAccess::next_element_seed
+struct TupleVariantSeqAccess<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    de: &'d mut Deserializer<'de, R, E>,
+}
+
+impl<'de, 'd, R, E> de::SeqAccess<'de> for TupleVariantSeqAccess<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        self.de.skip_whitespaces()?;
+        match self.de.peek()? {
+            DeEvent::Start(_) => match self.de.next()? {
+                DeEvent::Start(e) => seed
+                    .deserialize(VariantContentDeserializer {
+                        start: e,
+                        de: self.de,
+                    })
+                    .map(Some),
+                _ => unreachable!(),
+            },
+            DeEvent::End(_) | DeEvent::Eof => Ok(None),
+            _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }
 }

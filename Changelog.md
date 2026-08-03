@@ -62,8 +62,9 @@ The MSRV has been raised to 1.86.
 ### Bug Fixes
 
 - [#819]: Fixed infinite recursion (stack overflow) when deserializing enum
-  newtype variants whose inner type is also an enum (e.g. `Apply(Vec<MathNode>)`).
-  The variant's Start event is now consumed before deserializing the inner type,
+  newtype and tuple variants whose inner type is also an enum
+  (e.g. `Apply(Vec<MathNode>)` or `Parent(Box<E>, String)`).
+  Each variant's Start event is now consumed before deserializing the inner type,
   and sequence boundary handling is corrected so that sequences no longer consume
   past the enclosing variant's end tag.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
