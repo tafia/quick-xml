@@ -562,7 +562,12 @@ where
     where
         V: Visitor<'de>,
     {
-        let has_nil = self.map.de.reader.reader.has_nil_attr(&self.map.start);
+        // `self.map.start` already was taken from the reader, so its namespace bindings were already processed.
+        let has_nil = self
+            .map
+            .start
+            .attributes()
+            .has_nil(&self.map.de.ns_resolver);
         if self.map.de.deserialize_opt(Some(has_nil))? {
             visitor.visit_some(self)
         } else {

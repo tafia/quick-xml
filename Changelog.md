@@ -68,6 +68,9 @@ The MSRV has been raised to 1.86.
   as `&#13;`, `&#10;`, and `&#9;` respectively, preventing silent data loss from
   XML attribute-value normalization on round-trip. Likewise `Attribute::from`
   performs the same transformation.
+- [#953]: The serde `Deserializer` now correctly handles namespaces. Previously
+  the namespace bindings might be applied or removed before the event actually
+  was consumed which lead to a couple of bugs.
 - [#989]: `Attributes::new` and `Attributes::html` now return empty iterators when
   their starting position is past the end of the input instead of panicking.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
@@ -99,9 +102,17 @@ The MSRV has been raised to 1.86.
   `decoded_and_normalized_value_with()`, `decode_and_unescape_value()`, and
   `decode_and_unescape_value_with()`. Use `normalized_value()` and
   `normalized_value_with()` instead.
+- [#1002]: Added `NamespaceResolver::with` that allows temporary applying namespace
+  bindings from the start tag for the scope of a provided closure F, without making any
+  persistent change to the resolver. It is useful to check a peeked event which is
+  not yet consumed in custom implementations of peekable reader.
+- [#1002]: Added `Deserializer::resolver` and `Deserializer::resolver_mut` methods
+  to get a namespace resolver used by this deserializer, because it no longer uses
+  an `NsReader` internally.
 
 [#670]: https://github.com/tafia/quick-xml/issues/670
 [#859]: https://github.com/tafia/quick-xml/issues/859
+[#953]: https://github.com/tafia/quick-xml/issues/953
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
 [#978]: https://github.com/tafia/quick-xml/issues/978
@@ -110,6 +121,7 @@ The MSRV has been raised to 1.86.
 [#989]: https://github.com/tafia/quick-xml/issues/989
 [#990]: https://github.com/tafia/quick-xml/issues/990
 [#1000]: https://github.com/tafia/quick-xml/pull/1000
+[#1002]: https://github.com/tafia/quick-xml/pull/1002
 
 
 ## 0.41.0 -- 2026-06-29

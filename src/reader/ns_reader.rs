@@ -20,13 +20,13 @@ use crate::reader::{Config, Reader, Span, XmlSource};
 #[derive(Debug, Clone)]
 pub struct NsReader<R> {
     /// An XML reader
-    pub(super) reader: Reader<R>,
+    pub(crate) reader: Reader<R>,
     /// A buffer to manage namespaces
-    pub(super) ns_resolver: NamespaceResolver,
+    pub(crate) ns_resolver: NamespaceResolver,
     /// We cannot pop data from the namespace stack until returned `Empty` or `End`
     /// event will be processed by the user, so we only mark that we should that
     /// in the next [`Self::read_event_impl()`] call.
-    pending_pop: bool,
+    pub(crate) pending_pop: bool,
 }
 
 /// Builder methods
