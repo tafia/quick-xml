@@ -2770,6 +2770,7 @@ where
             return Ok(event);
         }
         // SAFETY: `self.read` was filled in the code above.
+        // NOTE: with msrv=1.95 we may use push_front_mut
         // NOTE: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
         // if unsafe code will be allowed
         unreachable!()
@@ -2779,22 +2780,6 @@ where
         match &mut self.peek {
             Some(event) => Ok(event),
             empty_peek @ None => Ok(empty_peek.insert(self.reader.next()?)),
-        }
-    }
-
-    #[inline]
-    fn last_peeked(&self) -> &DeEvent<'de> {
-        #[cfg(feature = "overlapped-lists")]
-        {
-            self.read
-                .front()
-                .expect("`Deserializer::peek()` should be called")
-        }
-        #[cfg(not(feature = "overlapped-lists"))]
-        {
-            self.peek
-                .as_ref()
-                .expect("`Deserializer::peek()` should be called")
         }
     }
 
@@ -3093,9 +3078,26 @@ where
     ///
     /// [specification]: https://www.w3.org/TR/xmlschema11-1/#Instance_Document_Constructions
     fn deserialize_opt(&mut self, parent_is_nil: Option<bool>) -> Result<bool, DeError> {
-        // We cannot use result of `peek()` directly because of borrow checker
-        let _ = self.peek()?;
-        Ok(match self.last_peeked() {
+        // We cannot use result of `peek()` directly because of borrow checker, so it's inlined here
+        #[cfg(feature = "overlapped-lists")]
+        let event = {
+            if self.read.is_empty() {
+                self.read.push_front(self.reader.next()?);
+            }
+            // SAFETY: `self.read` was filled in the code above.
+            // NOTE: with msrv=1.95 we may use push_front_mut
+            self.read
+                .front()
+                .expect("`self.read` was filled in the code above")
+        };
+
+        #[cfg(not(feature = "overlapped-lists"))]
+        let event = match &mut self.peek {
+            Some(event) => event,
+            empty_peek @ None => empty_peek.insert(self.reader.next()?),
+        };
+
+        Ok(match event {
             DeEvent::Text(t) if t.is_empty() => false,
             // If we inside the tree, call visit_some for Eof to get an error from the visitor
             // (getting Eof means that XML tag is not closed). On top-level Eof is true None
