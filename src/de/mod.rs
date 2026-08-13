@@ -3050,6 +3050,67 @@ where
         self.read_to_end(name)
     }
 
+    /// Determines if `Option` should be deserialized as `Some` or `None`.
+    ///
+    /// It handles `xsi:nil` attribute in two places:
+    /// - on parent element:  `<map xsi:nil="true"><opt/></map>`
+    /// - on checked element: `<map><opt xsi:nil="true"/></map>`
+    ///
+    /// According to the [specification], `xsi:nil` controls only ability to (not) have nested
+    /// elements, but it does not applied to attributes:
+    ///
+    /// > 2.7.2 xsi:nil
+    /// > -------------
+    /// >
+    /// > _XML Schema Definition Language: Structures_ introduces a mechanism for signaling that
+    /// > an element must be accepted as ·valid· when it has no content despite a content type
+    /// > which does not require or even necessarily allow empty content. An element can be
+    /// > ·valid· without content if it has the attribute `xsi:nil` with the value `true`.
+    /// > An element so labeled must be empty, but can carry attributes if permitted by the
+    /// > corresponding complex type.
+    ///
+    /// Due to that we must deserialize all attributes from the `<map>`.
+    /// To get an access to them we define Rust struct as follow:
+    ///
+    /// ```ignore
+    /// struct MapTag {
+    ///     #[serde(rename = "@attr")]
+    ///     attr: String,
+    ///     // <opt> element
+    ///     opt: Option<String>,
+    /// }
+    /// ```
+    ///
+    /// `<map attr = "value" xsi:nil="true"/>` should be deserialized as
+    /// `MapTag { attr: "value", foo: None }`.
+    ///
+    /// `<map attr = "value" xsi:nil="true"><foo/></map>` is invalid XML (see the quote from
+    /// the specification above), but will be deserialized the same.
+    ///
+    /// When we at top-level, `parent` is `None` and we handle only the `<opt xsi:nil="..."/>` case.
+    ///
+    /// Returns `true` if `visit_some()` should be called and `false` if `visit_none()`.
+    ///
+    /// [specification]: https://www.w3.org/TR/xmlschema11-1/#Instance_Document_Constructions
+    fn deserialize_opt(&mut self, parent_is_nil: Option<bool>) -> Result<bool, DeError> {
+        // We cannot use result of `peek()` directly because of borrow checker
+        let _ = self.peek()?;
+        Ok(match self.last_peeked() {
+            DeEvent::Text(t) if t.is_empty() => false,
+            // If we inside the tree, call visit_some for Eof to get an error from the visitor
+            // (getting Eof means that XML tag is not closed). On top-level Eof is true None
+            DeEvent::Eof => parent_is_nil.is_some(),
+            // if the `xsi:nil` attribute is set to true we got a none value
+            DeEvent::Start(start)
+                if parent_is_nil.unwrap_or(false) || self.reader.reader.has_nil_attr(start) =>
+            {
+                self.skip_next_tree()?;
+                false
+            }
+            _ => true,
+        })
+    }
+
     /// Method for testing Deserializer implementation. Checks that all events was consumed during
     /// deserialization. Panics if the next event will not be [`DeEvent::Eof`].
     #[doc(hidden)]
@@ -3364,17 +3425,10 @@ where
     where
         V: Visitor<'de>,
     {
-        // We cannot use result of `peek()` directly because of borrow checker
-        let _ = self.peek()?;
-        match self.last_peeked() {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            DeEvent::Eof => visitor.visit_none(),
-            // if the `xsi:nil` attribute is set to true we got a none value
-            DeEvent::Start(start) if self.reader.reader.has_nil_attr(start) => {
-                self.skip_next_tree()?;
-                visitor.visit_none()
-            }
-            _ => visitor.visit_some(self),
+        if self.deserialize_opt(None)? {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
         }
     }
 
