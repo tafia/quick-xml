@@ -1,5 +1,6 @@
 //! Utility functions for serde integration tests
 
+use pretty_assertions::assert_eq;
 use quick_xml::de::Deserializer;
 use quick_xml::DeError;
 use serde::Deserialize;
@@ -19,6 +20,14 @@ where
     // If type was deserialized, the whole XML document should be consumed
     if result.is_ok() {
         de.check_eof_reached();
+
+        let resolver = de.get_ref().get_ref().resolver();
+        assert_eq!(
+            resolver.level(),
+            0,
+            "all namespace bindings must be popped, level should be zero: {:#?}",
+            resolver
+        );
     }
 
     result
