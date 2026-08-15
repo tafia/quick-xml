@@ -2798,14 +2798,19 @@ where
         }
     }
 
+    #[cfg(feature = "overlapped-lists")]
+    fn take_peeked(&mut self) -> Option<DeEvent<'de>> {
+        self.read.pop_front()
+    }
+
+    #[cfg(not(feature = "overlapped-lists"))]
+    fn take_peeked(&mut self) -> Option<DeEvent<'de>> {
+        self.peek.take()
+    }
+
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         // Replay skipped or peeked events
-        #[cfg(feature = "overlapped-lists")]
-        if let Some(event) = self.read.pop_front() {
-            return Ok(event);
-        }
-        #[cfg(not(feature = "overlapped-lists"))]
-        if let Some(e) = self.peek.take() {
+        if let Some(e) = self.take_peeked() {
             return Ok(e);
         }
         self.reader.next()
@@ -2993,11 +2998,10 @@ where
 
     /// Drops all events until event with [name](BytesEnd::name()) `name` won't be
     /// dropped. This method should be called after [`Self::next()`]
-    #[cfg(feature = "overlapped-lists")]
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         let mut depth = 0;
         loop {
-            match self.read.pop_front() {
+            match self.take_peeked() {
                 Some(DeEvent::Start(e)) if e.name() == name => {
                     depth += 1;
                 }
@@ -3036,16 +3040,6 @@ where
             }
         }
         Ok(())
-    }
-    #[cfg(not(feature = "overlapped-lists"))]
-    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
-        // First one might be in self.peek
-        match self.next()? {
-            DeEvent::Start(e) => self.reader.read_to_end(e.name())?,
-            DeEvent::End(e) if e.name() == name => return Ok(()),
-            _ => (),
-        }
-        self.reader.read_to_end(name)
     }
 
     fn skip_next_tree(&mut self) -> Result<(), DeError> {
