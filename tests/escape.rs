@@ -20,6 +20,8 @@ fn escape() {
         escape::escape("prefix_\"a\"b&<>c"),
         "prefix_&quot;a&quot;b&amp;&lt;&gt;c"
     );
+    assert_eq!(escape::escape("hello\rworld"), "hello&#13;world");
+    assert_eq!(escape::escape("a\r\nb"), "a&#13;\nb");
 }
 
 #[test]
@@ -39,6 +41,7 @@ fn partial_escape() {
         escape::partial_escape("prefix_\"a\"b&<>c"),
         "prefix_\"a\"b&amp;&lt;&gt;c"
     );
+    assert_eq!(escape::partial_escape("hello\rworld"), "hello&#13;world");
 }
 
 #[test]
@@ -52,6 +55,7 @@ fn minimal_escape() {
         escape::minimal_escape("prefix_\"a\"b&<>c"),
         "prefix_\"a\"b&amp;&lt;>c"
     );
+    assert_eq!(escape::minimal_escape("hello\rworld"), "hello&#13;world");
 }
 
 #[test]

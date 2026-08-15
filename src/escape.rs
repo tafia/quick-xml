@@ -91,7 +91,8 @@ impl std::error::Error for EscapeError {
 }
 
 /// Escapes an `&str` and replaces all xml special characters (`<`, `>`, `&`, `'`, `"`)
-/// with their corresponding xml escaped value.
+/// with their corresponding xml escaped value. Also escapes `\r` which would
+/// otherwise be converted to `\n` by XML end-of-line normalization.
 ///
 /// This function performs following replacements:
 ///
@@ -102,22 +103,16 @@ impl std::error::Error for EscapeError {
 /// | `&`       | `&amp;`
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
-///
-/// This function performs following replacements:
-///
-/// | Character | Replacement
-/// |-----------|------------
-/// | `<`       | `&lt;`
-/// | `>`       | `&gt;`
-/// | `&`       | `&amp;`
-/// | `'`       | `&apos;`
-/// | `"`       | `&quot;`
+/// | `\r`      | `&#13;`
 pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
+    _escape(raw, |ch| {
+        matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r')
+    })
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
-/// with their corresponding xml escaped value.
+/// with their corresponding xml escaped value. Also escapes `\r` which would
+/// otherwise be converted to `\n` by XML end-of-line normalization.
 ///
 /// Should only be used for escaping text content. In XML text content, it is allowed
 /// (though not recommended) to leave the quote special characters `"` and `'` unescaped.
@@ -129,6 +124,33 @@ pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `<`       | `&lt;`
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
+/// | `\r`      | `&#13;`
+pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\r'))
+}
+
+/// XML standard [requires] that only `<` and `&` was escaped in text content or
+/// attribute value. All other characters not necessary to be escaped, although
+/// for compatibility with SGML they also should be escaped. Practically, escaping
+/// only those characters is enough. Also escapes `\r` which would otherwise be
+/// converted to `\n` by XML end-of-line normalization.
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `&`       | `&amp;`
+/// | `\r`      | `&#13;`
+///
+/// [requires]: https://www.w3.org/TR/xml11/#syntax
+pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    _escape(raw, |ch| matches!(ch, b'<' | b'&' | b'\r'))
+}
+
+/// Escapes a `&str` for use in an XML attribute value. In addition to the
+/// characters escaped by [`escape`], this also escapes `\n` and `\t` which
+/// would otherwise be normalized to spaces by XML attribute-value normalization.
 ///
 /// This function performs following replacements:
 ///
@@ -137,25 +159,18 @@ pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `<`       | `&lt;`
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
-pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
-}
-
-/// XML standard [requires] that only `<` and `&` was escaped in text content or
-/// attribute value. All other characters not necessary to be escaped, although
-/// for compatibility with SGML they also should be escaped. Practically, escaping
-/// only those characters is enough.
-///
-/// This function performs following replacements:
-///
-/// | Character | Replacement
-/// |-----------|------------
-/// | `<`       | `&lt;`
-/// | `&`       | `&amp;`
-///
-/// [requires]: https://www.w3.org/TR/xml11/#syntax
-pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'&'))
+/// | `'`       | `&apos;`
+/// | `"`       | `&quot;`
+/// | `\r`      | `&#13;`
+/// | `\n`      | `&#10;`
+/// | `\t`      | `&#9;`
+pub(crate) fn escape_attribute<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    _escape(raw, |ch| {
+        matches!(
+            ch,
+            b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r' | b'\n' | b'\t'
+        )
+    })
 }
 
 pub(crate) fn escape_char<W>(writer: &mut W, value: &str, from: usize, to: usize) -> fmt::Result
@@ -170,9 +185,8 @@ where
         b'&' => writer.write_str("&amp;")?,
         b'"' => writer.write_str("&quot;")?,
 
-        // This set of escapes handles characters that should be escaped
-        // in elements of xs:lists, because those characters works as
-        // delimiters of list elements
+        // Whitespace characters: used as delimiters in xs:list elements,
+        // and subject to XML EOL / attribute-value normalization
         b'\t' => writer.write_str("&#9;")?,
         b'\n' => writer.write_str("&#10;")?,
         b'\r' => writer.write_str("&#13;")?,
