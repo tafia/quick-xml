@@ -3027,14 +3027,6 @@ where
         Ok(())
     }
 
-    fn skip_next_tree(&mut self) -> Result<(), DeError> {
-        let DeEvent::Start(start) = self.next()? else {
-            unreachable!("Only call this if the next event is a start event")
-        };
-        let name = start.name();
-        self.read_to_end(name)
-    }
-
     /// Determines if `Option` should be deserialized as `Some` or `None`.
     ///
     /// It handles `xsi:nil` attribute in two places:
@@ -3106,7 +3098,10 @@ where
             DeEvent::Start(start)
                 if parent_is_nil.unwrap_or(false) || self.reader.reader.has_nil_attr(start) =>
             {
-                self.skip_next_tree()?;
+                let DeEvent::Start(start) = self.next()? else {
+                    unreachable!("Just checked that the next event is a start event")
+                };
+                self.read_to_end(start.name())?;
                 false
             }
             _ => true,
