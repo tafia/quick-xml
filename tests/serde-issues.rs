@@ -986,8 +986,9 @@ mod issue978 {
 
     #[test]
     fn struct_field_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct S {
+            #[allow(dead_code)]
             field: Option<Box<S>>,
         }
 
@@ -1011,9 +1012,10 @@ mod issue978 {
 
     #[test]
     fn struct_field_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct S {
             #[serde(default)]
+            #[allow(dead_code)]
             field: Vec<S>,
         }
 
@@ -1037,9 +1039,10 @@ mod issue978 {
 
     #[test]
     fn struct_value_field_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct S {
             #[serde(rename = "$value")]
+            #[allow(dead_code)]
             v: Option<Box<S>>,
         }
 
@@ -1061,10 +1064,11 @@ mod issue978 {
 
     #[test]
     fn struct_value_field_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct S {
             #[serde(rename = "$value")]
             #[serde(default)]
+            #[allow(dead_code)]
             v: Vec<S>,
         }
 
@@ -1088,10 +1092,10 @@ mod issue978 {
 
     #[test]
     fn newtype_variant_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
-            Wrap(Box<E>),
             #[allow(dead_code)]
+            Wrap(Box<E>),
             Leaf,
         }
 
@@ -1110,10 +1114,10 @@ mod issue978 {
 
     #[test]
     fn newtype_variant_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
-            Wrap(Vec<E>),
             #[allow(dead_code)]
+            Wrap(Vec<E>),
             Leaf,
         }
 
@@ -1131,10 +1135,10 @@ mod issue978 {
 
     #[test]
     fn tuple_variant_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
-            Wrap(Box<E>, String),
             #[allow(dead_code)]
+            Wrap(Box<E>, String),
             Leaf,
         }
 
@@ -1150,10 +1154,10 @@ mod issue978 {
 
     #[test]
     fn tuple_variant_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
-            Wrap(Vec<E>, String),
             #[allow(dead_code)]
+            Wrap(Vec<E>, String),
             Leaf,
         }
 
@@ -1171,12 +1175,12 @@ mod issue978 {
 
     #[test]
     fn struct_variant_field_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
             Wrap {
+                #[allow(dead_code)]
                 f: Box<E>,
             },
-            #[allow(dead_code)]
             Leaf,
         }
 
@@ -1193,13 +1197,13 @@ mod issue978 {
 
     #[test]
     fn struct_variant_field_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
             Wrap {
                 #[serde(default)]
+                #[allow(dead_code)]
                 f: Vec<E>,
             },
-            #[allow(dead_code)]
             Leaf,
         }
 
@@ -1214,10 +1218,11 @@ mod issue978 {
 
     #[test]
     fn struct_variant_value_field_box() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
             Wrap {
                 #[serde(rename = "$value")]
+                #[allow(dead_code)]
                 v: Box<E>,
             },
             Leaf,
@@ -1243,11 +1248,12 @@ mod issue978 {
 
     #[test]
     fn struct_variant_value_field_vec() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         enum E {
             Wrap {
                 #[serde(rename = "$value")]
                 #[serde(default)]
+                #[allow(dead_code)]
                 v: Vec<E>,
             },
             Leaf,
@@ -1273,14 +1279,15 @@ mod issue978 {
 
     #[test]
     fn siblings_do_not_increase_depth() {
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct Root {
             item: Vec<Item>,
         }
 
-        #[derive(Debug, Deserialize)]
+        #[derive(Deserialize)]
         struct Item {
             #[serde(rename = "$text")]
+            #[allow(dead_code)]
             name: String,
         }
 
