@@ -584,16 +584,16 @@ mod trim_text {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -602,7 +602,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -611,7 +611,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\ntext \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\ntext \t\r\n"))
         );
 
         assert_eq!(
@@ -620,7 +620,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -629,7 +629,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -638,7 +638,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -647,7 +647,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
@@ -660,7 +660,7 @@ mod trim_text {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -705,16 +705,16 @@ mod trim_text_start {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -723,7 +723,7 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -732,16 +732,16 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\ntext \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\ntext \t\r\n"))
         );
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -750,7 +750,7 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -759,7 +759,7 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -768,7 +768,7 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
@@ -781,7 +781,7 @@ mod trim_text_start {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -793,11 +793,11 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new("text \t\r\n"))
+            Event::Text(BytesText::from_escaped("text \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -826,16 +826,16 @@ mod trim_text_end {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -844,7 +844,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -853,7 +853,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\ntext \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\ntext \t\r\n"))
         );
 
         assert_eq!(
@@ -862,7 +862,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -871,7 +871,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -880,7 +880,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(
@@ -889,7 +889,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\n"))
+            Event::Text(BytesText::from_escaped(" \t\r\n"))
         );
 
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
@@ -904,7 +904,7 @@ mod trim_text_end {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::DocType(BytesText::new("root \t\r\n"))
+            Event::DocType(BytesText::from_escaped("root \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -916,7 +916,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Text(BytesText::new(" \t\r\ntext"))
+            Event::Text(BytesText::from_escaped(" \t\r\ntext"))
         );
         assert_eq!(
             reader.read_event().unwrap(),

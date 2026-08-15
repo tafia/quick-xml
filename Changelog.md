@@ -66,7 +66,8 @@ The MSRV has been raised to 1.86.
 
 - [#670]: Serde serializer now escapes `\r`, `\n`, and `\t` in attribute values
   as `&#13;`, `&#10;`, and `&#9;` respectively, preventing silent data loss from
-  XML attribute-value normalization on round-trip.
+  XML attribute-value normalization on round-trip. Likewise `Attribute::from`
+  performs the same transformation.
 - [#989]: `Attributes::new` and `Attributes::html` now return empty iterators when
   their starting position is past the end of the input instead of panicking.
 - [#977]: `NamespaceResolver::push` (and hence every `NsReader` `Start`/`Empty`
@@ -82,8 +83,11 @@ The MSRV has been raised to 1.86.
   limit (default 128, matching `serde_json`). Deeply nested XML returns
   `DeError::TooDeeplyNested` instead of overflowing the native call stack.
   Use `Deserializer::recursion_limit()` to adjust.
-- [#990]: Serde serializer now escapes `\r` in text content as `&#13;`, preventing
-  silent conversion to `\n` from XML end-of-line normalization on round-trip.
+- [#990]: `\r` in text content is now escaped as `&#13;` by the serde serializer,
+  `BytesText::new()`, `escape()`, `partial_escape()`, and `minimal_escape()`,
+  preventing silent conversion to `\n` from XML end-of-line normalization on
+  round-trip. Note that `\r` cannot be preserved through CDATA serialization
+  because character references are not permitted inside CDATA sections.
 
 ### Misc Changes
 

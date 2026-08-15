@@ -4,7 +4,7 @@
 
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
-use crate::escape::{escape, resolve_predefined_entity};
+use crate::escape::{escape_attribute, resolve_predefined_entity};
 use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
 use crate::utils::is_whitespace;
 use crate::XmlVersion;
@@ -372,7 +372,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
         Attribute {
             key: QName(val.0),
-            value: escape(val.1),
+            value: escape_attribute(val.1),
         }
     }
 }
@@ -394,7 +394,7 @@ impl<'a> From<(&'a str, Cow<'a, str>)> for Attribute<'a> {
     fn from(val: (&'a str, Cow<'a, str>)) -> Attribute<'a> {
         Attribute {
             key: QName(val.0),
-            value: escape(val.1),
+            value: escape_attribute(val.1),
         }
     }
 }
