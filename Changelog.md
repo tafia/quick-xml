@@ -101,15 +101,16 @@ The MSRV has been raised to 1.86.
   `normalized_value_with()` instead.
 
 [#670]: https://github.com/tafia/quick-xml/issues/670
+[#859]: https://github.com/tafia/quick-xml/issues/859
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#977]: https://github.com/tafia/quick-xml/issues/977
-[#980]: https://github.com/tafia/quick-xml/issues/980
-[#859]: https://github.com/tafia/quick-xml/issues/859
 [#978]: https://github.com/tafia/quick-xml/issues/978
+[#980]: https://github.com/tafia/quick-xml/issues/980
 [#983]: https://github.com/tafia/quick-xml/issues/983
 [#989]: https://github.com/tafia/quick-xml/issues/989
 [#990]: https://github.com/tafia/quick-xml/issues/990
 [#1000]: https://github.com/tafia/quick-xml/pull/1000
+
 
 ## 0.41.0 -- 2026-06-29
 
