@@ -304,40 +304,61 @@ fn normalization_sensitive_roundtrip() {
 /// CDATA sections cannot contain character references. Verify that writing
 /// normalization-sensitive characters via BytesCData produces literal characters
 /// (not &#13; etc.), and that \r is normalized to \n on parse (inherent XML limitation).
-#[test]
-fn cdata_no_character_references() {
-    for (label, value, expected_written, expected_parsed) in [
-        (
+mod cdata_no_character_references {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn cr() {
+        test_case(
             "CR",
             "hello\rworld",
             "<v><![CDATA[hello\rworld]]></v>",
             "hello\nworld",
-        ),
-        (
-            "CRLF",
-            "hello\r\nworld",
-            "<v><![CDATA[hello\r\nworld]]></v>",
-            "hello\nworld",
-        ),
-        (
+        );
+    }
+
+    #[test]
+    fn lf() {
+        test_case(
             "LF",
             "hello\nworld",
             "<v><![CDATA[hello\nworld]]></v>",
             "hello\nworld",
-        ),
-        (
+        )
+    }
+
+    #[test]
+    fn crlf() {
+        test_case(
+            "CRLF",
+            "hello\r\nworld",
+            "<v><![CDATA[hello\r\nworld]]></v>",
+            "hello\nworld",
+        )
+    }
+
+    #[test]
+    fn tab() {
+        test_case(
             "TAB",
             "col1\tcol2",
             "<v><![CDATA[col1\tcol2]]></v>",
             "col1\tcol2",
-        ),
-        (
+        )
+    }
+
+    #[test]
+    fn all() {
+        test_case(
             "all",
             "\t\r\n&<>\"'",
             "<v><![CDATA[\t\r\n&<>\"']]></v>",
             "\t\n&<>\"'",
-        ),
-    ] {
+        )
+    }
+
+    fn test_case(label: &str, value: &str, expected_written: &str, expected_parsed: &str) {
         let mut writer = Writer::new(Vec::new());
         writer.write_event(Start(BytesStart::new("v"))).unwrap();
         writer.write_event(CData(BytesCData::new(value))).unwrap();
