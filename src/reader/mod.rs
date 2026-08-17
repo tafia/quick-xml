@@ -159,57 +159,83 @@ pub struct Config {
     /// [`check_end_names`]: Self::check_end_names
     pub trim_markup_names_in_closing_tags: bool,
 
-    /// Whether whitespace before character data should be removed.
+    /// Whether leading whitespace before character data should be removed.
     ///
-    /// When set to `true`, leading whitespace is trimmed in [`Text`] events.
-    /// If after that the event is empty it will not be pushed.
+    /// When set to `true`, whitespace at the start of [`Text`] events is
+    /// stripped. If the event becomes empty after trimming, it is still
+    /// emitted as `Text("")`.
     ///
     /// Default: `false`
     ///
-    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    /// <div style="background:rgba(255, 80, 80, 0.20);padding:0.75em;">
     ///
-    /// WARNING: With this option every text events will be trimmed which is
-    /// incorrect behavior when text events delimited by comments, processing
-    /// instructions or CDATA sections. To correctly trim data manually apply
-    /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
-    /// only to necessary events.
+    /// **WARNING:** This option has known issues.
+    ///
+    /// - **Incorrect trimming around comments, PIs, and CDATA sections:**
+    ///   Trimming applies to every [`Text`] event regardless of context.
+    ///   In `text <!-- comment --> more`, the leading space of ` more` is
+    ///   content, but this option trims it because the parser treats each
+    ///   text chunk independently without knowledge of the surrounding markup.
+    /// - **Empty events:** Whitespace-only text that is fully trimmed
+    ///   produces an empty `Text("")` event instead of being suppressed
+    ///   ([#984]).
+    ///
+    /// To correctly trim data manually apply [`BytesText::inplace_trim_start`]
+    /// and [`BytesText::inplace_trim_end`] only to necessary events.
     /// </div>
     ///
     /// [`Text`]: crate::events::Event::Text
     /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
     /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    /// [#984]: https://github.com/tafia/quick-xml/issues/984
     pub trim_text_start: bool,
 
-    /// Whether whitespace after character data should be removed.
+    /// Whether trailing whitespace after character data should be removed.
     ///
-    /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
-    /// If after that the event is empty it will not be pushed.
+    /// When set to `true`, trailing whitespace in [`Text`] events is
+    /// stripped. If the event becomes empty after trimming, it is still
+    /// emitted as `Text("")`.
     ///
     /// Default: `false`
     ///
-    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    /// <div style="background:rgba(255, 80, 80, 0.20);padding:0.75em;">
     ///
-    /// WARNING: With this option every text events will be trimmed which is
-    /// incorrect behavior when text events delimited by comments, processing
-    /// instructions or CDATA sections. To correctly trim data manually apply
-    /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
-    /// only to necessary events.
+    /// **WARNING:** This option has known issues.
+    ///
+    /// - **Incorrect trimming around comments, PIs, and CDATA sections:**
+    ///   Trimming applies to every [`Text`] event regardless of context.
+    ///   In `text <!-- comment --> more`, the trailing space of `text ` is
+    ///   content, but this option trims it because the parser treats each
+    ///   text chunk independently without knowledge of the surrounding markup.
+    /// - **Empty events:** Whitespace-only text that is fully trimmed
+    ///   produces an empty `Text("")` event instead of being suppressed
+    ///   ([#984]).
+    ///
+    /// To correctly trim data manually apply [`BytesText::inplace_trim_start`]
+    /// and [`BytesText::inplace_trim_end`] only to necessary events.
     /// </div>
     ///
     /// [`Text`]: crate::events::Event::Text
     /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
     /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    /// [#984]: https://github.com/tafia/quick-xml/issues/984
     pub trim_text_end: bool,
 }
 
 impl Config {
     /// Set both [`trim_text_start`] and [`trim_text_end`] to the same value.
     ///
-    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    /// See those options for more details, including known issues.
     ///
-    /// WARNING: With this option every text events will be trimmed which is
-    /// incorrect behavior when text events delimited by comments, processing
-    /// instructions or CDATA sections. To correctly trim data manually apply
+    /// Default: `false`
+    ///
+    /// <div style="background:rgba(255, 80, 80, 0.20);padding:0.75em;">
+    ///
+    /// **WARNING:** This option has known issues.
+    ///
+    /// With this option every text event will be trimmed which is incorrect
+    /// behavior when text events delimited by comments, processing instructions
+    /// or CDATA sections. To correctly trim data manually apply
     /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
     /// only to necessary events.
     /// </div>
@@ -218,6 +244,7 @@ impl Config {
     /// [`trim_text_end`]: Self::trim_text_end
     /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
     /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    /// [#984]: https://github.com/tafia/quick-xml/issues/984
     #[inline]
     pub fn trim_text(&mut self, trim: bool) {
         self.trim_text_start = trim;
