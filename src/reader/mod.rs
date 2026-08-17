@@ -998,16 +998,15 @@ impl<R> Reader<R> {
 /// Result of an attempt to read XML textual data from the source.
 #[derive(Debug)]
 enum ReadTextResult<'r, B> {
-    /// Start of markup (`<` character) was found in the first byte. `<` was consumed.
+    /// The reader is positioned at `<` (start of markup). `<` was not consumed.
     /// Contains buffer that should be returned back to the next iteration cycle
     /// to satisfy borrow checker requirements.
     Markup(B),
-    /// Start of reference (`&` character) was found in the first byte.
-    /// `&` was not consumed.
+    /// The reader is positioned at `&` (start of a reference). `&` was not consumed.
     /// Contains buffer that should be returned back to the next iteration cycle
     /// to satisfy borrow checker requirements.
     Ref(B),
-    /// Contains text block up to start of markup (`<` character). `<` was consumed.
+    /// Contains text block up to start of markup (`<` character). `<` was not consumed.
     UpToMarkup(&'r str),
     /// Contains text block up to start of reference (`&` character).
     /// `&` was not consumed.
