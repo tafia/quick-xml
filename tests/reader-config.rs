@@ -563,6 +563,12 @@ mod trim_markup_names_in_closing_tags {
     }
 }
 
+// NOTE: These tests currently do NOT apply XML end-of-line normalization (XML 1.0 Section 2.11).
+// Per the spec, `\r\n` must be normalized to `\n` before any other processing, which
+// means every `\r\n` in this constant should become `\n` in the parsed output. That
+// normalization applies universally: text content, element/attribute whitespace, comments,
+// PIs, CDATA, and DOCTYPE. All assertions below that expect `\r\n` in their output are
+// therefore incorrect with respect to a spec-compliant parser.
 const XML: &str = " \t\r\n\
 <!DOCTYPE root \t\r\n> \t\r\n\
 <root \t\r\n> \t\r\n\
@@ -819,6 +825,30 @@ mod trim_text_end {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// Whitespace-only text before `<` should be suppressed (issue #984)
+    #[test]
+    fn skips_whitespace_only_text_before_markup() {
+        let mut reader = Reader::from_str(" <a/>");
+        reader.config_mut().trim_text_end = true;
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+
+        let mut reader = Reader::from_reader(" <a/>".as_bytes());
+        reader.config_mut().trim_text_end = true;
+        let mut buffer = Vec::new();
+
+        assert_eq!(
+            reader.read_event_into(&mut buffer).unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        buffer.clear();
+        assert_eq!(reader.read_event_into(&mut buffer).unwrap(), Event::Eof);
+    }
+
     #[test]
     fn false_() {
         let mut reader = Reader::from_str(XML);
@@ -895,9 +925,7 @@ mod trim_text_end {
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
     }
 
-    // TODO: Enable test after rewriting parser
     #[test]
-    #[ignore = "currently it is hard to fix incorrect behavior, but this will much easy after parser rewrite"]
     fn true_() {
         let mut reader = Reader::from_str(XML);
         reader.config_mut().trim_text_end = true;
