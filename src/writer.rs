@@ -260,10 +260,12 @@ impl<W: Write> Writer<W> {
     /// Writes the given event to the underlying writer.
     pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
         let mut next_should_line_break = true;
+        let mut mark_non_text = false;
         let result = match event.into() {
             Event::Start(e) => {
                 let result = self.write_wrapped("<", &e, ">");
                 if let Some(i) = self.indent.as_mut() {
+                    i.mark_non_text_content();
                     i.grow();
                 }
                 result
@@ -271,36 +273,60 @@ impl<W: Write> Writer<W> {
             Event::End(e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
+                    if i.last_non_text_level > i.current_indent_len {
+                        i.should_line_break = true;
+                    }
                 }
                 self.write_wrapped("</", &e, ">")
             }
-            Event::Empty(e) => self.write_wrapped(
-                "<",
-                &e,
-                if self.config.add_space_before_slash_in_empty_elements {
-                    " />"
-                } else {
-                    "/>"
-                },
-            ),
+            Event::Empty(e) => {
+                mark_non_text = true;
+                self.write_wrapped(
+                    "<",
+                    &e,
+                    if self.config.add_space_before_slash_in_empty_elements {
+                        " />"
+                    } else {
+                        "/>"
+                    },
+                )
+            }
             Event::Text(e) => {
                 next_should_line_break = false;
                 self.write(e.as_bytes())
             }
-            Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
+            Event::Comment(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<!--", &e, "-->")
+            }
             Event::CData(e) => {
                 next_should_line_break = false;
                 self.write(b"<![CDATA[")?;
                 self.write(e.as_bytes())?;
                 self.write(b"]]>")
             }
-            Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
-            Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
-            Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
-            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
+            Event::Decl(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<?", &e, "?>")
+            }
+            Event::PI(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<?", &e, "?>")
+            }
+            Event::DocType(e) => {
+                mark_non_text = true;
+                self.write_wrapped("<!DOCTYPE ", &e, ">")
+            }
+            Event::GeneralRef(e) => {
+                mark_non_text = true;
+                self.write_wrapped("&", &e, ";")
+            }
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
+            if mark_non_text {
+                i.mark_non_text_content();
+            }
             i.should_line_break = next_should_line_break;
         }
         result
@@ -679,6 +705,10 @@ pub(crate) struct Indentation {
     indents: String,
     /// The current amount of indentation
     current_indent_len: usize,
+    /// Indent level at which the most recent non-text event was written.
+    /// Used by End to force a line break when a non-text child (Comment,
+    /// Empty, child Start, etc.) preceded a Text event in the same element.
+    last_non_text_level: usize,
 }
 
 impl Indentation {
@@ -690,6 +720,7 @@ impl Indentation {
             indent_size,
             indents: std::iter::repeat(indent_char).take(128).collect(),
             current_indent_len: 0,
+            last_non_text_level: 0,
         }
     }
 
@@ -720,5 +751,9 @@ impl Indentation {
         while self.indents.len() < new_len {
             self.indents.push(self.indent_char);
         }
+    }
+
+    fn mark_non_text_content(&mut self) {
+        self.last_non_text_level = self.current_indent_len;
     }
 }

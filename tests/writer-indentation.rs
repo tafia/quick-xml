@@ -1,4 +1,4 @@
-use quick_xml::events::{BytesStart, BytesText, Event};
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
 
 use pretty_assertions::assert_eq;
@@ -549,4 +549,31 @@ mod in_attributes_multi {
             \n/>"
         );
     }
+}
+
+// Regression test for https://github.com/tafia/quick-xml/issues/276
+// Elements containing both a comment and a text node should not produce
+// misaligned closing tags.
+#[test]
+fn issue_276_comment_then_text_indent() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+    writer
+        .write_event(Event::Start(BytesStart::new("tag2")))
+        .unwrap();
+    writer
+        .write_event(Event::Comment(BytesText::new("Test comment")))
+        .unwrap();
+    writer
+        .write_event(Event::Text(BytesText::new("Test")))
+        .unwrap();
+    writer
+        .write_event(Event::End(BytesEnd::new("tag2")))
+        .unwrap();
+
+    let output = std::str::from_utf8(&buffer).unwrap();
+    // The closing </tag2> must start on a new line at the same indentation
+    // level as <tag2>, not immediately after the text node.
+    assert_eq!(output, "<tag2>\n    <!--Test comment-->Test\n</tag2>");
 }

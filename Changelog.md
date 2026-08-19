@@ -64,6 +64,10 @@ The MSRV has been raised to 1.86.
 
 ### Bug Fixes
 
+- [#276]: Fixed `Writer::new_with_indent` producing misaligned closing tags
+  when an element contained a non-text child (e.g. a comment) followed by a
+  text node. The `</tag>` was appended directly after the text instead of
+  starting on a new line at the correct indentation level.
 - [#670]: Serde serializer now escapes `\r`, `\n`, and `\t` in attribute values
   as `&#13;`, `&#10;`, and `&#9;` respectively, preventing silent data loss from
   XML attribute-value normalization on round-trip. Likewise `Attribute::from`
@@ -110,6 +114,7 @@ The MSRV has been raised to 1.86.
   to get a namespace resolver used by this deserializer, because it no longer uses
   an `NsReader` internally.
 
+[#276]: https://github.com/tafia/quick-xml/issues/276
 [#670]: https://github.com/tafia/quick-xml/issues/670
 [#859]: https://github.com/tafia/quick-xml/issues/859
 [#953]: https://github.com/tafia/quick-xml/issues/953
