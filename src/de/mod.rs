@@ -2114,8 +2114,8 @@ use crate::{
     errors::Error,
     escape::{parse_number, EscapeError},
     events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event},
-    name::QName,
-    reader::NsReader,
+    name::{NamespaceResolver, QName},
+    reader::{NsReader, Reader},
 };
 use serde::de::{
     self, Deserialize, DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor,
@@ -2536,6 +2536,8 @@ where
 {
     /// An XML reader that streams events into this deserializer
     reader: XmlReader<'de, R, E>,
+    /// A buffer to manage namespaces
+    ns_resolver: NamespaceResolver,
 
     /// When deserializing sequences sometimes we have to skip unwanted events.
     /// That events should be stored and then replayed. This is a replay buffer,
@@ -2585,9 +2587,10 @@ where
     ///
     ///  - [`Deserializer::from_str`]
     ///  - [`Deserializer::from_reader`]
-    fn new(reader: R, entity_resolver: E) -> Self {
+    fn new(reader: R, ns_resolver: NamespaceResolver, entity_resolver: E) -> Self {
         Self {
             reader: XmlReader::new(reader, entity_resolver),
+            ns_resolver,
 
             #[cfg(feature = "overlapped-lists")]
             read: VecDeque::new(),
@@ -2626,7 +2629,7 @@ where
     /// # use pretty_assertions::assert_eq;
     /// use serde::Deserialize;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::NsReader;
+    /// use quick_xml::Reader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -2643,13 +2646,29 @@ where
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &NsReader<_> = de.get_ref().get_ref();
+    /// let reader: &Reader<_> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
     pub const fn get_ref(&self) -> &R {
         &self.reader.reader
+    }
+
+    /// Returns a storage of namespace bindings associated with this deserializer.
+    #[inline]
+    pub const fn resolver(&self) -> &NamespaceResolver {
+        &self.ns_resolver
+    }
+
+    /// Returns a mutable reference to the storage of namespace bindings
+    /// associated with this deserializer.
+    ///
+    /// Useful for configuring the resolver, e.g. to change the
+    /// [namespace-binding limit](NamespaceResolver::set_max_namespace_bindings).
+    #[inline]
+    pub fn resolver_mut(&mut self) -> &mut NamespaceResolver {
+        &mut self.ns_resolver
     }
 
     /// Set the maximum number of events that could be skipped during deserialization
@@ -2770,6 +2789,7 @@ where
             return Ok(event);
         }
         // SAFETY: `self.read` was filled in the code above.
+        // NOTE: with msrv=1.95 we may use push_front_mut
         // NOTE: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
         // if unsafe code will be allowed
         unreachable!()
@@ -2782,33 +2802,36 @@ where
         }
     }
 
-    #[inline]
-    fn last_peeked(&self) -> &DeEvent<'de> {
-        #[cfg(feature = "overlapped-lists")]
-        {
-            self.read
-                .front()
-                .expect("`Deserializer::peek()` should be called")
-        }
-        #[cfg(not(feature = "overlapped-lists"))]
-        {
-            self.peek
-                .as_ref()
-                .expect("`Deserializer::peek()` should be called")
-        }
+    #[cfg(feature = "overlapped-lists")]
+    fn take_peeked(&mut self) -> Option<DeEvent<'de>> {
+        self.read.pop_front()
     }
 
-    fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
+    #[cfg(not(feature = "overlapped-lists"))]
+    fn take_peeked(&mut self) -> Option<DeEvent<'de>> {
+        self.peek.take()
+    }
+
+    fn next_impl(&mut self) -> Result<DeEvent<'de>, DeError> {
         // Replay skipped or peeked events
-        #[cfg(feature = "overlapped-lists")]
-        if let Some(event) = self.read.pop_front() {
-            return Ok(event);
-        }
-        #[cfg(not(feature = "overlapped-lists"))]
-        if let Some(e) = self.peek.take() {
+        if let Some(e) = self.take_peeked() {
             return Ok(e);
         }
         self.reader.next()
+    }
+
+    fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
+        match self.next_impl() {
+            Ok(DeEvent::Start(e)) => {
+                self.ns_resolver.push(&e)?;
+                Ok(DeEvent::Start(e))
+            }
+            Ok(DeEvent::End(e)) => {
+                self.ns_resolver.pop();
+                Ok(DeEvent::End(e))
+            }
+            e => e,
+        }
     }
 
     fn skip_whitespaces(&mut self) -> Result<(), DeError> {
@@ -2993,11 +3016,10 @@ where
 
     /// Drops all events until event with [name](BytesEnd::name()) `name` won't be
     /// dropped. This method should be called after [`Self::next()`]
-    #[cfg(feature = "overlapped-lists")]
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         let mut depth = 0;
         loop {
-            match self.read.pop_front() {
+            match self.take_peeked() {
                 Some(DeEvent::Start(e)) if e.name() == name => {
                     depth += 1;
                 }
@@ -3035,25 +3057,95 @@ where
                 }
             }
         }
+        // read_to_end will consume closing tag. Because nobody can access to its
+        // content anymore, we directly pop namespace of the opening tag
+        self.ns_resolver.pop();
         Ok(())
     }
-    #[cfg(not(feature = "overlapped-lists"))]
-    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
-        // First one might be in self.peek
-        match self.next()? {
-            DeEvent::Start(e) => self.reader.read_to_end(e.name())?,
-            DeEvent::End(e) if e.name() == name => return Ok(()),
-            _ => (),
-        }
-        self.reader.read_to_end(name)
-    }
 
-    fn skip_next_tree(&mut self) -> Result<(), DeError> {
-        let DeEvent::Start(start) = self.next()? else {
-            unreachable!("Only call this if the next event is a start event")
+    /// Determines if `Option` should be deserialized as `Some` or `None`.
+    ///
+    /// It handles `xsi:nil` attribute in two places:
+    /// - on parent element:  `<map xsi:nil="true"><opt/></map>`
+    /// - on checked element: `<map><opt xsi:nil="true"/></map>`
+    ///
+    /// According to the [specification], `xsi:nil` controls only ability to (not) have nested
+    /// elements, but it does not applied to attributes:
+    ///
+    /// > 2.7.2 xsi:nil
+    /// > -------------
+    /// >
+    /// > _XML Schema Definition Language: Structures_ introduces a mechanism for signaling that
+    /// > an element must be accepted as ·valid· when it has no content despite a content type
+    /// > which does not require or even necessarily allow empty content. An element can be
+    /// > ·valid· without content if it has the attribute `xsi:nil` with the value `true`.
+    /// > An element so labeled must be empty, but can carry attributes if permitted by the
+    /// > corresponding complex type.
+    ///
+    /// Due to that we must deserialize all attributes from the `<map>`.
+    /// To get an access to them we define Rust struct as follow:
+    ///
+    /// ```ignore
+    /// struct MapTag {
+    ///     #[serde(rename = "@attr")]
+    ///     attr: String,
+    ///     // <opt> element
+    ///     opt: Option<String>,
+    /// }
+    /// ```
+    ///
+    /// `<map attr = "value" xsi:nil="true"/>` should be deserialized as
+    /// `MapTag { attr: "value", foo: None }`.
+    ///
+    /// `<map attr = "value" xsi:nil="true"><foo/></map>` is invalid XML (see the quote from
+    /// the specification above), but will be deserialized the same.
+    ///
+    /// When we at top-level, `parent` is `None` and we handle only the `<opt xsi:nil="..."/>` case.
+    ///
+    /// Returns `true` if `visit_some()` should be called and `false` if `visit_none()`.
+    ///
+    /// [specification]: https://www.w3.org/TR/xmlschema11-1/#Instance_Document_Constructions
+    fn deserialize_opt(&mut self, parent_is_nil: Option<bool>) -> Result<bool, DeError> {
+        // We cannot use result of `peek()` directly because of borrow checker, so it's inlined here
+        #[cfg(feature = "overlapped-lists")]
+        let event = {
+            if self.read.is_empty() {
+                self.read.push_front(self.reader.next()?);
+            }
+            // SAFETY: `self.read` was filled in the code above.
+            // NOTE: with msrv=1.95 we may use push_front_mut
+            self.read
+                .front()
+                .expect("`self.read` was filled in the code above")
         };
-        let name = start.name();
-        self.read_to_end(name)
+
+        #[cfg(not(feature = "overlapped-lists"))]
+        let event = match &mut self.peek {
+            Some(event) => event,
+            empty_peek @ None => empty_peek.insert(self.reader.next()?),
+        };
+
+        Ok(match event {
+            DeEvent::Text(t) if t.is_empty() => false,
+            // If we inside the tree, call visit_some for Eof to get an error from the visitor
+            // (getting Eof means that XML tag is not closed). On top-level Eof is true None
+            DeEvent::Eof => parent_is_nil.is_some(),
+            // if the `xsi:nil` attribute is set to true we got a none value
+            DeEvent::Start(start)
+                // Because we only peek event here, its namespace bindings not yet processed.
+                // Temporary push them inside `with` to check the presence of `xsi:nil`
+                if parent_is_nil.unwrap_or(false) || self.ns_resolver.with(start, |resolver| {
+                    start.attributes().has_nil(resolver)
+                })? =>
+            {
+                let DeEvent::Start(start) = self.next()? else {
+                    unreachable!("Just checked that the next event is a start event")
+                };
+                self.read_to_end(start.name())?;
+                false
+            }
+            _ => true,
+        })
     }
 
     /// Method for testing Deserializer implementation. Checks that all events was consumed during
@@ -3137,15 +3229,25 @@ where
     /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
     ///
     /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
-    pub fn borrowing_with_resolver(mut reader: NsReader<&'de [u8]>, entity_resolver: E) -> Self {
+    pub fn borrowing_with_resolver(reader: NsReader<&'de [u8]>, entity_resolver: E) -> Self {
+        let NsReader {
+            mut reader,
+            mut ns_resolver,
+            pending_pop,
+        } = reader;
         let config = reader.config_mut();
         config.expand_empty_elements = true;
+
+        if pending_pop {
+            ns_resolver.pop();
+        }
 
         Self::new(
             SliceReader {
                 reader,
                 version: XmlVersion::Implicit1_0,
             },
+            ns_resolver,
             entity_resolver,
         )
     }
@@ -3219,7 +3321,7 @@ where
     /// will borrow instead of copy. If you have `&[u8]` which is known to represent
     /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
-        let mut reader = NsReader::from_reader(reader);
+        let mut reader = Reader::from_reader(reader);
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -3229,6 +3331,7 @@ where
                 buf: Vec::new(),
                 version: XmlVersion::Implicit1_0,
             },
+            NamespaceResolver::default(),
             entity_resolver,
         )
     }
@@ -3239,9 +3342,18 @@ where
     /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
     ///
     /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
-    pub fn buffering_with_resolver(mut reader: NsReader<R>, entity_resolver: E) -> Self {
+    pub fn buffering_with_resolver(reader: NsReader<R>, entity_resolver: E) -> Self {
+        let NsReader {
+            mut reader,
+            mut ns_resolver,
+            pending_pop,
+        } = reader;
         let config = reader.config_mut();
         config.expand_empty_elements = true;
+
+        if pending_pop {
+            ns_resolver.pop();
+        }
 
         Self::new(
             IoReader {
@@ -3249,6 +3361,7 @@ where
                 buf: Vec::new(),
                 version: XmlVersion::Implicit1_0,
             },
+            ns_resolver,
             entity_resolver,
         )
     }
@@ -3370,17 +3483,10 @@ where
     where
         V: Visitor<'de>,
     {
-        // We cannot use result of `peek()` directly because of borrow checker
-        let _ = self.peek()?;
-        match self.last_peeked() {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            DeEvent::Eof => visitor.visit_none(),
-            // if the `xsi:nil` attribute is set to true we got a none value
-            DeEvent::Start(start) if self.reader.reader.has_nil_attr(start) => {
-                self.skip_next_tree()?;
-                visitor.visit_none()
-            }
-            _ => visitor.visit_some(self),
+        if self.deserialize_opt(None)? {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
         }
     }
 
@@ -3480,12 +3586,6 @@ pub trait XmlRead<'i> {
 
     /// Return an XML version of the source.
     fn xml_version(&self) -> XmlVersion;
-
-    /// Checks if the `start` tag has a [`xsi:nil`] attribute. This method ignores
-    /// any errors in attributes.
-    ///
-    /// [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
-    fn has_nil_attr(&self, start: &BytesStart) -> bool;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -3493,7 +3593,7 @@ pub trait XmlRead<'i> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
-    reader: NsReader<R>,
+    reader: Reader<R>,
     buf: Vec<u8>,
     version: XmlVersion,
 }
@@ -3506,7 +3606,7 @@ impl<R: BufRead> IoReader<R> {
     /// use serde::Deserialize;
     /// use std::io::Cursor;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::NsReader;
+    /// use quick_xml::Reader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -3523,12 +3623,12 @@ impl<R: BufRead> IoReader<R> {
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &NsReader<Cursor<&str>> = de.get_ref().get_ref();
+    /// let reader: &Reader<Cursor<&str>> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &NsReader<R> {
+    pub const fn get_ref(&self) -> &Reader<R> {
         &self.reader
     }
 }
@@ -3559,10 +3659,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn xml_version(&self) -> XmlVersion {
         self.version
     }
-
-    fn has_nil_attr(&self, start: &BytesStart) -> bool {
-        start.attributes().has_nil(self.reader.resolver())
-    }
 }
 
 /// XML input source that reads from a slice of bytes and can borrow from it.
@@ -3570,7 +3666,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
-    reader: NsReader<&'de [u8]>,
+    reader: Reader<&'de [u8]>,
     version: XmlVersion,
 }
 
@@ -3581,7 +3677,7 @@ impl<'de> SliceReader<'de> {
     /// # use pretty_assertions::assert_eq;
     /// use serde::Deserialize;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::NsReader;
+    /// use quick_xml::Reader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -3598,12 +3694,12 @@ impl<'de> SliceReader<'de> {
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &NsReader<&[u8]> = de.get_ref().get_ref();
+    /// let reader: &Reader<&[u8]> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &NsReader<&'de [u8]> {
+    pub const fn get_ref(&self) -> &Reader<&'de [u8]> {
         &self.reader
     }
 }
@@ -3631,10 +3727,6 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     #[inline]
     fn xml_version(&self) -> XmlVersion {
         self.version
-    }
-
-    fn has_nil_attr(&self, start: &BytesStart) -> bool {
-        start.attributes().has_nil(self.reader.resolver())
     }
 }
 
@@ -4218,12 +4310,12 @@ mod tests {
         "#;
 
         let mut reader1 = IoReader {
-            reader: NsReader::from_reader(s.as_bytes()),
+            reader: Reader::from_reader(s.as_bytes()),
             buf: Vec::new(),
             version: XmlVersion::Implicit1_0,
         };
         let mut reader2 = SliceReader {
-            reader: NsReader::from_str(s),
+            reader: Reader::from_str(s),
             version: XmlVersion::Implicit1_0,
         };
 
@@ -4249,7 +4341,7 @@ mod tests {
         "#;
 
         let mut reader = SliceReader {
-            reader: NsReader::from_str(s),
+            reader: Reader::from_str(s),
             version: XmlVersion::Implicit1_0,
         };
 

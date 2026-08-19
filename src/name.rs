@@ -777,6 +777,18 @@ impl NamespaceResolver {
         self.set_level(self.nesting_level.saturating_sub(1));
     }
 
+    /// Runs action as if all namespaces from the specified `start` element were added
+    /// to the resolver, but without actually changing the resolver state.
+    pub fn with<F, R>(&mut self, start: &BytesStart, mut action: F) -> Result<R, NamespaceError>
+    where
+        F: FnMut(&Self) -> R,
+    {
+        self.push(start)?;
+        let result = action(self);
+        self.pop();
+        Ok(result)
+    }
+
     /// Sets new number of [`push`] calls that were not followed by [`pop`] calls.
     ///
     /// When set to value lesser than current [`level`], behaves as if [`pop`]

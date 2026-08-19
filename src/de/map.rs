@@ -221,21 +221,6 @@ where
         })
     }
 
-    /// Determines if subtree started with the specified event should be skipped.
-    ///
-    /// Used to map elements with `xsi:nil` attribute set to true to `None` in optional contexts.
-    ///
-    /// We need to handle two attributes:
-    /// - on parent element: `<map xsi:nil="true"><foo/></map>`
-    /// - on this element:   `<map><foo xsi:nil="true"/></map>`
-    ///
-    /// We check parent element too because `xsi:nil` affects only nested elements of the
-    /// tag where it is defined. We can map structure with fields mapped to attributes to
-    /// the `<map>` element and set to `None` all its optional elements.
-    fn should_skip_subtree(&self, start: &BytesStart) -> bool {
-        self.de.reader.reader.has_nil_attr(&self.start) || self.de.reader.reader.has_nil_attr(start)
-    }
-
     /// Skips whitespaces when they are not preserved
     #[inline]
     fn skip_whitespaces(&mut self) -> Result<(), DeError> {
@@ -577,15 +562,16 @@ where
     where
         V: Visitor<'de>,
     {
-        // We cannot use result of `peek()` directly because of borrow checker
-        let _ = self.map.de.peek()?;
-        match self.map.de.last_peeked() {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            DeEvent::Start(start) if self.map.should_skip_subtree(start) => {
-                self.map.de.skip_next_tree()?;
-                visitor.visit_none()
-            }
-            _ => visitor.visit_some(self),
+        // `self.map.start` already was taken from the reader, so its namespace bindings were already processed.
+        let has_nil = self
+            .map
+            .start
+            .attributes()
+            .has_nil(&self.map.de.ns_resolver);
+        if self.map.de.deserialize_opt(Some(has_nil))? {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
         }
     }
 

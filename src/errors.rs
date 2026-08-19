@@ -418,6 +418,13 @@ pub mod serialize {
         }
     }
 
+    impl From<NamespaceError> for DeError {
+        #[inline]
+        fn from(e: NamespaceError) -> Self {
+            Self::InvalidXml(e.into())
+        }
+    }
+
     /// Serialization error
     #[derive(Clone, Debug)]
     pub enum SeError {
