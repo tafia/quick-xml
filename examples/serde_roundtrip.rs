@@ -15,6 +15,7 @@
 //! |------------------------------|----------------------------------------------|
 //! | attribute `id="..."`         | `#[serde(rename = "@id")]`                    |
 //! | text inside an element       | `#[serde(rename = "$text")]`                  |
+//! | fields shared across types   | `#[serde(flatten)]` on a sub-struct           |
 //! | child element `<title>`      | a field named `title` (no prefix)             |
 //! | repeated child elements      | a `Vec<T>` field                              |
 //! | the element's own tag name   | chosen by the parent field / root, see below  |
@@ -118,8 +119,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // `to_string` serializes back to XML. The root element name is derived from
     // the type name (`Catalog` -> `<Catalog>`); use `to_string_with_root` if you
-    // need to control it. The output is compact (no indentation); wrap it in a
-    // `Writer` if you need pretty-printing.
+    // need to control it. The output is compact by default; use `Serializer::indent`
+    // if you need pretty-printing.
     let xml = to_string(&catalog)?;
     println!("\n{xml}");
 
@@ -128,14 +129,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reparsed: Catalog = from_str(&xml)?;
     assert_eq!(catalog, reparsed);
 
+    // Pretty-printing with `Serializer::indent`
+
+    // For indented output, create a `Serializer` directly and configure it with
+    // `indent()`. The indent character (typically `b' '` or `b'\t'`) and width
+    // determine the spacing. `serialize()` then writes to any `io::Write` target.
+    let mut pretty_xml = String::new();
+    let mut ser = quick_xml::se::Serializer::new(&mut pretty_xml);
+    ser.indent(' ', 2);
+    catalog.serialize(ser)?;
+
+    println!("\nPretty-printed:\n{pretty_xml}");
+
+    // The indented output round-trips just like the compact version.
+    let reparsed: Catalog = from_str(&pretty_xml)?;
+    assert_eq!(catalog, reparsed);
+
     // Writing serde structs into a hand-driven `Writer`
 
-    // `to_string` above produces compact output. When you need pretty-printed
-    // output — or want to drop serde-serialized structs into a larger document
-    // you are building by hand — drive a `Writer` yourself and hand each value
-    // to `write_serializable`. It picks up the writer's indentation, which
-    // `to_string` cannot give you. Here we emit the `<catalog>` wrapper
-    // manually and serialize each `Book` into it.
+    // When you need to mix serde-serialized structs with hand-written XML elements —
+    // for example, adding processing instructions, custom wrappers, or interleaving
+    // serialized values with manually emitted content — drive a `Writer` yourself
+    // and hand each value to `write_serializable`. Here we emit the `<catalog>`
+    // wrapper manually and serialize each `Book` into it. The serialized structs
+    // pick up the writer's indentation settings automatically.
     let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
     writer.write_event(Event::Start(BytesStart::new("catalog")))?;
     for book in &catalog.book {

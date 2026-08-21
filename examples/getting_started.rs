@@ -54,10 +54,15 @@ fn main() -> Result<(), quick_xml::Error> {
     let mut titles = Vec::new();
     let mut book_count = 0u32;
 
+    // Track the XML version declared in the `<?xml?>` header. It affects attribute value
+    // normalization and other parsing behavior.
+    let mut xml_version = XmlVersion::Implicit1_0;
+
     // The reader does not implement `Iterator` (its events borrow from an internal buffer),
     // so we drive it with a plain loop.
     loop {
         match reader.read_event()? {
+            Event::Decl(e) => xml_version = e.xml_version()?,
             // <book ...> — an opening tag. `BytesStart` gives us the name and access to attributes.
             Event::Start(e) if e.name().as_ref() == "book" => {
                 book_count += 1;
@@ -69,7 +74,7 @@ fn main() -> Result<(), quick_xml::Error> {
                 for attr in e.attributes() {
                     let attr = attr?;
                     if attr.key.as_ref() == "id" {
-                        let id = attr.normalized_value(XmlVersion::Implicit1_0)?;
+                        let id = attr.normalized_value(xml_version)?;
                         println!("found book id={id}");
                     }
                 }
@@ -81,7 +86,7 @@ fn main() -> Result<(), quick_xml::Error> {
             // text; `xml_content` unescapes it into the logical string value.
             Event::Start(e) if e.name().as_ref() == "title" => {
                 let text = reader.read_text(e.name())?;
-                titles.push(text.xml_content(XmlVersion::Implicit1_0).into_owned());
+                titles.push(text.xml_content(xml_version).into_owned());
             }
 
             // `read_event` yields `Eof` exactly once, when the document ends.

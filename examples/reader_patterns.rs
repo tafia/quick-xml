@@ -58,11 +58,11 @@ struct Book {
 }
 
 /// Read the `id` attribute off a start tag, or return an empty string.
-fn id_of(e: &BytesStart) -> Result<String, quick_xml::Error> {
+fn id_of(e: &BytesStart, version: XmlVersion) -> Result<String, quick_xml::Error> {
     for attr in e.attributes() {
         let attr = attr?;
         if attr.key.as_ref() == "id" {
-            return Ok(attr.normalized_value(XmlVersion::Implicit1_0)?.into_owned());
+            return Ok(attr.normalized_value(version)?.into_owned());
         }
     }
     Ok(String::new())
@@ -102,6 +102,7 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
     // control over which whitespace matters (see the `Text` arms) and avoids
     // `trim_text`'s known issues around comments/CDATA.
     let mut reader = Reader::from_str(xml);
+    let mut xml_version = XmlVersion::Implicit1_0;
 
     let mut books = Vec::new();
     let mut state = State::BeforeRoot;
@@ -114,7 +115,10 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
         // parser accepts.
         state = match (state, reader.read_event()?) {
             // The optional `<?xml ...?>` declaration before the root element.
-            (State::BeforeRoot, Event::Decl(_)) => State::BeforeRoot,
+            (State::BeforeRoot, Event::Decl(e)) => {
+                xml_version = e.xml_version()?;
+                State::BeforeRoot
+            }
             // The root element opens the catalog.
             (State::BeforeRoot, Event::Start(e)) if e.name().as_ref() == "catalog" => {
                 State::InCatalog
@@ -123,7 +127,7 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
             // Enter a book, capturing its id up front.
             (State::InCatalog, Event::Start(e)) if e.name().as_ref() == "book" => {
                 State::InBook(Book {
-                    id: id_of(&e)?,
+                    id: id_of(&e, xml_version)?,
                     ..Default::default()
                 })
             }
@@ -154,7 +158,7 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
 
             // The text inside a field goes to the slot the state remembered.
             (State::InField(mut book, field), Event::Text(e)) => {
-                let text = e.xml_content(XmlVersion::Implicit1_0).into_owned();
+                let text = e.xml_content(xml_version).into_owned();
                 match field {
                     Field::Title => book.title = text,
                     Field::Author => book.authors.push(text),
@@ -204,12 +208,13 @@ fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Erro
     // whitespace between elements ourselves. Here that costs one `Text` arm per
     // loop, since each loop is its own `match`.
     let mut reader = Reader::from_str(xml);
+    let mut xml_version = XmlVersion::Implicit1_0;
 
     // Preamble and root: skip an optional `<?xml ...?>` declaration, then
     // require the opening `<catalog>` before anything else.
     loop {
         match reader.read_event()? {
-            Event::Decl(_) => {}
+            Event::Decl(e) => xml_version = e.xml_version()?,
             Event::Text(e) if e.trim().is_empty() => {}
             Event::Start(e) if e.name().as_ref() == "catalog" => break,
             event => return Err(format!("expected <catalog>, got {event:?}").into()),
@@ -222,7 +227,7 @@ fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Erro
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == "book" => {
-                books.push(read_book(&mut reader, &e)?);
+                books.push(read_book(&mut reader, &e, xml_version)?);
             }
             Event::End(e) if e.name().as_ref() == "catalog" => break,
             Event::Text(e) if e.trim().is_empty() => {}
@@ -247,9 +252,10 @@ fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Erro
 fn read_book(
     reader: &mut Reader<&[u8]>,
     start: &BytesStart,
+    version: XmlVersion,
 ) -> Result<Book, Box<dyn std::error::Error>> {
     let mut book = Book {
-        id: id_of(start)?,
+        id: id_of(start, version)?,
         ..Default::default()
     };
 
@@ -261,14 +267,14 @@ fn read_book(
                 "title" => {
                     book.title = reader
                         .read_text(e.name())?
-                        .xml_content(XmlVersion::Implicit1_0)
+                        .xml_content(version)
                         .into_owned();
                 }
                 "author" => {
                     book.authors.push(
                         reader
                             .read_text(e.name())?
-                            .xml_content(XmlVersion::Implicit1_0)
+                            .xml_content(version)
                             .into_owned(),
                     );
                 }
