@@ -74,11 +74,11 @@ trait CatalogVisitor {
 }
 
 /// Read the `id` attribute off a start tag, or return an empty string.
-fn id_of(e: &BytesStart) -> Result<String, quick_xml::Error> {
+fn id_of(e: &BytesStart, version: XmlVersion) -> Result<String, quick_xml::Error> {
     for attr in e.attributes() {
         let attr = attr?;
         if attr.key.as_ref() == "id" {
-            return Ok(attr.normalized_value(XmlVersion::Implicit1_0)?.into_owned());
+            return Ok(attr.normalized_value(version)?.into_owned());
         }
     }
     Ok(String::new())
@@ -88,26 +88,24 @@ fn id_of(e: &BytesStart) -> Result<String, quick_xml::Error> {
 /// that knows the document's structure.
 fn parse_catalog(xml: &str, visitor: &mut dyn CatalogVisitor) -> Result<(), quick_xml::Error> {
     let mut reader = Reader::from_str(xml);
+    let mut xml_version = XmlVersion::Implicit1_0;
 
     loop {
         match reader.read_event()? {
+            Event::Decl(e) => xml_version = e.xml_version()?,
             Event::Start(e) => match e.name().as_ref() {
                 "book" => {
-                    let id = id_of(&e)?;
+                    let id = id_of(&e, xml_version)?;
                     visitor.begin_book(&id);
                 }
                 // `read_text` yields the element's text; `xml_content` unescapes
                 // it into a `Cow<str>` we can hand out as a borrowed `&str`.
                 "title" => {
-                    let text = reader
-                        .read_text(e.name())?
-                        .xml_content(XmlVersion::Implicit1_0);
+                    let text = reader.read_text(e.name())?.xml_content(xml_version);
                     visitor.title(&text);
                 }
                 "author" => {
-                    let text = reader
-                        .read_text(e.name())?
-                        .xml_content(XmlVersion::Implicit1_0);
+                    let text = reader.read_text(e.name())?.xml_content(xml_version);
                     visitor.author(&text);
                 }
                 _ => {}
