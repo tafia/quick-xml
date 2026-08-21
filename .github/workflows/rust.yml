@@ -84,6 +84,23 @@ jobs:
       env:
         LLVM_PROFILE_FILE: coverage/all-features-%p-%m.profraw
       run: cargo test --all-features
+    - name: Run examples (no features)
+      run: |
+        cargo run --example getting_started
+        cargo run --example nested_readers
+        cargo run --example read_buffered
+        cargo run --example reader_patterns
+        cargo run --example read_nodes
+        cargo run --example custom_entities
+        cargo run --example writer
+        cargo run --example visitor
+    - name: Run examples (serialize)
+      run: |
+        cargo run --example serde_roundtrip --features serialize
+        cargo run --example read_nodes_serde --features serialize
+        cargo run --example flattened_enum --features serialize
+    - name: Run examples (encoding)
+      run: cargo run --example read_utf16 --features encoding
     - name: Prepare coverage information for upload
       if: runner.os == 'Linux'
       run: |
