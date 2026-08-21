@@ -86,7 +86,7 @@ use attributes::{AttrError, Attribute, Attributes};
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
 /// [`attributes`]: Self::attributes
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesStart<'a> {
     /// content of the element
     pub(crate) buf: Cow<'a, str>,
@@ -381,7 +381,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 ///
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, str>,
 }
@@ -506,7 +506,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 /// ```
 ///
 /// [`Config::check_comments`]: crate::reader::Config::check_comments
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesText<'a> {
     /// Escaped content of the event
     content: Cow<'a, str>,
@@ -718,7 +718,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 /// // deref coercion of &BytesCData to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesCData<'a> {
     content: Cow<'a, str>,
 }
@@ -997,7 +997,7 @@ impl FusedIterator for CDataIterator<'_> {}
 /// ```
 ///
 /// [PI]: https://www.w3.org/TR/xml11/#sec-pi
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesPI<'a> {
     content: BytesStart<'a>,
 }
@@ -1172,7 +1172,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
 /// // deref coercion of &BytesDecl to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesDecl<'a> {
     content: BytesStart<'a>,
 }
@@ -1520,7 +1520,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 /// // deref coercion of &BytesRef to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesRef<'a> {
     content: Cow<'a, str>,
 }
@@ -1702,7 +1702,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesRef<'a> {
 /// Event emitted by [`Reader::read_event_into`].
 ///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Event<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
