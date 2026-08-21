@@ -95,8 +95,13 @@ enum Field {
 }
 
 fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error>> {
+    // There is a `trim_text` option available on `Reader` which can sometimes
+    // simplify the parser greatly, however, it is a bit bug-prone in some cases.
+    // We will not use it here - the reader hands us the whitespace between
+    // elements as `Text` events, and we skip it explicitly below. That keeps
+    // control over which whitespace matters (see the `Text` arms) and avoids
+    // `trim_text`'s known issues around comments/CDATA.
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
 
     let mut books = Vec::new();
     let mut state = State::BeforeRoot;
@@ -159,6 +164,13 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
             // Closing a field returns us to the book.
             (State::InField(book, _), Event::End(_)) => State::InBook(book),
 
+            // Insignificant whitespace between elements (indentation, newlines).
+            // Because this grammar has no mixed content, any all-whitespace text
+            // outside a field can be ignored; binding `state` by value hands it
+            // back unchanged, `Book` payload and all. Real field text is caught
+            // by the `InField` arm above, so it never reaches here.
+            (state, Event::Text(e)) if e.trim().is_empty() => state,
+
             (State::AfterRoot, Event::Eof) => break,
 
             // Anything else is a structural error. This is the strict default:
@@ -188,14 +200,17 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
 // call stack carries the context (top level vs. inside a book) that the state
 // machine had to spell out in an `enum`.
 fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error>> {
+    // As in `parse_state_machine`, `trim_text` stays off and we skip the
+    // whitespace between elements ourselves. Here that costs one `Text` arm per
+    // loop, since each loop is its own `match`.
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
 
     // Preamble and root: skip an optional `<?xml ...?>` declaration, then
     // require the opening `<catalog>` before anything else.
     loop {
         match reader.read_event()? {
             Event::Decl(_) => {}
+            Event::Text(e) if e.trim().is_empty() => {}
             Event::Start(e) if e.name().as_ref() == "catalog" => break,
             event => return Err(format!("expected <catalog>, got {event:?}").into()),
         }
@@ -210,14 +225,18 @@ fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Erro
                 books.push(read_book(&mut reader, &e)?);
             }
             Event::End(e) if e.name().as_ref() == "catalog" => break,
+            Event::Text(e) if e.trim().is_empty() => {}
             event => return Err(format!("unexpected {event:?} inside <catalog>").into()),
         }
     }
 
-    // After the root closes, the only valid event is end-of-file.
-    match reader.read_event()? {
-        Event::Eof => {}
-        event => return Err(format!("expected end of document, got {event:?}").into()),
+    // After the root closes, only trailing whitespace and end-of-file remain.
+    loop {
+        match reader.read_event()? {
+            Event::Text(e) if e.trim().is_empty() => {}
+            Event::Eof => break,
+            event => return Err(format!("expected end of document, got {event:?}").into()),
+        }
     }
 
     Ok(books)
@@ -264,6 +283,8 @@ fn read_book(
             },
             // The book's own end tag: we are done with this subtree.
             Event::End(e) if e.name().as_ref() == "book" => break,
+            // Whitespace between the book's children: ignore it.
+            Event::Text(e) if e.trim().is_empty() => {}
             event => return Err(format!("unexpected {event:?} inside <book>").into()),
         }
     }
