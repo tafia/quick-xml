@@ -24,7 +24,7 @@
 
 use std::io::Cursor;
 
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
 
 /// The data we want to serialize into XML.
@@ -64,8 +64,9 @@ fn write_high_level() -> Result<String, quick_xml::Error> {
     // compact, unindented XML.
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
 
-    // You could use `create_element` for the root node as well... but it is rarely
-    // worth it.
+    // Write out the Xml Declaration
+    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))?;
+    // You could use `create_element` for the root node as well... but it is rarely worth it.
     writer.write_event(Event::Start(BytesStart::new("catalog")))?;
 
     // `create_element` returns a builder. `write_inner_content` takes a closure
@@ -113,6 +114,7 @@ fn write_high_level() -> Result<String, quick_xml::Error> {
 fn write_low_level() -> Result<String, quick_xml::Error> {
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
 
+    writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))?;
     writer.write_event(Event::Start(BytesStart::new("catalog")))?;
 
     for book in BOOKS {
