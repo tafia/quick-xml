@@ -16,10 +16,14 @@
 //!      `<book>`), hand control to a helper function that consumes just that
 //!      subtree with its own inner loop. This reads naturally when the document
 //!      is deeply nested, at the cost of being harder to share one read buffer
-//!      across levels (each helper tends to want its own).
+//!      across levels (each helper tends to want its own). It validates just as
+//!      strictly as the state machine, but the context lives in the call stack
+//!      instead of an explicit `enum`.
 //!
-//! Neither is "correct" — pick whichever keeps *your* document readable. And
-//! before writing either by hand, check whether serde (`serde_roundtrip.rs`)
+//! Both parse the same document and reject anything the grammar doesn't allow;
+//! each shows, in comments, how to relax that where you'd want to. Neither
+//! structuring pattern is "correct" — pick whichever keeps *your* document
+//! readable. And before writing either by hand, check whether serde (`serde_roundtrip.rs`)
 //! would do the whole job for you. See `examples/README.md` for the full
 //! decision guide.
 //!
@@ -179,22 +183,41 @@ fn parse_state_machine(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error
 // Pattern 2: nested readers
 // ---------------------------------------------------------------------------
 
-fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, quick_xml::Error> {
+// Like `parse_state_machine`, this version *strictly validates* structure:
+// instead of ignoring events it doesn't recognize, each loop rejects them. The
+// call stack carries the context (top level vs. inside a book) that the state
+// machine had to spell out in an `enum`.
+fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, Box<dyn std::error::Error>> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
-    let mut books = Vec::new();
+    // Preamble and root: skip an optional `<?xml ...?>` declaration, then
+    // require the opening `<catalog>` before anything else.
+    loop {
+        match reader.read_event()? {
+            Event::Decl(_) => {}
+            Event::Start(e) if e.name().as_ref() == "catalog" => break,
+            event => return Err(format!("expected <catalog>, got {event:?}").into()),
+        }
+    }
 
-    // The outer loop only knows about the top level: find each `<book>` and
-    // delegate the details to `read_book`.
+    // Inside the catalog: each child must be a `<book>` (delegated to
+    // `read_book`) until the catalog's own end tag.
+    let mut books = Vec::new();
     loop {
         match reader.read_event()? {
             Event::Start(e) if e.name().as_ref() == "book" => {
                 books.push(read_book(&mut reader, &e)?);
             }
-            Event::Eof => break,
-            _ => {}
+            Event::End(e) if e.name().as_ref() == "catalog" => break,
+            event => return Err(format!("unexpected {event:?} inside <catalog>").into()),
         }
+    }
+
+    // After the root closes, the only valid event is end-of-file.
+    match reader.read_event()? {
+        Event::Eof => {}
+        event => return Err(format!("expected end of document, got {event:?}").into()),
     }
 
     Ok(books)
@@ -202,7 +225,10 @@ fn parse_nested_readers(xml: &str) -> Result<Vec<Book>, quick_xml::Error> {
 
 /// Consume a single `<book>...</book>` subtree, starting *after* its start tag
 /// has been read, and stopping once its matching end tag is consumed.
-fn read_book(reader: &mut Reader<&[u8]>, start: &BytesStart) -> Result<Book, quick_xml::Error> {
+fn read_book(
+    reader: &mut Reader<&[u8]>,
+    start: &BytesStart,
+) -> Result<Book, Box<dyn std::error::Error>> {
     let mut book = Book {
         id: id_of(start)?,
         ..Default::default()
@@ -227,15 +253,18 @@ fn read_book(reader: &mut Reader<&[u8]>, start: &BytesStart) -> Result<Book, qui
                             .into_owned(),
                     );
                 }
-                // Unknown child: skip its subtree so we stay aligned.
-                _ => {
-                    reader.read_to_end(e.name())?;
+                // Unknown child: a structural error under strict parsing. To
+                // *tolerate* unknown children instead (e.g. for forward
+                // compatibility), skip the subtree and continue:
+                //
+                //     name => { reader.read_to_end(e.name())?; }
+                name => {
+                    return Err(format!("unexpected <{name}> inside <book>").into());
                 }
             },
             // The book's own end tag: we are done with this subtree.
             Event::End(e) if e.name().as_ref() == "book" => break,
-            Event::Eof => break,
-            _ => {}
+            event => return Err(format!("unexpected {event:?} inside <book>").into()),
         }
     }
 
