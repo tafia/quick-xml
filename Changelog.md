@@ -94,6 +94,9 @@ The MSRV has been raised to 1.86.
 
 ### Misc Changes
 
+- [#269]: Added getting-started examples (`getting_started`, `writer`,
+  `serde_roundtrip`, `reader_patterns`, `visitor`) and an `examples/README.md`
+  guide on choosing between the serde and pull-reader/writer APIs.
 - [#859]: Added an example showing how to pretty-print serialized XML.
 - [#983]: Adopted an AI use and contribution policy for new upstream contributions.
 - [#963]: MSRV bumped to 1.86 (April 2025)
@@ -111,6 +114,7 @@ The MSRV has been raised to 1.86.
   an `NsReader` internally.
 - [#1005]: Implement `Hash`, `PartialOrd`, and `Ord` across all `Bytes*` types.
 
+[#269]: https://github.com/tafia/quick-xml/issues/269
 [#670]: https://github.com/tafia/quick-xml/issues/670
 [#859]: https://github.com/tafia/quick-xml/issues/859
 [#953]: https://github.com/tafia/quick-xml/issues/953
