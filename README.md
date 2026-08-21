@@ -17,11 +17,19 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ## Example
 
+The snippets below give a quick taste of the reader and writer. For runnable,
+commented examples — and a guide on *which* API to reach for (serde, a
+hand-written `Reader`/`Writer`, the visitor pattern, ...) — see the
+[`examples/` directory](examples/) and its [guide](examples/README.md).
+[`examples/getting_started.rs`](examples/getting_started.rs) is the best place
+to start.
+
 ### Reader
 
 ```rust
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
+use quick_xml::XmlVersion;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -34,6 +42,7 @@ let mut count = 0;
 let mut txt = Vec::new();
 let mut buf = Vec::new();
 
+// Names and text are `&str`, not bytes: quick-xml validates that input is UTF-8.
 // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
     // NOTE: this is the generic case when we don't know about the input BufRead.
@@ -46,14 +55,16 @@ loop {
 
         Ok(Event::Start(e)) => {
             match e.name().as_ref() {
-                b"tag1" => println!("attributes values: {:?}",
+                "tag1" => println!("attributes values: {:?}",
                                     e.attributes().map(|a| a.unwrap().value)
                                     .collect::<Vec<_>>()),
-                b"tag2" => count += 1,
+                "tag2" => count += 1,
                 _ => (),
             }
         }
-        Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
+        // `xml_content` unescapes entities; the `XmlVersion` selects the
+        // normalization rules (1.0 vs 1.1). Most documents are 1.0.
+        Ok(Event::Text(e)) => txt.push(e.xml_content(XmlVersion::Implicit1_0).into_owned()),
 
         // There are several other `Event`s we do not consider here
         _ => (),
@@ -77,7 +88,7 @@ reader.config_mut().trim_text(true);
 let mut writer = Writer::new(Cursor::new(Vec::new()));
 loop {
     match reader.read_event() {
-        Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
+        Ok(Event::Start(e)) if e.name().as_ref() == "this_tag" => {
 
             // creates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
@@ -92,7 +103,7 @@ loop {
             // writes the event to the writer
             assert!(writer.write_event(Event::Start(elem)).is_ok());
         },
-        Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
+        Ok(Event::End(e)) if e.name().as_ref() == "this_tag" => {
             assert!(writer.write_event(Event::End(BytesEnd::new("my_elem"))).is_ok());
         },
         Ok(Event::Eof) => break,

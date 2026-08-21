@@ -274,6 +274,11 @@ required-features = ["serialize"]
 path = "examples/read_nodes_serde.rs"
 
 [[example]]
+name = "serde_roundtrip"
+required-features = ["serialize"]
+path = "examples/serde_roundtrip.rs"
+
+[[example]]
 name = "flattened_enum"
 required-features = ["serialize"]
 path = "examples/flattened_enum.rs"
