@@ -83,21 +83,30 @@ use attributes::{AttrError, Attribute, Attributes};
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
 /// [`attributes`]: Self::attributes
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesStart<'a> {
+pub struct BytesStart<'i> {
     /// content of the element
-    pub(crate) buf: Cow<'a, str>,
+    pub(crate) buf: Cow<'i, str>,
     /// end of the element name, the name starts at that the start of `buf`
     pub(crate) name_len: usize,
 }
 
-impl<'a> BytesStart<'a> {
+impl<'i> BytesStart<'i> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a str, name_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'i str, name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
@@ -110,8 +119,8 @@ impl<'a> BytesStart<'a> {
     ///
     /// `name` must be a valid name.
     #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
-        let buf: Cow<'a, str> = name.into();
+    pub fn new<C: Into<Cow<'i, str>>>(name: C) -> Self {
+        let buf: Cow<'i, str> = name.into();
         BytesStart {
             name_len: buf.len(),
             buf,
@@ -126,7 +135,7 @@ impl<'a> BytesStart<'a> {
     /// must be correctly-formed attributes. Neither are checked, it is possible
     /// to generate invalid XML if `content` or `name_len` are incorrect.
     #[inline]
-    pub fn from_content<C: Into<Cow<'a, str>>>(content: C, name_len: usize) -> Self {
+    pub fn from_content<C: Into<Cow<'i, str>>>(content: C, name_len: usize) -> Self {
         BytesStart {
             buf: content.into(),
             name_len,
@@ -158,11 +167,11 @@ impl<'a> BytesStart<'a> {
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::Error;
     ///
-    /// struct SomeStruct<'a> {
-    ///     attrs: BytesStart<'a>,
+    /// struct SomeStruct<'i> {
+    ///     attrs: BytesStart<'i>,
     ///     // ...
     /// }
-    /// # impl<'a> SomeStruct<'a> {
+    /// # impl<'i> SomeStruct<'i> {
     /// # fn example(&self) -> Result<(), Error> {
     /// # let mut writer = Writer::new(Vec::new());
     ///
@@ -207,7 +216,7 @@ impl<'a> BytesStart<'a> {
     /// # Warning
     ///
     /// `name` must be a valid name.
-    pub fn set_name(&mut self, name: &str) -> &mut BytesStart<'a> {
+    pub fn set_name(&mut self, name: &str) -> &mut BytesStart<'i> {
         let s = self.buf.to_mut();
         s.replace_range(..self.name_len, name);
         self.name_len = name.len();
@@ -216,14 +225,14 @@ impl<'a> BytesStart<'a> {
 }
 
 /// Attribute-related methods
-impl<'a> BytesStart<'a> {
+impl<'i> BytesStart<'i> {
     /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    pub fn with_attributes<'a, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
+        I::Item: Into<Attribute<'a>>,
     {
         self.extend_attributes(attributes);
         self
@@ -232,10 +241,10 @@ impl<'a> BytesStart<'a> {
     /// Add additional attributes to this tag using an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
+    pub fn extend_attributes<'a, I>(&mut self, attributes: I) -> &mut BytesStart<'i>
     where
         I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
+        I::Item: Into<Attribute<'a>>,
     {
         for attr in attributes {
             self.push_attribute(attr);
@@ -244,16 +253,16 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Adds an attribute to this element.
-    pub fn push_attribute<'b, A>(&mut self, attr: A)
+    pub fn push_attribute<'a, A>(&mut self, attr: A)
     where
-        A: Into<Attribute<'b>>,
+        A: Into<Attribute<'a>>,
     {
         self.buf.to_mut().push(' ');
         self.push_attr(attr.into());
     }
 
     /// Remove all attributes from the ByteStart
-    pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
+    pub fn clear_attributes(&mut self) -> &mut BytesStart<'i> {
         self.buf.to_mut().truncate(self.name_len);
         self
     }
@@ -276,7 +285,7 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Try to get an attribute
-    pub fn try_get_attribute(
+    pub fn try_get_attribute<'a>(
         &'a self,
         attr_name: &str,
     ) -> Result<Option<Attribute<'a>>, AttrError> {
@@ -290,7 +299,7 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Adds an attribute to this element.
-    pub(crate) fn push_attr<'b>(&mut self, attr: Attribute<'b>) {
+    pub(crate) fn push_attr<'a>(&mut self, attr: Attribute<'a>) {
         let s = self.buf.to_mut();
         s.push_str(attr.key.as_ref());
         s.push_str("=\"");
@@ -310,7 +319,7 @@ impl<'a> BytesStart<'a> {
     }
 }
 
-impl<'a> Debug for BytesStart<'a> {
+impl<'i> Debug for BytesStart<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesStart {{ buf: ")?;
         write_cow_string(f, &self.buf)?;
@@ -318,7 +327,7 @@ impl<'a> Debug for BytesStart<'a> {
     }
 }
 
-impl<'a> Deref for BytesStart<'a> {
+impl<'i> Deref for BytesStart<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -333,8 +342,8 @@ impl AsRef<str> for BytesStart<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesStart<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         let s = <&str>::arbitrary(u)?;
         if s.is_empty() || !s.chars().all(char::is_alphanumeric) {
             return Err(arbitrary::Error::IncorrectFormat);
@@ -379,17 +388,26 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesEnd<'a> {
-    name: Cow<'a, str>,
+pub struct BytesEnd<'i> {
+    name: Cow<'i, str>,
 }
 
-impl<'a> BytesEnd<'a> {
+impl<'i> BytesEnd<'i> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(name: Cow<'a, str>) -> Self {
+    pub(crate) const fn wrap(name: Cow<'i, str>) -> Self {
         BytesEnd { name }
     }
 
@@ -399,7 +417,7 @@ impl<'a> BytesEnd<'a> {
     ///
     /// `name` must be a valid name.
     #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+    pub fn new<C: Into<Cow<'i, str>>>(name: C) -> Self {
         Self::wrap(name.into())
     }
 
@@ -434,7 +452,7 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-impl<'a> Debug for BytesEnd<'a> {
+impl<'i> Debug for BytesEnd<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesEnd {{ name: ")?;
         write_cow_string(f, &self.name)?;
@@ -442,7 +460,7 @@ impl<'a> Debug for BytesEnd<'a> {
     }
 }
 
-impl<'a> Deref for BytesEnd<'a> {
+impl<'i> Deref for BytesEnd<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -456,16 +474,16 @@ impl AsRef<str> for BytesEnd<'_> {
     }
 }
 
-impl<'a> From<QName<'a>> for BytesEnd<'a> {
+impl<'i> From<QName<'i>> for BytesEnd<'i> {
     #[inline]
-    fn from(name: QName<'a>) -> Self {
+    fn from(name: QName<'i>) -> Self {
         Self::wrap(Cow::Borrowed(name.into_inner()))
     }
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesEnd<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
@@ -505,17 +523,26 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
 /// [`Config::check_comments`]: crate::reader::Config::check_comments
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesText<'a> {
+pub struct BytesText<'i> {
     /// Escaped content of the event
-    content: Cow<'a, str>,
+    content: Cow<'i, str>,
 }
 
-impl<'a> BytesText<'a> {
+impl<'i> BytesText<'i> {
     /// Creates a new `BytesText` from a string as it appeared in the XML source.
     #[inline]
-    pub(crate) const fn wrap(content: &'a str) -> Self {
+    pub(crate) const fn wrap(content: &'i str) -> Self {
         Self {
             content: Cow::Borrowed(content),
         }
@@ -533,7 +560,7 @@ impl<'a> BytesText<'a> {
     ///
     /// [`xml_content()`]: Self::xml_content
     #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
+    pub fn from_escaped<C: Into<Cow<'i, str>>>(content: C) -> Self {
         Self {
             content: content.into(),
         }
@@ -556,7 +583,7 @@ impl<'a> BytesText<'a> {
     /// [`from_escaped()`]: Self::from_escaped
     /// [`xml_content()`]: Self::xml_content
     #[inline]
-    pub fn new(content: &'a str) -> Self {
+    pub fn new(content: &'i str) -> Self {
         Self::from_escaped(escape(content))
     }
 
@@ -571,7 +598,7 @@ impl<'a> BytesText<'a> {
 
     /// Extracts the inner `Cow` from the `BytesText` event container.
     #[inline]
-    pub fn into_inner(self) -> Cow<'a, str> {
+    pub fn into_inner(self) -> Cow<'i, str> {
         self.content
     }
 
@@ -595,7 +622,7 @@ impl<'a> BytesText<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Cow<'a, str> {
+    pub fn xml10_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
@@ -614,7 +641,7 @@ impl<'a> BytesText<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Cow<'a, str> {
+    pub fn xml11_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
@@ -626,7 +653,7 @@ impl<'a> BytesText<'a> {
     ///
     /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'i, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -635,7 +662,7 @@ impl<'a> BytesText<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Cow<'a, str> {
+    pub fn html_content(&self) -> Cow<'i, str> {
         self.xml10_content()
     }
 
@@ -659,7 +686,7 @@ impl<'a> BytesText<'a> {
     }
 }
 
-impl<'a> Debug for BytesText<'a> {
+impl<'i> Debug for BytesText<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesText {{ content: ")?;
         write_cow_string(f, &self.content)?;
@@ -667,7 +694,7 @@ impl<'a> Debug for BytesText<'a> {
     }
 }
 
-impl<'a> Deref for BytesText<'a> {
+impl<'i> Deref for BytesText<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -682,8 +709,8 @@ impl AsRef<str> for BytesText<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesText<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         let s = <&str>::arbitrary(u)?;
         if !s.chars().all(char::is_alphanumeric) {
             return Err(arbitrary::Error::IncorrectFormat);
@@ -718,15 +745,25 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 /// // deref coercion of &BytesCData to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
+///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesCData<'a> {
-    content: Cow<'a, str>,
+pub struct BytesCData<'i> {
+    content: Cow<'i, str>,
 }
 
-impl<'a> BytesCData<'a> {
+impl<'i> BytesCData<'i> {
     /// Creates a new `BytesCData` from a string.
     #[inline]
-    pub(crate) const fn wrap(content: &'a str) -> Self {
+    pub(crate) const fn wrap(content: &'i str) -> Self {
         Self {
             content: Cow::Borrowed(content),
         }
@@ -739,7 +776,7 @@ impl<'a> BytesCData<'a> {
     /// `content` must not contain the `]]>` sequence. You can use
     /// [`BytesCData::escaped`] to escape the content instead.
     #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+    pub fn new<C: Into<Cow<'i, str>>>(content: C) -> Self {
         Self {
             content: content.into(),
         }
@@ -778,7 +815,7 @@ impl<'a> BytesCData<'a> {
     /// ]);
     /// ```
     #[inline]
-    pub const fn escaped(content: &'a str) -> CDataIterator<'a> {
+    pub const fn escaped(content: &'i str) -> CDataIterator<'i> {
         CDataIterator {
             inner: utils::CDataIterator::new(content),
         }
@@ -795,7 +832,7 @@ impl<'a> BytesCData<'a> {
 
     /// Extracts the inner `Cow` from the `BytesCData` event container.
     #[inline]
-    pub fn into_inner(self) -> Cow<'a, str> {
+    pub fn into_inner(self) -> Cow<'i, str> {
         self.content
     }
 
@@ -819,7 +856,7 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     /// | `'`       | `&apos;`
     /// | `"`       | `&quot;`
-    pub fn escape(self) -> Result<BytesText<'a>, EncodingError> {
+    pub fn escape(self) -> Result<BytesText<'i>, EncodingError> {
         Ok(match self.content {
             Cow::Borrowed(s) => BytesText::from_escaped(escape(s)),
             Cow::Owned(s) => BytesText::from_escaped(escape(&s).into_owned()),
@@ -839,7 +876,7 @@ impl<'a> BytesCData<'a> {
     /// | `<`       | `&lt;`
     /// | `>`       | `&gt;`
     /// | `&`       | `&amp;`
-    pub fn partial_escape(self) -> Result<BytesText<'a>, EncodingError> {
+    pub fn partial_escape(self) -> Result<BytesText<'i>, EncodingError> {
         Ok(match self.content {
             Cow::Borrowed(s) => BytesText::from_escaped(partial_escape(s)),
             Cow::Owned(s) => BytesText::from_escaped(partial_escape(&s).into_owned()),
@@ -858,7 +895,7 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#syntax
-    pub fn minimal_escape(self) -> Result<BytesText<'a>, EncodingError> {
+    pub fn minimal_escape(self) -> Result<BytesText<'i>, EncodingError> {
         Ok(match self.content {
             Cow::Borrowed(s) => BytesText::from_escaped(minimal_escape(s)),
             Cow::Owned(s) => BytesText::from_escaped(minimal_escape(&s).into_owned()),
@@ -878,7 +915,7 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Cow<'a, str> {
+    pub fn xml10_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
@@ -898,7 +935,7 @@ impl<'a> BytesCData<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Cow<'a, str> {
+    pub fn xml11_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
@@ -910,7 +947,7 @@ impl<'a> BytesCData<'a> {
     ///
     /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'i, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -919,12 +956,12 @@ impl<'a> BytesCData<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Cow<'a, str> {
+    pub fn html_content(&self) -> Cow<'i, str> {
         self.xml10_content()
     }
 }
 
-impl<'a> Debug for BytesCData<'a> {
+impl<'i> Debug for BytesCData<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesCData {{ content: ")?;
         write_cow_string(f, &self.content)?;
@@ -932,7 +969,7 @@ impl<'a> Debug for BytesCData<'a> {
     }
 }
 
-impl<'a> Deref for BytesCData<'a> {
+impl<'i> Deref for BytesCData<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -947,8 +984,8 @@ impl AsRef<str> for BytesCData<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesCData<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
@@ -996,16 +1033,25 @@ impl FusedIterator for CDataIterator<'_> {}
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
 /// [PI]: https://www.w3.org/TR/xml11/#sec-pi
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesPI<'a> {
-    content: BytesStart<'a>,
+pub struct BytesPI<'i> {
+    content: BytesStart<'i>,
 }
 
-impl<'a> BytesPI<'a> {
+impl<'i> BytesPI<'i> {
     /// Creates a new `BytesPI` from a string.
     #[inline]
-    pub(crate) const fn wrap(content: &'a str, target_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'i str, target_len: usize) -> Self {
         Self {
             content: BytesStart::wrap(content, target_len),
         }
@@ -1017,8 +1063,8 @@ impl<'a> BytesPI<'a> {
     ///
     /// `content` must not contain the `?>` sequence.
     #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        let buf: Cow<'a, str> = content.into();
+    pub fn new<C: Into<Cow<'i, str>>>(content: C) -> Self {
+        let buf: Cow<'i, str> = content.into();
         let name_len = name_len(buf.as_bytes());
         Self {
             content: BytesStart { buf, name_len },
@@ -1036,7 +1082,7 @@ impl<'a> BytesPI<'a> {
 
     /// Extracts the inner `Cow` from the `BytesPI` event container.
     #[inline]
-    pub fn into_inner(self) -> Cow<'a, str> {
+    pub fn into_inner(self) -> Cow<'i, str> {
         self.content.buf
     }
 
@@ -1117,7 +1163,7 @@ impl<'a> BytesPI<'a> {
     }
 }
 
-impl<'a> Debug for BytesPI<'a> {
+impl<'i> Debug for BytesPI<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesPI {{ content: ")?;
         write_cow_string(f, &self.content.buf)?;
@@ -1125,7 +1171,7 @@ impl<'a> Debug for BytesPI<'a> {
     }
 }
 
-impl<'a> Deref for BytesPI<'a> {
+impl<'i> Deref for BytesPI<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -1140,8 +1186,8 @@ impl AsRef<str> for BytesPI<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesPI<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
@@ -1172,12 +1218,22 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
 /// // deref coercion of &BytesDecl to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
+///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesDecl<'a> {
-    content: BytesStart<'a>,
+pub struct BytesDecl<'i> {
+    content: BytesStart<'i>,
 }
 
-impl<'a> BytesDecl<'a> {
+impl<'i> BytesDecl<'i> {
     /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
     /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
     /// attribute.
@@ -1226,7 +1282,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub const fn from_start(start: BytesStart<'a>) -> Self {
+    pub const fn from_start(start: BytesStart<'i>) -> Self {
         Self { content: start }
     }
 
@@ -1472,7 +1528,7 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
-impl<'a> Deref for BytesDecl<'a> {
+impl<'i> Deref for BytesDecl<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -1487,8 +1543,8 @@ impl AsRef<str> for BytesDecl<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesDecl<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         Ok(Self::new(
             <&str>::arbitrary(u)?,
             Option::<&str>::arbitrary(u)?,
@@ -1520,15 +1576,25 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 /// // deref coercion of &BytesRef to &str
 /// assert_eq!(event.as_ref(), content);
 /// ```
+///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub struct BytesRef<'a> {
-    content: Cow<'a, str>,
+pub struct BytesRef<'i> {
+    content: Cow<'i, str>,
 }
 
-impl<'a> BytesRef<'a> {
+impl<'i> BytesRef<'i> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a str) -> Self {
+    pub(crate) const fn wrap(content: &'i str) -> Self {
         Self {
             content: Cow::Borrowed(content),
         }
@@ -1540,7 +1606,7 @@ impl<'a> BytesRef<'a> {
     ///
     /// `name` must be a valid name.
     #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+    pub fn new<C: Into<Cow<'i, str>>>(name: C) -> Self {
         Self {
             content: name.into(),
         }
@@ -1555,7 +1621,7 @@ impl<'a> BytesRef<'a> {
 
     /// Extracts the inner `Cow` from the `BytesRef` event container.
     #[inline]
-    pub fn into_inner(self) -> Cow<'a, str> {
+    pub fn into_inner(self) -> Cow<'i, str> {
         self.content
     }
 
@@ -1581,7 +1647,7 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml10_content(&self) -> Cow<'a, str> {
+    pub fn xml10_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml10_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml10_eols(s).into_owned()),
@@ -1600,7 +1666,7 @@ impl<'a> BytesRef<'a> {
     /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
     /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
     /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
-    pub fn xml11_content(&self) -> Cow<'a, str> {
+    pub fn xml11_content(&self) -> Cow<'i, str> {
         match &self.content {
             Cow::Borrowed(s) => normalize_xml11_eols(s),
             Cow::Owned(s) => Cow::Owned(normalize_xml11_eols(s).into_owned()),
@@ -1612,7 +1678,7 @@ impl<'a> BytesRef<'a> {
     ///
     /// This will allocate if EOL normalization is required.
     #[inline]
-    pub fn xml_content(&self, version: XmlVersion) -> Cow<'a, str> {
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'i, str> {
         match version {
             XmlVersion::Explicit1_1 => self.xml11_content(),
             _ => self.xml10_content(),
@@ -1621,7 +1687,7 @@ impl<'a> BytesRef<'a> {
 
     /// Alias for [`xml10_content()`](Self::xml10_content).
     #[inline]
-    pub fn html_content(&self) -> Cow<'a, str> {
+    pub fn html_content(&self) -> Cow<'i, str> {
         self.xml10_content()
     }
 
@@ -1664,7 +1730,7 @@ impl<'a> BytesRef<'a> {
     }
 }
 
-impl<'a> Debug for BytesRef<'a> {
+impl<'i> Debug for BytesRef<'i> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesRef {{ content: ")?;
         write_cow_string(f, &self.content)?;
@@ -1672,7 +1738,7 @@ impl<'a> Debug for BytesRef<'a> {
     }
 }
 
-impl<'a> Deref for BytesRef<'a> {
+impl<'i> Deref for BytesRef<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -1687,8 +1753,8 @@ impl AsRef<str> for BytesRef<'_> {
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesRef<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+impl<'i> arbitrary::Arbitrary<'i> for BytesRef<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
 
@@ -1701,36 +1767,45 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesRef<'a> {
 
 /// Event emitted by [`Reader::read_event_into`].
 ///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
+/// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub enum Event<'a> {
+pub enum Event<'i> {
     /// Start tag (with attributes) `<tag attr="value">`.
-    Start(BytesStart<'a>),
+    Start(BytesStart<'i>),
     /// End tag `</tag>`.
-    End(BytesEnd<'a>),
+    End(BytesEnd<'i>),
     /// Empty element tag (with attributes) `<tag attr="value" />`.
-    Empty(BytesStart<'a>),
+    Empty(BytesStart<'i>),
     /// Escaped character data between tags.
-    Text(BytesText<'a>),
+    Text(BytesText<'i>),
     /// Unescaped character data stored in `<![CDATA[...]]>`.
-    CData(BytesCData<'a>),
+    CData(BytesCData<'i>),
     /// Comment `<!-- ... -->`.
-    Comment(BytesText<'a>),
+    Comment(BytesText<'i>),
     /// XML declaration `<?xml ...?>`.
-    Decl(BytesDecl<'a>),
+    Decl(BytesDecl<'i>),
     /// Processing instruction `<?...?>`.
-    PI(BytesPI<'a>),
+    PI(BytesPI<'i>),
     /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
-    DocType(BytesText<'a>),
+    DocType(BytesText<'i>),
     /// General reference `&entity;` in the textual data. Can be either an entity
     /// reference, or a character reference.
-    GeneralRef(BytesRef<'a>),
+    GeneralRef(BytesRef<'i>),
     /// End of XML document.
     Eof,
 }
 
-impl<'a> Event<'a> {
+impl<'i> Event<'i> {
     /// Converts the event to an owned version, untied to the lifetime of
     /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
@@ -1768,7 +1843,7 @@ impl<'a> Event<'a> {
     }
 }
 
-impl<'a> Deref for Event<'a> {
+impl<'i> Deref for Event<'i> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -1787,8 +1862,8 @@ impl<'a> Deref for Event<'a> {
     }
 }
 
-impl<'a> AsRef<Event<'a>> for Event<'a> {
-    fn as_ref(&self) -> &Event<'a> {
+impl<'i> AsRef<Event<'i>> for Event<'i> {
+    fn as_ref(&self) -> &Event<'i> {
         self
     }
 }

@@ -20,6 +20,10 @@ use std::{borrow::Cow, ops::Range};
 /// Field `value` stores the raw attribute value, possibly containing escape-sequences.
 /// Most users will likely want to access the value using the [`normalized_value`] method.
 ///
+/// # Lifetime
+///
+/// `'a` is a lifetime of the owning event from which this attribute is derived.
+///
 /// [`normalized_value`]: Self::normalized_value
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Attribute<'a> {
@@ -417,6 +421,10 @@ impl<'a> From<Attr<&'a str>> for Attribute<'a> {
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// When [`serialize`] feature is enabled, can be converted to serde's deserializer.
+///
+/// # Lifetime
+///
+/// `'a` is a lifetime of the owning event from which this iterator is derived.
 ///
 /// [`with_checks(false)`]: Self::with_checks
 /// [`serialize`]: ../../index.html#serialize
