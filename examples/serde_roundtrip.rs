@@ -15,10 +15,13 @@
 //! |------------------------------|----------------------------------------------|
 //! | attribute `id="..."`         | `#[serde(rename = "@id")]`                    |
 //! | text inside an element       | `#[serde(rename = "$text")]`                  |
+//! | xs:choice as Rust enum       | `#[serde(rename = "$value")]`                 |
 //! | fields shared across types   | `#[serde(flatten)]` on a sub-struct           |
 //! | child element `<title>`      | a field named `title` (no prefix)             |
 //! | repeated child elements      | a `Vec<T>` field                              |
 //! | the element's own tag name   | chosen by the parent field / root, see below  |
+//!
+//! See [`Mapping XML to Rust types`] for more info.
 //!
 //! Types are converted for you: `available="true"` becomes a `bool`,
 //! `<price>39.95</price>` becomes an `f64`, and so on.
@@ -28,6 +31,8 @@
 //! ```console
 //! cargo run --example serde_roundtrip --features serialize
 //! ```
+//!
+//! [`Mapping XML to Rust types`]: https://docs.rs/quick-xml/latest/quick_xml/de/index.html#mapping-xml-to-rust-types
 
 use quick_xml::de::from_str;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
