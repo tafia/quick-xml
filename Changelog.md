@@ -14,10 +14,22 @@
 
 ## Unreleased
 
+### Breaking Changes
+
+### New Features
+
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.42.0 -- 2026-08-22
+
 This is a large release. The primary change is an ergonomic improvement across the entire API -
 quick_xml now makes use of `&str` and `String` types where possible instead of
 `&[u8]` and `Vec<u8>`. This requires significant refactoring of downstream code,
-but should result in a net simplification as well as potential performance improvements.
+but should result in a net simplification as well as potential performance improvements,
+and opens up additional opportunities in future releases.
 
 The MSRV has been raised to 1.86. We now use Rust 2024 Edition.
 
