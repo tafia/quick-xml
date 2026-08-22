@@ -1028,7 +1028,7 @@ impl FusedIterator for CDataIterator<'_> {}
 /// # use pretty_assertions::assert_eq;
 /// let mut reader = Reader::from_str("<!--comment -- -->");
 /// let content = "comment -- ";
-/// let event = BytesComment::new(content);
+/// let event = BytesComment::new(content).unwrap();
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
 /// // deref coercion of &BytesComment to &str
@@ -1047,7 +1047,145 @@ impl FusedIterator for CDataIterator<'_> {}
 ///
 /// [`Config::check_comments`]: crate::reader::Config::check_comments
 /// [`.into_owned()`]: Self::into_owned
-pub type BytesComment<'i> = BytesText<'i>;
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct BytesComment<'i> {
+    content: BytesText<'i>,
+}
+
+impl<'i> BytesComment<'i> {
+    /// Creates a new `BytesComment` from a string as it appeared in the XML source.
+    #[inline]
+    pub(crate) const fn wrap(content: &'i str) -> Self {
+        Self {
+            content: BytesText::wrap(content),
+        }
+    }
+
+    /// Creates a new comment from a string. Returns error if `content` contains the `-->` sequence,
+    /// with the position of `-->`.
+    ///
+    /// ```
+    /// # use quick_xml::events::BytesComment;
+    /// #
+    /// assert!(BytesComment::new("--").is_ok());
+    /// assert!(matches!(BytesComment::new("illegal -->"), Err(8)));
+    /// ```
+    #[inline]
+    pub fn new(content: &'i str) -> Result<Self, usize> {
+        match content.find("-->") {
+            Some(p) => Err(p),
+            None => Ok(Self::wrap(content)),
+        }
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesComment<'static> {
+        BytesComment {
+            content: self.content.into_owned(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesComment` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'i, str> {
+        self.content.into_inner()
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesComment<'_> {
+        BytesComment {
+            content: self.content.borrow(),
+        }
+    }
+
+    /// Returns the content of the XML 1.0 or HTML event with EOL normalization applied.
+    ///
+    /// This will allocate if EOL normalization is required.
+    ///
+    /// Note, that this method should be used only if event represents XML 1.0 or HTML content,
+    /// because rules for normalizing EOLs for [XML 1.0] / [HTML] and [XML 1.1] differs.
+    ///
+    /// This method also can be used to get HTML content, because rules the same.
+    ///
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
+    #[inline]
+    pub fn xml10_content(&self) -> Cow<'i, str> {
+        self.content.xml10_content()
+    }
+
+    /// Returns the content of the XML 1.1 event with EOL normalization applied.
+    ///
+    /// This will allocate if EOL normalization is required.
+    ///
+    /// Note, that this method should be used only if event represents XML 1.1 content,
+    /// because rules for normalizing EOLs for [XML 1.0], [XML 1.1] and [HTML] differs.
+    ///
+    /// To get HTML content use [`xml10_content()`](Self::xml10_content).
+    ///
+    /// [XML 1.0]: https://www.w3.org/TR/xml/#sec-line-ends
+    /// [XML 1.1]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [HTML]: https://html.spec.whatwg.org/#normalize-newlines
+    #[inline]
+    pub fn xml11_content(&self) -> Cow<'i, str> {
+        self.content.xml11_content()
+    }
+
+    /// Returns the content of the XML event with EOL normalization applied
+    /// according to the specified version.
+    ///
+    /// This will allocate if EOL normalization is required.
+    #[inline]
+    pub fn xml_content(&self, version: XmlVersion) -> Cow<'i, str> {
+        self.content.xml_content(version)
+    }
+
+    /// Alias for [`xml10_content()`](Self::xml10_content).
+    #[inline]
+    pub fn html_content(&self) -> Cow<'i, str> {
+        self.content.html_content()
+    }
+}
+
+impl<'i> Debug for BytesComment<'i> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesComment {{ content: ")?;
+        write_cow_string(f, &self.content.content)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'i> Deref for BytesComment<'i> {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.content
+    }
+}
+
+impl AsRef<str> for BytesComment<'_> {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'i> arbitrary::Arbitrary<'i> for BytesComment<'i> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'i>) -> arbitrary::Result<Self> {
+        let s = <&str>::arbitrary(u)?;
+        if !s.chars().all(char::is_alphanumeric) {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+        Self::new(s).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

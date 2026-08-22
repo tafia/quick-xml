@@ -100,8 +100,8 @@ mod syntax {
         syntax_err!(unclosed09(".<!--->") => SyntaxError::UnclosedComment);
         syntax_err!(unclosed10(".<!---c") => SyntaxError::UnclosedComment);
 
-        event_ok!(normal1("<!---->")     => 7: Event::Comment(BytesComment::new("")));
-        event_ok!(normal2("<!---->rest") => 7: Event::Comment(BytesComment::new("")));
+        event_ok!(normal1("<!---->")     => 7: Event::Comment(BytesComment::new("").unwrap()));
+        event_ok!(normal2("<!---->rest") => 7: Event::Comment(BytesComment::new("").unwrap()));
     }
 
     /// https://www.w3.org/TR/xml11/#NT-CDSect
@@ -645,7 +645,7 @@ mod ill_formed {
         found: "end".to_string(),
     });
 
-    event_ok!(double_hyphen_in_comment1("<!---->") => 7: Event::Comment(BytesComment::new("")));
+    event_ok!(double_hyphen_in_comment1("<!---->") => 7: Event::Comment(BytesComment::new("").unwrap()));
     err!(double_hyphen_in_comment2("<!----->") => 4: IllFormedError::DoubleHyphenInComment);
     //                                  ^= 4
     err!(double_hyphen_in_comment3("<!-- --->") => 5: IllFormedError::DoubleHyphenInComment);

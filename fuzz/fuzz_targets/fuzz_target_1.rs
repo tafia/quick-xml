@@ -42,7 +42,10 @@ where
                     }
                 }
             }
-            Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e)) | Ok(Event::DocType(ref e)) => {
+            Ok(Event::Text(ref e)) | Ok(Event::DocType(ref e)) => {
+                debug_format!(e);
+            }
+            Ok(Event::Comment(ref e)) => {
                 debug_format!(e);
             }
             Ok(Event::CData(e)) => {

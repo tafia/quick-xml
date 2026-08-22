@@ -609,7 +609,7 @@ mod read_to_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesComment::new("comment"))
+            Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_to_end(QName("root")).unwrap(),
@@ -953,7 +953,7 @@ mod read_to_end_into {
         );
         assert_eq!(
             reader.read_event_into(buf).unwrap(),
-            Comment(BytesComment::new("comment"))
+            Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_to_end_into(QName("root"), buf).unwrap(),
@@ -1299,7 +1299,7 @@ mod read_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesComment::new("comment"))
+            Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_text(QName("root")).unwrap(),
@@ -1646,7 +1646,7 @@ mod read_text_into {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Comment(BytesComment::new("comment"))
+            Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_text_into(QName("root"), &mut buf).unwrap(),

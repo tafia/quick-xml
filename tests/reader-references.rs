@@ -63,7 +63,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesComment::from_escaped(&format!("&{i};"))),
+                    Comment(BytesComment::new(&format!("&{i};")).unwrap()),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -205,7 +205,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesComment::from_escaped(&format!("&#{i:x};"))),
+                    Comment(BytesComment::new(&format!("&#{i:x};")).unwrap()),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -339,7 +339,7 @@ mod general_entity_reference {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesComment::from_escaped("&entity;")),
+            Comment(BytesComment::new("&entity;").unwrap()),
         );
     }
 
@@ -459,7 +459,7 @@ mod parameter_entity_reference {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesComment::from_escaped("%param;")),
+            Comment(BytesComment::new("%param;").unwrap()),
         );
     }
 

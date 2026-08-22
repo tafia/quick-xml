@@ -65,7 +65,10 @@ fn test_start_end_comment() {
         r.read_event().unwrap(),
         Empty(BytesStart::from_content("a  ", 1))
     );
-    assert_eq!(r.read_event().unwrap(), Comment(BytesComment::new("t")));
+    assert_eq!(
+        r.read_event().unwrap(),
+        Comment(BytesComment::new("t").unwrap())
+    );
     assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("b")));
 }
 
@@ -82,7 +85,10 @@ fn test_start_txt_end() {
 fn test_comment() {
     let mut r = Reader::from_str("<!--test-->");
 
-    assert_eq!(r.read_event().unwrap(), Comment(BytesComment::new("test")));
+    assert_eq!(
+        r.read_event().unwrap(),
+        Comment(BytesComment::new("test").unwrap())
+    );
 }
 
 #[test]

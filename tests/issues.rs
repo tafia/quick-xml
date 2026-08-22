@@ -279,7 +279,7 @@ mod issue604 {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesComment::from_escaped(">"))
+            Event::Comment(BytesComment::new(">").unwrap())
         );
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
@@ -297,7 +297,7 @@ mod issue604 {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesComment::from_escaped("->"))
+            Event::Comment(BytesComment::new("->").unwrap())
         );
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
