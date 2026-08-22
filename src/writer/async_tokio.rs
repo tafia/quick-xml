@@ -345,7 +345,7 @@ mod tests {
 
     test!(
         comment,
-        Event::Comment(BytesText::new("this is a comment")),
+        Event::Comment(BytesComment::new("this is a comment")),
         r#"<!--this is a comment-->"#
     );
 

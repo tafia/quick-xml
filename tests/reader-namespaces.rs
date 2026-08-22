@@ -2,7 +2,7 @@ use pretty_assertions::assert_eq;
 use quick_xml::events::Event::*;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{
-    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText,
+    BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText,
 };
 use quick_xml::name::ResolveResult::*;
 use quick_xml::name::{Namespace, PrefixDeclaration, QName};
@@ -609,7 +609,7 @@ mod read_to_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesText::new("comment"))
+            Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_to_end(QName("root")).unwrap(),
@@ -953,7 +953,7 @@ mod read_to_end_into {
         );
         assert_eq!(
             reader.read_event_into(buf).unwrap(),
-            Comment(BytesText::new("comment"))
+            Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_to_end_into(QName("root"), buf).unwrap(),
@@ -1299,7 +1299,7 @@ mod read_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesText::new("comment"))
+            Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_text(QName("root")).unwrap(),
@@ -1646,7 +1646,7 @@ mod read_text_into {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Comment(BytesText::new("comment"))
+            Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_text_into(QName("root"), &mut buf).unwrap(),
