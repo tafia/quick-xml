@@ -500,11 +500,9 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesEnd<'i> {
 /// Data from various events (most notably, `Event::Text`).
 ///
 /// This event implements `Deref<Target = str>`. The `deref()` implementation
-/// returns the content of this event. In case of comment this is everything
-/// between `<!--` and `-->` and the text of comment may not contain `-->` inside
-/// (if [`Config::check_comments`] is set to `true`).
-/// In case of DTD this is everything between `<!DOCTYPE` + spaces and closing `>`
-/// (i.e. in case of DTD the first character is never space):
+/// returns the content of this event. In case of DTD this is everything between
+/// `<!DOCTYPE` + spaces and closing `>` (i.e. in case of DTD the first character
+/// is never space):
 ///
 /// ```
 /// # use quick_xml::events::{BytesText, Event};
@@ -513,16 +511,14 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesEnd<'i> {
 /// // Remember, that \ at the end of string literal strips
 /// // all space characters to the first non-space character
 /// let mut reader = Reader::from_str("\
-///     <!DOCTYPE comment or text >\
-///     comment or text \
-///     <!--comment or text -->"
+///     <!DOCTYPE  text >\
+///     text "
 /// );
-/// let content = "comment or text ";
+/// let content = "text ";
 /// let event = BytesText::new(content);
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::DocType(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Text(event.borrow()));
-/// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
 /// // deref coercion of &BytesText to &str
 /// assert_eq!(&event as &str, content);
 /// // AsRef<str> for &T
@@ -537,7 +533,6 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesEnd<'i> {
 /// If such event need to outlive the single parsing loop iteration, take ownership of the data
 /// using [`.into_owned()`].
 ///
-/// [`Config::check_comments`]: crate::reader::Config::check_comments
 /// [`.into_owned()`]: Self::into_owned
 #[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub struct BytesText<'i> {
@@ -1018,6 +1013,41 @@ impl<'a> Iterator for CDataIterator<'a> {
 }
 
 impl FusedIterator for CDataIterator<'_> {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A data between `<!--` and `-->` of an XML comment.
+///
+/// This event implements `Deref<Target = str>`. The `deref()` implementation
+/// returns the content of this event. This is everything between `<!--` and `-->`
+/// and the text of comment may not contain `--` inside (when [`Config::check_comments`] is set to `true`).
+///
+/// ```
+/// # use quick_xml::events::{BytesComment, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<!--comment -- -->");
+/// let content = "comment -- ";
+/// let event = BytesComment::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
+/// // deref coercion of &BytesComment to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
+/// assert_eq!(event.as_ref(), content);
+/// ```
+///
+/// # Lifetime
+///
+/// `'i` (stands of "input") is a lifetime of the original buffer from which event was parsed.
+/// In particular, when reader was created from a string, this is lifetime of the string.
+/// If event come from a buffered reader, this is lifetime of the user-provided buffer.
+/// If such event need to outlive the single parsing loop iteration, take ownership of the data
+/// using [`.into_owned()`].
+///
+/// [`Config::check_comments`]: crate::reader::Config::check_comments
+/// [`.into_owned()`]: Self::into_owned
+pub type BytesComment<'i> = BytesText<'i>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1805,7 +1835,7 @@ pub enum Event<'i> {
     /// Unescaped character data stored in `<![CDATA[...]]>`.
     CData(BytesCData<'i>),
     /// Comment `<!-- ... -->`.
-    Comment(BytesText<'i>),
+    Comment(BytesComment<'i>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'i>),
     /// Processing instruction `<?...?>`.

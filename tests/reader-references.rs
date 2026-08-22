@@ -1,5 +1,6 @@
+use quick_xml::events::Event::*;
 use quick_xml::events::{
-    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event::*,
+    BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText,
 };
 use quick_xml::reader::Reader;
 
@@ -62,7 +63,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesText::from_escaped(&format!("&{i};"))),
+                    Comment(BytesComment::from_escaped(&format!("&{i};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -204,7 +205,7 @@ mod character_reference {
 
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Comment(BytesText::from_escaped(&format!("&#{i:x};"))),
+                    Comment(BytesComment::from_escaped(&format!("&#{i:x};"))),
                     "Character reference {i}=0x{i:x}: {input}"
                 );
             }
@@ -338,7 +339,7 @@ mod general_entity_reference {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesText::from_escaped("&entity;")),
+            Comment(BytesComment::from_escaped("&entity;")),
         );
     }
 
@@ -458,7 +459,7 @@ mod parameter_entity_reference {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Comment(BytesText::from_escaped("%param;")),
+            Comment(BytesComment::from_escaped("%param;")),
         );
     }
 

@@ -5,7 +5,9 @@ use std::fmt::Debug;
 use encoding_rs::UTF_8;
 
 use crate::errors::{Error, IllFormedError, Result};
-use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use crate::events::{
+    BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event,
+};
 use crate::parser::{Parser, PiParser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -136,7 +138,7 @@ impl ReaderState {
                         haystack = &haystack[p + 1..];
                     }
                 }
-                Ok(Event::Comment(BytesText::wrap(
+                Ok(Event::Comment(BytesComment::wrap(
                     // Cut of `<!--` and `-->` from start and end
                     &buf[4..len - 3],
                 )))

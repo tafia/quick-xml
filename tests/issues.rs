@@ -7,7 +7,7 @@ use std::iter;
 use std::sync::mpsc;
 
 use quick_xml::errors::{Error, IllFormedError, SyntaxError};
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesComment, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::{Namespace, QName, ResolveResult};
 use quick_xml::reader::{NsReader, Reader};
 use quick_xml::utils::Bytes;
@@ -279,7 +279,7 @@ mod issue604 {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesText::from_escaped(">"))
+            Event::Comment(BytesComment::from_escaped(">"))
         );
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
@@ -297,7 +297,7 @@ mod issue604 {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesText::from_escaped("->"))
+            Event::Comment(BytesComment::from_escaped("->"))
         );
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }

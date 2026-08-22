@@ -1,5 +1,6 @@
+use quick_xml::events::Event::*;
 use quick_xml::events::{
-    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event::*,
+    BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText,
 };
 use quick_xml::writer::Writer;
 
@@ -194,7 +195,7 @@ fn cdata() {
 fn comment() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Comment(BytesText::from_escaped(
+        .write_event(Comment(BytesComment::from_escaped(
             "Kerrigan & Raynor: The Z[erg] programming language",
         )))
         .expect("writing comment should succeed");

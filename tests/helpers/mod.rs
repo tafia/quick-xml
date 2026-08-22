@@ -10,7 +10,7 @@ macro_rules! small_buffers_tests {
         $(, $async:ident, $await:ident)?
     ) => {
         mod small_buffers {
-            use quick_xml::events::{BytesCData, BytesDecl, BytesPI, BytesStart, BytesText, Event};
+            use quick_xml::events::{BytesCData, BytesComment, BytesDecl, BytesPI, BytesStart, Event};
             use quick_xml::reader::Reader;
             use pretty_assertions::assert_eq;
 
@@ -120,7 +120,7 @@ macro_rules! small_buffers_tests {
 
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                    Event::Comment(BytesText::new("comment"))
+                    Event::Comment(BytesComment::new("comment"))
                 );
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -139,7 +139,7 @@ macro_rules! small_buffers_tests {
 
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                    Event::Comment(BytesText::new("comment"))
+                    Event::Comment(BytesComment::new("comment"))
                 );
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),

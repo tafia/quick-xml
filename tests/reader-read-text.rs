@@ -1,4 +1,6 @@
-use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use quick_xml::events::{
+    BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event,
+};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
@@ -114,7 +116,7 @@ mod borrowed {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new("comment"))
+            Event::Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_text(QName("root")).unwrap(),
@@ -431,7 +433,7 @@ mod buffered {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesText::new("comment"))
+            Event::Comment(BytesComment::new("comment"))
         );
         assert_eq!(
             reader.read_text_into(QName("root"), &mut buf).unwrap(),

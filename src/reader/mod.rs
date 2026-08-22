@@ -2086,7 +2086,7 @@ mod test {
 
             /// Ensures, that no empty `Text` events are generated
             mod $read_event {
-                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+                use crate::events::{BytesCData, BytesComment, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -2212,7 +2212,7 @@ mod test {
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Comment(BytesText::from_escaped(""))
+                        Event::Comment(BytesComment::from_escaped(""))
                     );
                 }
 

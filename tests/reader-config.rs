@@ -6,7 +6,9 @@
 //! Please keep tests sorted (exceptions are allowed if options are tightly related).
 
 use quick_xml::errors::{Error, IllFormedError};
-use quick_xml::events::{BytesCData, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event};
+use quick_xml::events::{
+    BytesCData, BytesComment, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event,
+};
 use quick_xml::reader::Reader;
 
 mod allow_dangling_amp {
@@ -137,7 +139,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(""))
+                Event::Comment(BytesComment::from_escaped(""))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -153,7 +155,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(" comment "))
+                Event::Comment(BytesComment::from_escaped(" comment "))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -169,7 +171,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(" comment -- "))
+                Event::Comment(BytesComment::from_escaped(" comment -- "))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -185,7 +187,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(" comment -"))
+                Event::Comment(BytesComment::from_escaped(" comment -"))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -201,7 +203,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(">"))
+                Event::Comment(BytesComment::from_escaped(">"))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -217,7 +219,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped("->"))
+                Event::Comment(BytesComment::from_escaped("->"))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -247,7 +249,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(""))
+                Event::Comment(BytesComment::from_escaped(""))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -263,7 +265,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(" comment "))
+                Event::Comment(BytesComment::from_escaped(" comment "))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -317,7 +319,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(">"))
+                Event::Comment(BytesComment::from_escaped(">"))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -333,7 +335,7 @@ mod check_comments {
 
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped("->"))
+                Event::Comment(BytesComment::from_escaped("->"))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -624,7 +626,7 @@ mod trim_text {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
+            Event::Comment(BytesComment::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -696,7 +698,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
+            Event::Comment(BytesComment::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -742,7 +744,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
+            Event::Comment(BytesComment::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -789,7 +791,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
+            Event::Comment(BytesComment::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -869,7 +871,7 @@ mod trim_text {
             );
             assert_eq!(
                 reader.read_event().unwrap(),
-                Event::Comment(BytesText::from_escaped(" comment "))
+                Event::Comment(BytesComment::from_escaped(" comment "))
             );
             assert_eq!(
                 reader.read_event().unwrap(),
