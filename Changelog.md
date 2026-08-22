@@ -25,8 +25,11 @@
 
 ### Misc Changes
 
+- [#1009]: Split of `BytesComment` from `BytesText`.
+
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
+[#1009]: https://github.com/tafia/quick-xml/pull/1009
 
 
 ## 0.42.0 -- 2026-08-22

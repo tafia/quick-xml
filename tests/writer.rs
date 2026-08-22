@@ -195,9 +195,9 @@ fn cdata() {
 fn comment() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Comment(BytesComment::from_escaped(
-            "Kerrigan & Raynor: The Z[erg] programming language",
-        )))
+        .write_event(Comment(
+            BytesComment::new("Kerrigan & Raynor: The Z[erg] programming language").unwrap(),
+        ))
         .expect("writing comment should succeed");
 
     let result = writer.into_inner();

@@ -2212,7 +2212,7 @@ mod test {
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Comment(BytesComment::from_escaped(""))
+                        Event::Comment(BytesComment::new("").unwrap())
                     );
                 }
 

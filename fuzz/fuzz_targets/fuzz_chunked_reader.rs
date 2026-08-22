@@ -50,7 +50,10 @@ fuzz_target!(|data: &[u8]| {
                     }
                 }
             }
-            Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e)) | Ok(Event::DocType(ref e)) => {
+            Ok(Event::Text(ref e)) | Ok(Event::DocType(ref e)) => {
+                let _ = black_box(e);
+            }
+            Ok(Event::Comment(ref e)) => {
                 let _ = black_box(e);
             }
             Ok(Event::CData(e)) => {

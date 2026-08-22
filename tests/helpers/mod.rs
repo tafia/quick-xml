@@ -120,7 +120,7 @@ macro_rules! small_buffers_tests {
 
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                    Event::Comment(BytesComment::new("comment"))
+                    Event::Comment(BytesComment::new("comment").unwrap())
                 );
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -139,7 +139,7 @@ macro_rules! small_buffers_tests {
 
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                    Event::Comment(BytesComment::new("comment"))
+                    Event::Comment(BytesComment::new("comment").unwrap())
                 );
                 assert_eq!(
                     reader.$read_event(&mut buf) $(.$await)? .unwrap(),

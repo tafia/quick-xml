@@ -116,7 +116,7 @@ mod borrowed {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesComment::new("comment"))
+            Event::Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_text(QName("root")).unwrap(),
@@ -433,7 +433,7 @@ mod buffered {
         );
         assert_eq!(
             reader.read_event_into(&mut buf).unwrap(),
-            Event::Comment(BytesComment::new("comment"))
+            Event::Comment(BytesComment::new("comment").unwrap())
         );
         assert_eq!(
             reader.read_text_into(QName("root"), &mut buf).unwrap(),
