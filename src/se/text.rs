@@ -1,8 +1,8 @@
 //! Contains serializer for a special `&text` field
 
 use crate::de::TEXT_KEY;
-use crate::se::simple_type::{SimpleSeq, SimpleTypeSerializer};
 use crate::se::SeError;
+use crate::se::simple_type::{SimpleSeq, SimpleTypeSerializer};
 use serde::ser::{Impossible, Serialize, Serializer};
 use std::fmt::Write;
 

@@ -1,4 +1,4 @@
-use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{self, Criterion, Throughput, criterion_group, criterion_main};
 use quick_xml::events::Event;
 use quick_xml::reader::{NsReader, Reader};
 use quick_xml::{Result as XmlResult, XmlVersion};

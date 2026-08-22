@@ -2,12 +2,12 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
+use crate::XmlVersion;
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape_attribute, resolve_predefined_entity};
 use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
 use crate::utils::is_whitespace;
-use crate::XmlVersion;
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -1296,9 +1296,9 @@ mod xml {
 
     mod attribute_value_normalization {
         use super::*;
+        use crate::XmlVersion::*;
         use crate::errors::Error;
         use crate::escape::EscapeError::*;
-        use crate::XmlVersion::*;
         use pretty_assertions::assert_eq;
 
         /// Empty values returned are unchanged

@@ -14,7 +14,7 @@
 //! [#969]: https://github.com/tafia/quick-xml/issues/969
 //! [#971]: https://github.com/tafia/quick-xml/pull/971
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 

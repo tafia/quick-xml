@@ -2106,13 +2106,13 @@ mod var;
 pub use self::attributes::AttributesDeserializer;
 pub use self::resolver::{EntityResolver, PredefinedEntityResolver};
 pub use self::simple_type::SimpleTypeDeserializer;
-pub use crate::errors::serialize::DeError;
 use crate::XmlVersion;
+pub use crate::errors::serialize::DeError;
 
 use crate::{
     de::map::ElementMapAccess,
     errors::Error,
-    escape::{parse_number, EscapeError},
+    escape::{EscapeError, parse_number},
     events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event},
     name::{NamespaceResolver, QName},
     reader::{NsReader, Reader},

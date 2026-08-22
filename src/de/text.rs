@@ -1,6 +1,6 @@
 use crate::{
     de::simple_type::SimpleTypeDeserializer,
-    de::{Text, TEXT_KEY},
+    de::{TEXT_KEY, Text},
     errors::serialize::DeError,
 };
 use serde::de::value::BorrowedStrDeserializer;

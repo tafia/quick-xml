@@ -3,7 +3,7 @@ use crate::{
     de::map::ElementMapAccess,
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
-    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY},
+    de::{DeEvent, Deserializer, TEXT_KEY, XmlRead},
     errors::serialize::DeError,
 };
 use serde::de::value::BorrowedStrDeserializer;

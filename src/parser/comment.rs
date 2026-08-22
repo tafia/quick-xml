@@ -143,8 +143,8 @@ fn seen2(bytes: &[u8]) -> Option<usize> {
 
 #[test]
 fn parse() {
-    use pretty_assertions::assert_eq;
     use CommentParser::*;
+    use pretty_assertions::assert_eq;
 
     /// Returns `Ok(pos)` with the position in the buffer where element is ended.
     ///

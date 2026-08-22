@@ -4,7 +4,7 @@
 
 use pretty_assertions::assert_eq;
 use quick_xml::de::{from_reader, from_str};
-use quick_xml::se::{to_string, to_string_with_root, Serializer};
+use quick_xml::se::{Serializer, to_string, to_string_with_root};
 use serde::de::{Deserializer, IgnoredAny};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -990,8 +990,8 @@ mod issue953 {
 /// a stack overflow. Tests are ordered: struct (general, then `$value`),
 /// enum (newtype, tuple, struct variant), then siblings.
 mod issue978 {
-    use quick_xml::de::Deserializer as XmlDeserializer;
     use quick_xml::DeError;
+    use quick_xml::de::Deserializer as XmlDeserializer;
     use serde::Deserialize;
 
     /// Generate XML like `<S><field><field>...</field></field></S>`.

@@ -5,11 +5,11 @@ use crate::{
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::text::TextDeserializer,
-    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
-    errors::serialize::DeError,
+    de::{DeEvent, Deserializer, TEXT_KEY, VALUE_KEY, XmlRead},
     errors::Error,
-    events::attributes::IterState,
+    errors::serialize::DeError,
     events::BytesStart,
+    events::attributes::IterState,
     name::QName,
 };
 use serde::de::value::BorrowedStrDeserializer;

@@ -1,9 +1,9 @@
 //! Cases that was found by fuzzing
 
+use quick_xml::XmlVersion;
 use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use quick_xml::XmlVersion;
 
 #[test]
 fn fuzz_53() {

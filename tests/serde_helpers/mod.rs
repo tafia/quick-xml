@@ -1,8 +1,8 @@
 //! Utility functions for serde integration tests
 
 use pretty_assertions::assert_eq;
-use quick_xml::de::Deserializer;
 use quick_xml::DeError;
+use quick_xml::de::Deserializer;
 use serde::Deserialize;
 
 /// Deserialize an instance of type T from a string of XML text.

@@ -425,8 +425,8 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
 #[cfg(test)]
 mod test {
-    use crate::reader::test::check;
     use crate::reader::XmlSource;
+    use crate::reader::test::check;
 
     /// Default buffer constructor just pass the byte array from the test
     fn identity<T>(input: T) -> T {

@@ -5,11 +5,11 @@ use std::borrow::Cow;
 use serde::de::{DeserializeSeed, Deserializer, Error, MapAccess, Visitor};
 use serde::forward_to_deserialize_any;
 
-use crate::de::key::QNameDeserializer;
+use crate::XmlVersion;
 use crate::de::SimpleTypeDeserializer;
+use crate::de::key::QNameDeserializer;
 use crate::errors::serialize::DeError;
 use crate::events::attributes::Attributes;
-use crate::XmlVersion;
 
 impl<'i> Attributes<'i> {
     /// Converts this iterator into a serde's [`MapAccess`] trait to use with serde.

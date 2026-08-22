@@ -482,9 +482,9 @@ impl<'w, 'i, W: Write> SerializeTupleStruct for Seq<'w, 'i, W> {
 pub(super) mod tests {
     use super::*;
     use crate::utils::Bytes;
+    use WriteResult::*;
     use serde::Serialize;
     use std::collections::BTreeMap;
-    use WriteResult::*;
 
     #[derive(Debug, Serialize, PartialEq)]
     pub struct Unit;

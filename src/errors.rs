@@ -152,7 +152,11 @@ impl fmt::Display for IllFormedError {
                 f.write_str("an XML declaration does not contain `version` attribute")
             }
             Self::MissingDeclVersion(Some(attr)) => {
-                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
+                write!(
+                    f,
+                    "an XML declaration must start with `version` attribute, but in starts with `{}`",
+                    attr
+                )
             }
             Self::UnknownVersion => {
                 f.write_str("unknown XML version: either 1.0 or 1.1 is expected")

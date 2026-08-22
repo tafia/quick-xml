@@ -26,9 +26,9 @@
 //! - `writer.rs` for producing XML
 //! - `examples/README.md` for a guide on which approach to choose
 
+use quick_xml::XmlVersion;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use quick_xml::XmlVersion;
 
 const XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <catalog>

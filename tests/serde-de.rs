@@ -1,11 +1,11 @@
+use quick_xml::DeError;
 use quick_xml::de::Deserializer;
 use quick_xml::utils::{ByteBuf, Bytes};
-use quick_xml::DeError;
 
 use pretty_assertions::assert_eq;
 
-use serde::de::IgnoredAny;
 use serde::Deserialize;
+use serde::de::IgnoredAny;
 
 mod serde_helpers;
 use serde_helpers::from_str;
@@ -1793,7 +1793,9 @@ mod borrow {
 
         #[test]
         fn attribute() {
-            match from_str::<BorrowedAttribute>(r#"<root string="with &quot;escape&quot; sequences"/>"#) {
+            match from_str::<BorrowedAttribute>(
+                r#"<root string="with &quot;escape&quot; sequences"/>"#,
+            ) {
                 Err(DeError::Custom(reason)) => assert_eq!(
                     reason,
                     "invalid type: string \"with \\\"escape\\\" sequences\", expected a borrowed string"

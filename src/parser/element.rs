@@ -91,8 +91,8 @@ impl Default for ElementParser {
 
 #[test]
 fn parse() {
-    use pretty_assertions::assert_eq;
     use ElementParser::*;
+    use pretty_assertions::assert_eq;
 
     /// Returns `Ok(pos)` with the position in the buffer where element is ended.
     ///

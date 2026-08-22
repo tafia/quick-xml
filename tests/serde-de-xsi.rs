@@ -1,8 +1,8 @@
 //! Tests for ensure behavior of `xsi:nil` handling.
 //!
 //! We want to threat element with `xsi:nil="true"` as `None` in optional contexts.
-use quick_xml::se::to_string;
 use quick_xml::DeError;
+use quick_xml::se::to_string;
 
 use serde::{Deserialize, Serialize};
 

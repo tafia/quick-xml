@@ -45,15 +45,15 @@ use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Deref;
 
+use crate::XmlVersion;
 use crate::encoding::EncodingError;
 use crate::errors::{Error, IllFormedError};
 use crate::escape::{
-    escape, minimal_escape, normalize_xml10_eols, normalize_xml11_eols, parse_number,
-    partial_escape, EscapeError,
+    EscapeError, escape, minimal_escape, normalize_xml10_eols, normalize_xml11_eols, parse_number,
+    partial_escape,
 };
 use crate::name::{LocalName, QName};
 use crate::utils::{self, name_len, trim_xml_end, trim_xml_start, write_cow_string};
-use crate::XmlVersion;
 use attributes::{AttrError, Attribute, Attributes};
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.

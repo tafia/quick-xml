@@ -73,7 +73,11 @@ impl fmt::Display for NamespaceError {
                 )
             }
             Self::InvalidPrefixForXml(prefix) => {
-                write!(f, "the namespace prefix '{}' cannot be bound to 'http://www.w3.org/XML/1998/namespace'", prefix)
+                write!(
+                    f,
+                    "the namespace prefix '{}' cannot be bound to 'http://www.w3.org/XML/1998/namespace'",
+                    prefix
+                )
             }
             Self::InvalidPrefixForXmlns(prefix) => {
                 write!(
@@ -1281,8 +1285,8 @@ impl<'a> FusedIterator for NamespaceBindingsOfLevelIter<'a> {}
 #[cfg(test)]
 mod namespaces {
     use super::*;
-    use pretty_assertions::assert_eq;
     use ResolveResult::*;
+    use pretty_assertions::assert_eq;
 
     /// Regression test for <https://github.com/tafia/quick-xml/issues/970>: a single element with
     /// many `xmlns:*` declarations must be rejected once the total binding count exceeds the limit.

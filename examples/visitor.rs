@@ -35,9 +35,9 @@
 //! cargo run --example visitor
 //! ```
 
+use quick_xml::XmlVersion;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;
-use quick_xml::XmlVersion;
 
 const XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <catalog>

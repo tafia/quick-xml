@@ -2,12 +2,12 @@
 // Note: for this specific data set using serde feature would simplify
 //       this simple data is purely to make it easier to understand the code
 
+use quick_xml::XmlVersion;
 use quick_xml::encoding::EncodingError;
 use quick_xml::events::attributes::AttrError;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
-use quick_xml::XmlVersion;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;

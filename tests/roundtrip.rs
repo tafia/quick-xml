@@ -1,11 +1,11 @@
 //! Contains tests that checks that writing events from a reader produces the same documents.
 
+use quick_xml::XmlVersion;
 use quick_xml::escape::unescape;
 use quick_xml::events::attributes::AttrError;
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-use quick_xml::XmlVersion;
 
 use pretty_assertions::assert_eq;
 

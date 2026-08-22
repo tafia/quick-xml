@@ -4,7 +4,8 @@ use std::borrow::Cow;
 use std::io::{self, Write};
 
 use crate::encoding::UTF8_BOM;
-use crate::events::{attributes::Attribute, BytesCData, BytesPI, BytesStart, BytesText, Event};
+use crate::events::attributes::Attribute;
+use crate::events::{BytesCData, BytesPI, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
 mod async_tokio;

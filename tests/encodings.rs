@@ -1,4 +1,4 @@
-use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1251};
+use encoding_rs::{UTF_8, UTF_16BE, UTF_16LE, WINDOWS_1251};
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event::*;
 use quick_xml::reader::Reader;

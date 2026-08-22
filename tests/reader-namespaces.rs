@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
-use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{
     BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText,
 };

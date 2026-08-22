@@ -6,10 +6,10 @@ fn main() -> Result<(), quick_xml::Error> {
     use std::fs::File;
     use std::io::BufReader;
 
+    use quick_xml::XmlVersion;
     use quick_xml::encoding::DecodingReader;
     use quick_xml::events::Event;
     use quick_xml::reader::Reader;
-    use quick_xml::XmlVersion;
 
     let file = File::open("tests/documents/encoding/utf16le-bom.xml")?;
     let transcoder = DecodingReader::new(BufReader::new(file));

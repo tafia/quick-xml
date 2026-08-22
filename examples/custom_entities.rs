@@ -13,12 +13,12 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 
+use quick_xml::XmlVersion;
 use quick_xml::errors::Error;
 use quick_xml::escape::EscapeError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
-use quick_xml::XmlVersion;
 use regex::Regex;
 
 use pretty_assertions::assert_eq;

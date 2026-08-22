@@ -1,4 +1,4 @@
-use criterion::{self, criterion_group, criterion_main, Criterion};
+use criterion::{self, Criterion, criterion_group, criterion_main};
 use pretty_assertions::assert_eq;
 use quick_xml::escape::{escape, unescape};
 use quick_xml::events::Event;
@@ -231,10 +231,11 @@ fn attributes(c: &mut Criterion) {
                                 count += 1
                             }
                         }
-                        assert!(e
-                            .try_get_attribute("attribute-that-doesn't-exist")
-                            .unwrap()
-                            .is_none());
+                        assert!(
+                            e.try_get_attribute("attribute-that-doesn't-exist")
+                                .unwrap()
+                                .is_none()
+                        );
                     }
                     Ok(Event::Eof) => break,
                     _ => (),

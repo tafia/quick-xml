@@ -3,11 +3,11 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
+use crate::XmlVersion;
 use crate::de::Text;
 use crate::errors::serialize::DeError;
 use crate::escape::resolve_predefined_entity;
-use crate::utils::{trim_xml_spaces, CowRef};
-use crate::XmlVersion;
+use crate::utils::{CowRef, trim_xml_spaces};
 use memchr::memchr;
 use serde::de::value::UnitDeserializer;
 use serde::de::{
@@ -741,8 +741,8 @@ impl<'de, 'a> IntoDeserializer<'de, DeError> for SimpleTypeDeserializer<'de, 'a>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
     use crate::se::QuoteLevel;
+    use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
     use serde::{Deserialize, Serialize};
