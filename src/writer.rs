@@ -9,6 +9,9 @@ use crate::events::{BytesCData, BytesPI, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
+mod pretty;
+
+pub use pretty::PrettyWriter;
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
 #[cfg(feature = "serialize")]
