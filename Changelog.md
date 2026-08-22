@@ -113,7 +113,7 @@ The MSRV has been raised to 1.86.
 - [#1002]: Added `Deserializer::resolver` and `Deserializer::resolver_mut` methods
   to get a namespace resolver used by this deserializer, because it no longer uses
   an `NsReader` internally.
-- [#1005]: Implement `Hash`, `PartialOrd`, and `Ord` across all `Bytes*` types.
+- [#1005]: Implement `Hash`, `PartialOrd`, and `Ord` for `BytesText` and `BytesCData` types.
 
 [#269]: https://github.com/tafia/quick-xml/issues/269
 [#331]: https://github.com/tafia/quick-xml/issues/331

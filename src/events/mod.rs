@@ -95,7 +95,7 @@ use attributes::{AttrError, Attribute, Attributes};
 /// [`local_name`]: Self::local_name
 /// [`attributes`]: Self::attributes
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'i> {
     /// content of the element
     pub(crate) buf: Cow<'i, str>,
@@ -399,7 +399,7 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesStart<'i> {
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'i> {
     name: Cow<'i, str>,
 }
@@ -1043,7 +1043,7 @@ impl FusedIterator for CDataIterator<'_> {}
 ///
 /// [PI]: https://www.w3.org/TR/xml11/#sec-pi
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesPI<'i> {
     content: BytesStart<'i>,
 }
@@ -1228,7 +1228,7 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesPI<'i> {
 /// using [`.into_owned()`].
 ///
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'i> {
     content: BytesStart<'i>,
 }
@@ -1586,7 +1586,7 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesDecl<'i> {
 /// using [`.into_owned()`].
 ///
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesRef<'i> {
     content: Cow<'i, str>,
 }
@@ -1777,7 +1777,7 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesRef<'i> {
 ///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
 /// [`.into_owned()`]: Self::into_owned
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Event<'i> {
     /// Start tag (with attributes) `<tag attr="value">`.
