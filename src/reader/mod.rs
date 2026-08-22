@@ -1241,7 +1241,7 @@ impl BangType {
                     }
                 }
             }
-            Self::DocType(ref mut parser) => return parser.feed(buf, chunk),
+            Self::DocType(parser) => return parser.feed(buf, chunk),
         }
         None
     }

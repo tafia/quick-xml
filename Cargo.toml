@@ -2,7 +2,7 @@
 name = "quick-xml"
 version = "0.41.0"
 description = "High performance xml reader and writer"
-edition = "2021"
+edition = "2024"
 
 documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"

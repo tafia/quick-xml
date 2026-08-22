@@ -967,7 +967,7 @@ impl IterState {
     fn skip_value(&self, slice: &[u8], offset: usize) -> Option<usize> {
         let mut iter = (offset..).zip(slice[offset..].iter());
 
-        match iter.find(|(_, &b)| is_whitespace(b)) {
+        match iter.find(|&(_, &b)| is_whitespace(b)) {
             // Input: `    key  =  value `
             //                     |    ^
             //                offset    e
@@ -985,7 +985,7 @@ impl IterState {
         let mut iter = (offset..).zip(slice[offset..].iter());
 
         // Skip all up to the quote and get the quote type
-        let quote = match iter.find(|(_, &b)| !is_whitespace(b)) {
+        let quote = match iter.find(|&(_, &b)| !is_whitespace(b)) {
             // Input: `    key  =  "`
             //                  |  ^
             //             offset
@@ -1005,7 +1005,7 @@ impl IterState {
             None => return None,
         };
 
-        match iter.find(|(_, &b)| b == quote) {
+        match iter.find(|&(_, &b)| b == quote) {
             // Input: `    key  =  "   "`
             //                         ^
             Some((e, b'"')) => Some(e),
@@ -1127,7 +1127,7 @@ impl IterState {
         };
 
         // Index where next key started
-        let start_key = match iter.find(|(_, &b)| !is_whitespace(b)) {
+        let start_key = match iter.find(|&(_, &b)| !is_whitespace(b)) {
             // Input: `    key`
             //             ^
             Some((s, _)) => s,
@@ -1140,7 +1140,7 @@ impl IterState {
             }
         };
         // Span of a key
-        let (key, offset) = match iter.find(|(_, &b)| b == b'=' || is_whitespace(b)) {
+        let (key, offset) = match iter.find(|&(_, &b)| b == b'=' || is_whitespace(b)) {
             // Input: `    key=`
             //             |  ^
             //             s  e
@@ -1148,7 +1148,7 @@ impl IterState {
 
             // Input: `    key `
             //                ^
-            Some((e, _)) => match iter.find(|(_, &b)| !is_whitespace(b)) {
+            Some((e, _)) => match iter.find(|&(_, &b)| !is_whitespace(b)) {
                 // Input: `    key  =`
                 //             |  | ^
                 //     start_key  e
@@ -1196,7 +1196,7 @@ impl IterState {
         ////////////////////////////////////////////////////////////////////////
 
         // Gets the position of quote and quote type
-        let (start_value, quote) = match iter.find(|(_, &b)| !is_whitespace(b)) {
+        let (start_value, quote) = match iter.find(|&(_, &b)| !is_whitespace(b)) {
             // Input: `    key  =  "`
             //                     ^
             Some((s, b'"')) => (s + 1, b'"'),
@@ -1211,7 +1211,7 @@ impl IterState {
                 // We do not check validity of attribute value characters as required
                 // according to https://html.spec.whatwg.org/#unquoted. It can be done
                 // during validation phase
-                let end = match iter.find(|(_, &b)| is_whitespace(b)) {
+                let end = match iter.find(|&(_, &b)| is_whitespace(b)) {
                     // Input: `    key  =  value `
                     //                     |    ^
                     //                     s    e
@@ -1240,7 +1240,7 @@ impl IterState {
             }
         };
 
-        match iter.find(|(_, &b)| b == quote) {
+        match iter.find(|&(_, &b)| b == quote) {
             // Input: `    key  =  "   "`
             //                         ^
             Some((e, b'"')) => self.double_q(key, start_value..e),

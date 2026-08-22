@@ -19,7 +19,7 @@ quick_xml now makes use of `&str` and `String` types where possible instead of
 `&[u8]` and `Vec<u8>`. This requires significant refactoring of downstream code,
 but should result in a net simplification as well as potential performance improvements.
 
-The MSRV has been raised to 1.86.
+The MSRV has been raised to 1.86. We now use Rust 2024 Edition.
 
 ### Breaking Changes
 
