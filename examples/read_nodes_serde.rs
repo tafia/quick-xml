@@ -43,26 +43,16 @@ const XML: &str = r#"
 <Config>
   <DefaultSettings Language="es" Greeting="HELLO"/>
   <Localization>
-    <Translation Tag="HELLO" Language="ja">
-      こんにちは
-    </Translation>
-    <Translation Tag="BYE" Language="ja">
-      さようなら
-    </Translation>
-    <Translation Tag="HELLO" Language="es">
-      Hola
-    </Translation>
-    <Translation Tag="BYE" Language="es">
-      Adiós
-    </Translation>
+    <Translation Tag="HELLO" Language="ja">こんにちは</Translation>
+    <Translation Tag="BYE" Language="ja">さようなら</Translation>
+    <Translation Tag="HELLO" Language="es">Hola</Translation>
+    <Translation Tag="BYE" Language="es">Adiós</Translation>
   </Localization>
 </Config>
 "#;
 
 const ONE_TRANSLATION_XML: &str = r#"
-    <Translation Tag="HELLO" Language="ja">
-      こんにちは
-    </Translation>
+    <Translation Tag="HELLO" Language="ja">こんにちは</Translation>
 "#;
 
 fn main() -> Result<(), quick_xml::DeError> {
