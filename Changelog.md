@@ -20,7 +20,13 @@
 
 ### Bug Fixes
 
+- [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
+  events except `BytesText` and `BytesCData`, which was introduced in [#1005].
+
 ### Misc Changes
+
+[#1005]: https://github.com/tafia/quick-xml/pull/1005
+[#1007]: https://github.com/tafia/quick-xml/pull/1007
 
 
 ## 0.42.0 -- 2026-08-22
