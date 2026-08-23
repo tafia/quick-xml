@@ -80,6 +80,8 @@ use attributes::{AttrError, Attribute, Attributes};
 /// assert_eq!(reader.read_event().unwrap(), Event::Empty(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Start(event.borrow()));
 /// // deref coercion of &BytesStart to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -385,6 +387,8 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesStart<'i> {
 /// assert_eq!(reader.read_event().unwrap(), Event::End(event.borrow()));
 /// assert_eq!(event.name().as_ref(), content);
 /// // deref coercion of &BytesEnd to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -520,6 +524,8 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesEnd<'i> {
 /// assert_eq!(reader.read_event().unwrap(), Event::Text(event.borrow()));
 /// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
 /// // deref coercion of &BytesText to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -743,6 +749,8 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesText<'i> {
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::CData(event.borrow()));
 /// // deref coercion of &BytesCData to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -1030,6 +1038,8 @@ impl FusedIterator for CDataIterator<'_> {}
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::PI(event.borrow()));
 /// // deref coercion of &BytesPI to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -1216,6 +1226,8 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesPI<'i> {
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
 /// // deref coercion of &BytesDecl to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
@@ -1574,6 +1586,8 @@ impl<'i> arbitrary::Arbitrary<'i> for BytesDecl<'i> {
 ///
 /// assert_eq!(reader.read_event().unwrap(), Event::GeneralRef(event.borrow()));
 /// // deref coercion of &BytesRef to &str
+/// assert_eq!(&event as &str, content);
+/// // AsRef<str> for &T
 /// assert_eq!(event.as_ref(), content);
 /// ```
 ///
