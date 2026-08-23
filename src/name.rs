@@ -5,7 +5,7 @@
 
 use crate::events::attributes::Attribute;
 use crate::events::{BytesStart, Event};
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
 
 /// Some namespace was invalid
@@ -53,7 +53,7 @@ pub enum NamespaceError {
 }
 
 impl fmt::Display for NamespaceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::UnknownPrefix(prefix) => {
                 write!(f, "unknown namespace prefix '{}'", prefix)
@@ -216,6 +216,14 @@ impl<'a> Debug for QName<'a> {
         write!(f, "QName({})", self.0)
     }
 }
+
+impl<'a> Display for QName<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
 impl<'a> AsRef<str> for QName<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
@@ -246,6 +254,12 @@ impl<'a> Debug for LocalName<'a> {
     }
 }
 
+impl<'a> Display for LocalName<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 impl<'a> AsRef<str> for LocalName<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
@@ -306,6 +320,13 @@ impl<'a> Prefix<'a> {
 impl<'a> Debug for Prefix<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Prefix({})", self.0)
+    }
+}
+
+impl<'a> Display for Prefix<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -383,6 +404,13 @@ impl<'a> Namespace<'a> {
 impl<'a> Debug for Namespace<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "Namespace({})", self.0)
+    }
+}
+
+impl<'a> Display for Namespace<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 
