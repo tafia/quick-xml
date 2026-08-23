@@ -25,11 +25,12 @@ fuzz_target!(|data: &[u8]| {
     // is not legal, and any capacity `>= data.len()` degenerates to the
     // Cursor case already covered by `fuzz_target_1`, so a small range is
     // both sufficient and the most efficient use of fuzz budget.
-    let Some((&cap_byte, xml)) = data.split_first() else { return };
+    let Some((&cap_byte, xml)) = data.split_first() else {
+        return;
+    };
     let capacity = (cap_byte as usize).max(1);
 
-    let mut reader =
-        Reader::from_reader(BufReader::with_capacity(capacity, Cursor::new(xml)));
+    let mut reader = Reader::from_reader(BufReader::with_capacity(capacity, Cursor::new(xml)));
     let mut buf = Vec::new();
     loop {
         // Touch the event payload enough to exercise the borrowed-data

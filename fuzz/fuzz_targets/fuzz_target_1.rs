@@ -2,7 +2,7 @@
 use libfuzzer_sys::fuzz_target;
 use std::hint::black_box;
 
-use quick_xml::{events::Event, reader::Reader, writer::Writer, XmlVersion};
+use quick_xml::{XmlVersion, events::Event, reader::Reader, writer::Writer};
 use std::io::Cursor;
 
 macro_rules! debug_format {
