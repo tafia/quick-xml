@@ -223,11 +223,11 @@ impl<R: BufRead> NsReader<R> {
     ///     match reader.read_resolved_event_into(&mut buf).unwrap() {
     ///         (Bound(Namespace("www.xxxx")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag1").into());
+    ///             assert_eq!(e.local_name(), "tag1");
     ///         }
     ///         (Bound(Namespace("www.yyyy")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag2").into());
+    ///             assert_eq!(e.local_name(), "tag2");
     ///         }
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
@@ -555,11 +555,11 @@ impl<'i> NsReader<&'i [u8]> {
     ///     match reader.read_resolved_event().unwrap() {
     ///         (Bound(Namespace("www.xxxx")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag1").into());
+    ///             assert_eq!(e.local_name(), "tag1");
     ///         }
     ///         (Bound(Namespace("www.yyyy")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag2").into());
+    ///             assert_eq!(e.local_name(), "tag2");
     ///         }
     ///         (_, Event::Start(_)) => unreachable!(),
     ///

@@ -267,6 +267,20 @@ impl<'a> AsRef<str> for LocalName<'a> {
     }
 }
 
+impl PartialEq<&str> for LocalName<'_> {
+    #[inline]
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<LocalName<'_>> for &str {
+    #[inline]
+    fn eq(&self, other: &LocalName<'_>) -> bool {
+        *self == other.0
+    }
+}
+
 impl<'a> From<QName<'a>> for LocalName<'a> {
     /// Creates `LocalName` from a [`QName`]
     ///
@@ -334,6 +348,20 @@ impl<'a> AsRef<str> for Prefix<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
         self.0
+    }
+}
+
+impl PartialEq<&str> for Prefix<'_> {
+    #[inline]
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<Prefix<'_>> for &str {
+    #[inline]
+    fn eq(&self, other: &Prefix<'_>) -> bool {
+        *self == other.0
     }
 }
 
@@ -418,6 +446,20 @@ impl<'a> AsRef<str> for Namespace<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
         self.0
+    }
+}
+
+impl PartialEq<&str> for Namespace<'_> {
+    #[inline]
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<Namespace<'_>> for &str {
+    #[inline]
+    fn eq(&self, other: &Namespace<'_>) -> bool {
+        *self == other.0
     }
 }
 
@@ -965,11 +1007,11 @@ impl NamespaceResolver {
     ///     match reader.resolver().resolve_event(event) {
     ///         (Bound(Namespace("www.xxxx")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag1").into());
+    ///             assert_eq!(e.local_name(), "tag1");
     ///         }
     ///         (Bound(Namespace("www.yyyy")), Event::Start(e)) => {
     ///             count += 1;
-    ///             assert_eq!(e.local_name(), QName("tag2").into());
+    ///             assert_eq!(e.local_name(), "tag2");
     ///         }
     ///         (_, Event::Start(_)) => unreachable!(),
     ///

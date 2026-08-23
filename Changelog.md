@@ -18,6 +18,9 @@
 
 ### New Features
 
+- [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
+- [#1011]: Implement `PartialEq<&str>` on `LocalName`, `Prefix` and `Namespace`.
+
 ### Bug Fixes
 
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
@@ -31,6 +34,8 @@
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 
+[#1010]: https://github.com/tafia/quick-xml/pull/1010
+[#1011]: https://github.com/tafia/quick-xml/pull/1011
 
 ## 0.42.0 -- 2026-08-22
 
