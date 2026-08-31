@@ -1,6 +1,6 @@
 //! Manage xml character escapes
 
-use memchr::{memchr, memchr2_iter, memchr3};
+use memchr::{memchr, memchr2, memchr2_iter, memchr3};
 use std::borrow::Cow;
 use std::fmt::{self, Write};
 use std::num::ParseIntError;
@@ -104,10 +104,53 @@ impl std::error::Error for EscapeError {
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
 /// | `\r`      | `&#13;`
+#[inline]
+fn find_escape6(bytes: &[u8]) -> Option<usize> {
+    let a = memchr3(b'<', b'>', b'&', bytes);
+    let b = memchr3(b'\'', b'"', b'\r', bytes);
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.min(y)),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    }
+}
+#[inline]
+fn find_escape4(bytes: &[u8]) -> Option<usize> {
+    let a = memchr3(b'<', b'>', b'&', bytes);
+    let b = memchr(b'\r', bytes);
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.min(y)),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    }
+}
+#[inline]
+fn find_escape3(bytes: &[u8]) -> Option<usize> {
+    memchr3(b'<', b'&', b'\r', bytes)
+}
+#[inline]
+fn find_escape8(bytes: &[u8]) -> Option<usize> {
+    let a = memchr3(b'<', b'>', b'&', bytes);
+    let b = memchr3(b'\'', b'"', b'\r', bytes);
+    let c = memchr2(b'\n', b'\t', bytes);
+    let ab = match (a, b) {
+        (Some(x), Some(y)) => Some(x.min(y)),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    };
+    match (ab, c) {
+        (Some(x), Some(y)) => Some(x.min(y)),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    }
+}
+
 pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| {
-        matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r')
-    })
+    _escape_with(raw, find_escape6)
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
@@ -126,7 +169,7 @@ pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `&`       | `&amp;`
 /// | `\r`      | `&#13;`
 pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\r'))
+    _escape_with(raw, find_escape4)
 }
 
 /// XML standard [requires] that only `<` and `&` was escaped in text content or
@@ -145,7 +188,7 @@ pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 ///
 /// [requires]: https://www.w3.org/TR/xml11/#syntax
 pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'&' | b'\r'))
+    _escape_with(raw, find_escape3)
 }
 
 /// Escapes a `&str` for use in an XML attribute value. In addition to the
@@ -165,12 +208,7 @@ pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `\n`      | `&#10;`
 /// | `\t`      | `&#9;`
 pub(crate) fn escape_attribute<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| {
-        matches!(
-            ch,
-            b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r' | b'\n' | b'\t'
-        )
-    })
+    _escape_with(raw, find_escape8)
 }
 
 pub(crate) fn escape_char<W>(writer: &mut W, value: &str, from: usize, to: usize) -> fmt::Result
@@ -215,6 +253,32 @@ fn _escape<'a, F: Fn(u8) -> bool>(raw: impl Into<Cow<'a, str>>, escape_chars: F)
         pos = new_pos + 1;
     }
 
+    if let Some(mut escaped) = escaped {
+        if let Some(raw) = raw.get(pos..) {
+            // SAFETY: It should fail only on OOM
+            escaped.write_str(raw).unwrap();
+        }
+        Cow::Owned(escaped)
+    } else {
+        raw
+    }
+}
+
+fn _escape_with<'a>(raw: impl Into<Cow<'a, str>>, find: fn(&[u8]) -> Option<usize>) -> Cow<'a, str> {
+    let raw = raw.into();
+    let bytes = raw.as_bytes();
+    let mut escaped = None;
+    let mut pos = 0;
+    while let Some(i) = find(&bytes[pos..]) {
+        if escaped.is_none() {
+            escaped = Some(String::with_capacity(raw.len()));
+        }
+        let escaped = escaped.as_mut().expect("initialized");
+        let new_pos = pos + i;
+        // SAFETY: It should fail only on OOM
+        escape_char(escaped, &raw, pos, new_pos).unwrap();
+        pos = new_pos + 1;
+    }
     if let Some(mut escaped) = escaped {
         if let Some(raw) = raw.get(pos..) {
             // SAFETY: It should fail only on OOM
