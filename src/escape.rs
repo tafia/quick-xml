@@ -104,6 +104,7 @@ impl std::error::Error for EscapeError {
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
 /// | `\r`      | `&#13;`
+#[allow(missing_docs)]
 #[inline]
 fn find_escape6(bytes: &[u8]) -> Option<usize> {
     let a = memchr3(b'<', b'>', b'&', bytes);
@@ -115,6 +116,7 @@ fn find_escape6(bytes: &[u8]) -> Option<usize> {
         (None, None) => None,
     }
 }
+#[allow(missing_docs)]
 #[inline]
 fn find_escape4(bytes: &[u8]) -> Option<usize> {
     let a = memchr3(b'<', b'>', b'&', bytes);
@@ -126,10 +128,12 @@ fn find_escape4(bytes: &[u8]) -> Option<usize> {
         (None, None) => None,
     }
 }
+#[allow(missing_docs)]
 #[inline]
 fn find_escape3(bytes: &[u8]) -> Option<usize> {
     memchr3(b'<', b'&', b'\r', bytes)
 }
+#[allow(missing_docs)]
 #[inline]
 fn find_escape8(bytes: &[u8]) -> Option<usize> {
     let a = memchr3(b'<', b'>', b'&', bytes);
@@ -264,6 +268,7 @@ fn _escape<'a, F: Fn(u8) -> bool>(raw: impl Into<Cow<'a, str>>, escape_chars: F)
     }
 }
 
+#[allow(missing_docs)]
 fn _escape_with<'a>(raw: impl Into<Cow<'a, str>>, find: fn(&[u8]) -> Option<usize>) -> Cow<'a, str> {
     let raw = raw.into();
     let bytes = raw.as_bytes();
