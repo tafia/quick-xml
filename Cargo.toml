@@ -74,9 +74,9 @@ harness = false
 path = "benches/issue971.rs"
 
 [[bench]]
-name = "issue718"
+name = "simd_vs_scalar"
 harness = false
-path = "benches/issue718.rs"
+path = "benches/simd_vs_scalar.rs"
 
 [features]
 default = []
