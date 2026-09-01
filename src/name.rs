@@ -287,6 +287,23 @@ impl<'a> From<QName<'a>> for LocalName<'a> {
     }
 }
 
+impl<'a> From<LocalName<'a>> for QName<'a> {
+    /// Creates `QName` from a [`LocalName`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use quick_xml::name::{LocalName, QName};
+    ///
+    /// let local: LocalName = QName("unprefixed").into();
+    /// assert_eq!(QName::from(local), QName("unprefixed"));
+    /// ```
+    #[inline]
+    fn from(name: LocalName<'a>) -> Self {
+        Self(name.0)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A [namespace prefix] part of the [qualified name](QName) of an element tag
