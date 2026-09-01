@@ -154,7 +154,7 @@ impl std::error::Error for EscapeError {
 /// | `"`       | `&quot;`
 /// | `\r`      | `&#13;`
 pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, find_escape6)
+    _escape(raw.into(), find_escape6)
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
@@ -173,7 +173,7 @@ pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `&`       | `&amp;`
 /// | `\r`      | `&#13;`
 pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, find_escape4)
+    _escape(raw.into(), find_escape4)
 }
 
 /// XML standard [requires] that only `<` and `&` was escaped in text content or
@@ -192,7 +192,7 @@ pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 ///
 /// [requires]: https://www.w3.org/TR/xml11/#syntax
 pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, find_escape3)
+    _escape(raw.into(), find_escape3)
 }
 
 /// Escapes a `&str` for use in an XML attribute value. In addition to the
@@ -212,7 +212,7 @@ pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `\n`      | `&#10;`
 /// | `\t`      | `&#9;`
 pub(crate) fn escape_attribute<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, find_escape8)
+    _escape(raw.into(), find_escape8)
 }
 
 pub(crate) fn escape_char<W>(writer: &mut W, value: &str, from: usize, to: usize) -> fmt::Result
@@ -239,8 +239,10 @@ where
 }
 
 /// Escapes an `&str` using SIMD search `find` to locate next char needing escape.
-fn _escape<'a>(raw: impl Into<Cow<'a, str>>, find: fn(&[u8]) -> Option<usize>) -> Cow<'a, str> {
-    let raw = raw.into();
+fn _escape<'a, F>(raw: Cow<'a, str>, find: F) -> Cow<'a, str>
+where
+    F: Fn(&[u8]) -> Option<usize>,
+{
     let bytes = raw.as_bytes();
     let mut escaped = None;
     let mut pos = 0;
