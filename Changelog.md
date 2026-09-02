@@ -19,7 +19,7 @@
 ### New Features
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
-- [#1011]: Implement `From<LocalName>` on `QName`.
+- [#1015]: Implement `From<LocalName>` on `QName`.
 
 ### Bug Fixes
 
