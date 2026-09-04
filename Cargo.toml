@@ -73,6 +73,11 @@ name = "issue971"
 harness = false
 path = "benches/issue971.rs"
 
+[[bench]]
+name = "simd_vs_scalar"
+harness = false
+path = "benches/simd_vs_scalar.rs"
+
 [features]
 default = []
 
