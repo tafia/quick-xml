@@ -249,7 +249,8 @@ impl<'a> Attribute<'a> {
     ///
     /// # Deprecation
     ///
-    /// Use [`normalized_value()`](Self::normalized_value) instead.
+    /// Use [`normalized_value()`](Self::normalized_value) instead with
+    /// argument `XmlVersion::Implicit1_0`.
     ///
     /// Escape sequences such as `&gt;` are replaced with their unescaped
     /// equivalents such as `>`.
@@ -260,7 +261,7 @@ impl<'a> Attribute<'a> {
     ///
     /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
-    #[deprecated = "use `Self::normalized_value()`"]
+    #[deprecated = "use `Self::normalized_value(XmlVersion::Implicit1_0)`"]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         // resolve_predefined_entity returns only non-recursive replacements, so depth=1 is enough
         self.normalized_value_with(XmlVersion::Implicit1_0, 1, resolve_predefined_entity)
@@ -270,7 +271,8 @@ impl<'a> Attribute<'a> {
     ///
     /// # Deprecation
     ///
-    /// Use [`normalized_value_with()`](Self::normalized_value_with) instead.
+    /// Use [`normalized_value_with()`](Self::normalized_value_with) instead
+    /// with parameters with arguments `XmlVersion::Implicit1_0` and `128`.
     ///
     /// Escape sequences such as `&gt;` are replaced with their unescaped
     /// equivalents such as `>`. A fallback resolver for additional custom
@@ -282,7 +284,7 @@ impl<'a> Attribute<'a> {
     ///
     /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
-    #[deprecated = "use `Self::normalized_value_with()`"]
+    #[deprecated = "use `Self::normalized_value_with(XmlVersion::Implicit1_0, 128, resolve_entity)`"]
     #[inline]
     pub fn unescape_value_with<'entity>(
         &self,
@@ -296,10 +298,11 @@ impl<'a> Attribute<'a> {
     /// # Deprecation
     ///
     /// Attribute values are now always stored as valid UTF-8 strings, so decoding
-    /// is no longer needed. Use [`normalized_value()`](Self::normalized_value) instead.
+    /// is no longer needed. Use [`normalized_value()`](Self::normalized_value)
+    /// instead with argument `XmlVersion::Implicit1_0`.
     ///
     /// This will allocate if the value contains any escape sequences.
-    #[deprecated = "decoding is no longer needed, use `Self::normalized_value()` instead"]
+    #[deprecated = "decoding is no longer needed, use `Self::normalized_value(XmlVersion::Implicit1_0)` instead"]
     #[inline]
     pub fn decode_and_unescape_value(&self, _decoder: Decoder) -> XmlResult<Cow<'a, str>> {
         self.normalized_value(XmlVersion::Implicit1_0)
@@ -310,10 +313,11 @@ impl<'a> Attribute<'a> {
     /// # Deprecation
     ///
     /// Attribute values are now always stored as valid UTF-8 strings, so decoding
-    /// is no longer needed. Use [`normalized_value_with()`](Self::normalized_value_with) instead.
+    /// is no longer needed. Use [`normalized_value_with()`](Self::normalized_value_with)
+    /// instead with arguments `XmlVersion::Implicit1_0` and `128`.
     ///
     /// This will allocate if the value contains any escape sequences.
-    #[deprecated = "decoding is no longer needed, use `Self::normalized_value_with()` instead"]
+    #[deprecated = "decoding is no longer needed, use `Self::normalized_value_with(XmlVersion::Implicit1_0, 128, resolve_entity)` instead"]
     #[inline]
     pub fn decode_and_unescape_value_with<'entity>(
         &self,
