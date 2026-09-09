@@ -25,6 +25,9 @@
 
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
+- [#1017]: Fix panic and wrong output when the indent character is not ASCII.
+  `Indentation` used a character count as a byte index into its indent buffer, and
+  `Serializer::indent` truncated its `char` argument with `as u8`.
 
 ### Misc Changes
 
@@ -35,6 +38,7 @@
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
+[#1017]: https://github.com/tafia/quick-xml/pull/1017
 
 
 ## 0.42.0 -- 2026-08-22

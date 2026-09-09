@@ -550,3 +550,170 @@ mod in_attributes_multi {
         );
     }
 }
+
+/// `Writer::new_with_indent` converts the indent byte with `char::from`, so bytes
+/// above 0x7F select a character that is two bytes long in UTF-8.
+mod multi_byte_indent_char {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// NO-BREAK SPACE is `char::from(0xA0)` and occupies two bytes in UTF-8.
+    const NBSP: char = '\u{a0}';
+
+    #[test]
+    fn nested() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, 0xA0, 2);
+
+        let start = BytesStart::new("paired");
+        let end = start.to_end().into_owned();
+
+        writer
+            .write_event(Event::Start(start.clone()))
+            .expect("write start 1 tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start 2 tag failed");
+        writer
+            .write_event(Event::Empty(BytesStart::new("inner")))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(end.clone()))
+            .expect("write end tag 2 failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag 1 failed");
+
+        let i = NBSP.to_string().repeat(2);
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            format!(
+                "<paired>\n{i}<paired>\n{i}{i}<inner/>\n{i}</paired>\n</paired>",
+                i = i
+            )
+        );
+    }
+
+    #[test]
+    fn in_attributes() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, 0xA0, 2);
+
+        writer
+            .create_element("element")
+            .new_line()
+            .with_attribute(("first", "1"))
+            .write_empty()
+            .expect("write tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            format!("<element\n{i}first=\"1\"/>", i = NBSP.to_string().repeat(2))
+        );
+    }
+
+    /// An odd `indent_size` makes the byte length of one level an odd number,
+    /// which used to land in the middle of a two byte character and panic.
+    #[test]
+    fn odd_indent_size() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, 0xA0, 1);
+
+        let start = BytesStart::new("paired");
+        writer
+            .write_event(Event::Start(start.clone()))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::Empty(BytesStart::new("inner")))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(start.to_end()))
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            format!("<paired>\n{i}<inner/>\n</paired>", i = NBSP)
+        );
+    }
+
+    /// Attribute indent is added on top of the current element indent, so the
+    /// conversion must apply to the added level only, not to the sum.
+    #[test]
+    fn in_attributes_nested() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, 0xA0, 2);
+
+        let outer = BytesStart::new("outer");
+        writer
+            .write_event(Event::Start(outer.clone()))
+            .expect("write outer tag failed");
+        writer
+            .create_element("element")
+            .new_line()
+            .with_attribute(("first", "1"))
+            .write_empty()
+            .expect("write tag failed");
+        writer
+            .write_event(Event::End(outer.to_end()))
+            .expect("write end tag failed");
+
+        let i = NBSP.to_string();
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            format!(
+                "<outer>\n{i2}<element\n{i4}first=\"1\"/>\n</outer>",
+                i2 = i.repeat(2),
+                i4 = i.repeat(4)
+            )
+        );
+    }
+
+    /// ASCII indents must keep working exactly as before.
+    #[test]
+    fn ascii_is_unchanged() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
+
+        let start = BytesStart::new("paired");
+        writer
+            .write_event(Event::Start(start.clone()))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::Empty(BytesStart::new("inner")))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(start.to_end()))
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            "<paired>\n  <inner/>\n</paired>"
+        );
+    }
+
+    /// `Serializer::indent` takes a `char`, so it must not be truncated to a byte.
+    #[cfg(feature = "serialize")]
+    #[test]
+    fn serializer_indent_char_is_not_truncated() {
+        use quick_xml::se::Serializer;
+        use serde::Serialize;
+
+        #[derive(Serialize)]
+        struct Response {
+            message: &'static str,
+        }
+
+        // IDEOGRAPHIC SPACE: three bytes in UTF-8, `as u8` truncates it to NUL.
+        let mut output = String::new();
+        let mut serializer = Serializer::with_root(&mut output, Some("response")).unwrap();
+        serializer.indent('\u{3000}', 2);
+        Response { message: "Success" }
+            .serialize(serializer)
+            .unwrap();
+
+        assert_eq!(
+            output,
+            "<response>\n\u{3000}\u{3000}<message>Success</message>\n</response>"
+        );
+    }
+}
