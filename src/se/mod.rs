@@ -817,7 +817,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// );
     /// ```
     pub fn indent(&mut self, indent_char: char, indent_size: usize) -> &mut Self {
-        self.ser.indent = Indent::Owned(Indentation::new(indent_char as u8, indent_size));
+        self.ser.indent = Indent::Owned(Indentation::with_char(indent_char, indent_size));
         self
     }
 
