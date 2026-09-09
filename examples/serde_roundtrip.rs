@@ -158,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and hand each value to `write_serializable`. Here we emit the `<catalog>`
     // wrapper manually and serialize each `Book` into it. The serialized structs
     // pick up the writer's indentation settings automatically.
-    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
+    let mut writer = Writer::new_with_indent(Vec::new(), ' ', 4);
     writer.write_event(Event::Start(BytesStart::new("catalog")))?;
     for book in &catalog.book {
         writer.write_serializable("book", book)?;

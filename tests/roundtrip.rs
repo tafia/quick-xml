@@ -197,7 +197,7 @@ fn with_indent() {
     let input = include_str!("documents/test_writer_indent.xml");
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
+    let mut writer = Writer::new_with_indent(Vec::new(), ' ', 4);
     loop {
         match reader.read_event().unwrap() {
             Eof => break,
@@ -217,7 +217,7 @@ fn with_indent_cdata() {
     let input = include_str!("documents/test_writer_indent_cdata.xml");
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
+    let mut writer = Writer::new_with_indent(Vec::new(), ' ', 4);
     loop {
         match reader.read_event().unwrap() {
             Eof => break,

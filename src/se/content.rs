@@ -1076,7 +1076,7 @@ pub(super) mod tests {
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
-                        indent: Indent::Owned(Indentation::new(b' ', 2)),
+                        indent: Indent::Owned(Indentation::new(' ', 2)),
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,
@@ -1100,7 +1100,7 @@ pub(super) mod tests {
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
-                        indent: Indent::Owned(Indentation::new(b' ', 2)),
+                        indent: Indent::Owned(Indentation::new(' ', 2)),
                         write_indent: false,
                         text_format: TextFormat::Text,
                         allow_primitive: true,

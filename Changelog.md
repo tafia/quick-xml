@@ -20,6 +20,7 @@
   It is implemented for `String` only. If you use another `std::fmt::Write` implementation,
   implement new trait for it or use forwarding wrapper. To write to `std::io::Write`
   a `quick_xml::se::Utf8Writer` is provided, as well as existing `quick_xml::se::to_utf8_io_writer()`.
+- [#1017]: `Writer::new_with_indent` now accepts indent char as a `char` instead of `u8`.
 - [#1031]: Async writing methods on `Writer` now returns `tokio::io::Result` instead of `quick_xml::Result`.
   That corresponds to how non-async writing methods returns `io::Result`.
   `quick_xml::Error` used only for reader errors in the rest of library.
@@ -37,6 +38,9 @@
 
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
+- [#1017]: Fix panic and wrong output when the indent character is not ASCII.
+  `Indentation` used a character count as a byte index into its indent buffer, and
+  `Serializer::indent` truncated its `char` argument with `as u8`.
 - [#1023]: `DecodingReader` now decodes content that follows the XML declaration using the
   declared encoding even when that content falls within the first 64 bytes of the input.
   Previously such bytes were decoded with the default UTF-8 decoder before `set_encoding()`
@@ -76,6 +80,7 @@
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
+[#1017]: https://github.com/tafia/quick-xml/pull/1017
 [#1023]: https://github.com/tafia/quick-xml/pull/1023
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
