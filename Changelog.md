@@ -20,6 +20,9 @@
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
 - [#1015]: Implement `From<LocalName>` on `QName`.
+- [#1020]: Add `Deserializer::overlapped_lists()` to disable buffering of unrelated
+  events for a particular deserializer when the `overlapped-lists` feature is enabled
+  by another crate in the dependency tree.
 
 ### Bug Fixes
 
@@ -35,6 +38,7 @@
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
+[#1020]: https://github.com/tafia/quick-xml/pull/1020
 
 
 ## 0.42.0 -- 2026-08-22

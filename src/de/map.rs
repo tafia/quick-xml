@@ -954,14 +954,20 @@ where
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
                 DeEvent::Start(e) if !self.filter.is_suitable(e)? => {
-                    self.map.de.skip()?;
-                    continue;
+                    if self.map.de.can_skip() {
+                        self.map.de.skip()?;
+                        continue;
+                    }
+                    Ok(None)
                 }
                 // Skip any text events if sequence expects only specific tag names
                 #[cfg(feature = "overlapped-lists")]
                 DeEvent::Text(_) if self.filter.need_skip_text() => {
-                    self.map.de.skip()?;
-                    continue;
+                    if self.map.de.can_skip() {
+                        self.map.de.skip()?;
+                        continue;
+                    }
+                    Ok(None)
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]

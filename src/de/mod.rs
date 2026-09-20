@@ -2562,6 +2562,11 @@ where
     /// consumption when parsing a very large amount of XML into a sequence field.
     #[cfg(feature = "overlapped-lists")]
     limit: Option<NonZeroUsize>,
+    /// Whether events not related to the sequence that is currently deserialized
+    /// can be skipped and buffered. When `false`, deserializer behaves as if
+    /// the `overlapped-lists` feature is not enabled.
+    #[cfg(feature = "overlapped-lists")]
+    skip_unknown: bool,
 
     #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
@@ -2598,6 +2603,8 @@ where
             write: VecDeque::new(),
             #[cfg(feature = "overlapped-lists")]
             limit: None,
+            #[cfg(feature = "overlapped-lists")]
+            skip_unknown: true,
 
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
@@ -2734,6 +2741,59 @@ where
     pub fn event_buffer_size(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.limit = limit;
         self
+    }
+
+    /// Enable or disable support for overlapped lists in this deserializer.
+    ///
+    /// When enabled (the default when the `overlapped-lists` feature is active),
+    /// the deserializer buffers events that do not belong to the sequence being
+    /// deserialized, so elements of a list may be interleaved with other elements.
+    /// This can lead to high memory consumption and quadratic parsing time.
+    ///
+    /// When disabled, the deserializer behaves as if the `overlapped-lists`
+    /// feature is not enabled: a sequence ends at the first element that does
+    /// not belong to it and no events are buffered. This is useful when the
+    /// feature was enabled by another crate in the dependency tree, but is
+    /// unwanted for a particular document.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::de::Deserializer;
+    /// use quick_xml::errors::serialize::DeError;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, Deserialize)]
+    /// struct List {
+    ///     item: Vec<()>,
+    /// }
+    ///
+    /// let xml = "<list><item/><other/><item/></list>";
+    ///
+    /// // Overlapped lists are supported by default
+    /// let mut de = Deserializer::from_str(xml);
+    /// let list = List::deserialize(&mut de).unwrap();
+    /// assert_eq!(list.item.len(), 2);
+    ///
+    /// // Once disabled, the second `<item/>` is reported as a duplicate field
+    /// let mut de = Deserializer::from_str(xml);
+    /// de.overlapped_lists(false);
+    /// match List::deserialize(&mut de) {
+    ///     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+    ///     e => panic!("Expected `Err(Custom(\"duplicate field `item`\"))`, but got `{:?}`", e),
+    /// }
+    /// ```
+    #[cfg(feature = "overlapped-lists")]
+    pub fn overlapped_lists(&mut self, enable: bool) -> &mut Self {
+        self.skip_unknown = enable;
+        self
+    }
+
+    #[cfg(feature = "overlapped-lists")]
+    #[inline]
+    pub(crate) const fn can_skip(&self) -> bool {
+        self.skip_unknown
     }
 
     /// Set the maximum recursion depth for deserialization of nested structures.
@@ -4200,6 +4260,42 @@ mod tests {
                 Err(DeError::TooManyEvents(count)) => assert_eq!(count.get(), 3),
                 e => panic!("Expected `Err(TooManyEvents(3))`, but got `{:?}`", e),
             }
+        }
+
+        /// Checks that disabling overlapped lists prevents buffering of events
+        #[test]
+        fn disabled() {
+            use serde::Deserialize;
+
+            #[derive(Debug, Deserialize)]
+            #[allow(unused)]
+            struct List {
+                item: Vec<()>,
+            }
+
+            let mut de = make_de(
+                "\
+                <any-name>\
+                    <item/>\
+                    <another-item>\
+                        <some-element>with text</some-element>\
+                        <yet-another-element/>\
+                    </another-item>\
+                    <item/>\
+                    <item/>\
+                </any-name>\
+                ",
+            );
+            de.overlapped_lists(false);
+
+            match List::deserialize(&mut de) {
+                Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+                e => panic!(
+                    r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
+                    e
+                ),
+            }
+            assert_eq!(de.write, vec![]);
         }
 
         /// Without handling Eof in `skip` this test failed with memory allocation

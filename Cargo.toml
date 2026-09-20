@@ -189,12 +189,14 @@ escape-html = []
 ## events as many times as the number of sequence fields present in the schema.
 ##
 ## To reduce negative consequences, always [limit] the maximum number of events
-## that [`Deserializer`] will buffer.
+## that [`Deserializer`] will buffer. If this feature was enabled by another
+## crate in your dependency tree, you can [disable] it for a particular deserializer.
 ##
 ## This feature works only with `serialize` feature and has no effect if `serialize`
 ## is not enabled.
 ##
 ## [limit]: crate::de::Deserializer::event_buffer_size
+## [disable]: crate::de::Deserializer::overlapped_lists
 ## [`Deserializer`]: crate::de::Deserializer
 overlapped-lists = []
 
