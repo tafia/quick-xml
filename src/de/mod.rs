@@ -2562,6 +2562,11 @@ where
     /// consumption when parsing a very large amount of XML into a sequence field.
     #[cfg(feature = "overlapped-lists")]
     limit: Option<NonZeroUsize>,
+    /// Whether events not related to the sequence that is currently deserialized
+    /// can be skipped and buffered. When `false`, deserializer behaves as if
+    /// the `overlapped-lists` feature is not enabled.
+    #[cfg(feature = "overlapped-lists")]
+    skip_unknown: bool,
 
     #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
@@ -2598,6 +2603,8 @@ where
             write: VecDeque::new(),
             #[cfg(feature = "overlapped-lists")]
             limit: None,
+            #[cfg(feature = "overlapped-lists")]
+            skip_unknown: true,
 
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
@@ -2736,6 +2743,69 @@ where
         self
     }
 
+    /// Enable or disable support for overlapped lists in this deserializer.
+    ///
+    /// When enabled (the default when the `overlapped-lists` feature is active),
+    /// the deserializer buffers events that do not belong to the sequence being
+    /// deserialized, so elements of a list may be interleaved with other elements.
+    /// This can lead to high memory consumption and quadratic parsing time.
+    ///
+    /// When disabled, the deserializer behaves as if the `overlapped-lists`
+    /// feature is not enabled: a sequence ends at the first element that does
+    /// not belong to it and no events are buffered. This is useful when the
+    /// feature was enabled by another crate in the dependency tree, but is
+    /// unwanted for a particular document.
+    ///
+    /// This method is available regardless of the `overlapped-lists` feature,
+    /// so it can be called unconditionally. Without the feature it does nothing,
+    /// because overlapped lists are never supported in that case.
+    ///
+    /// Call this method before deserialization starts. The setting is read each
+    /// time the deserializer decides whether to buffer an event, so changing it
+    /// while a document is being deserialized would make different sequences of
+    /// the same document behave differently.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::de::Deserializer;
+    /// use quick_xml::errors::serialize::DeError;
+    /// use serde::Deserialize;
+    ///
+    /// #[derive(Debug, Deserialize)]
+    /// struct List {
+    ///     item: Vec<()>,
+    /// }
+    ///
+    /// let xml = "<list><item/><other/><item/></list>";
+    ///
+    /// // With the `overlapped-lists` feature, overlapped lists are supported by default
+    /// # #[cfg(feature = "overlapped-lists")] {
+    /// let mut de = Deserializer::from_str(xml);
+    /// let list = List::deserialize(&mut de).unwrap();
+    /// assert_eq!(list.item.len(), 2);
+    /// # }
+    ///
+    /// // Once disabled, the second `<item/>` is reported as a duplicate field,
+    /// // exactly as it would be without the feature
+    /// let mut de = Deserializer::from_str(xml);
+    /// de.overlapped_lists(false);
+    /// match List::deserialize(&mut de) {
+    ///     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+    ///     e => panic!("Expected `Err(Custom(\"duplicate field `item`\"))`, but got `{:?}`", e),
+    /// }
+    /// ```
+    pub fn overlapped_lists(&mut self, enable: bool) -> &mut Self {
+        #[cfg(feature = "overlapped-lists")]
+        {
+            self.skip_unknown = enable;
+        }
+        #[cfg(not(feature = "overlapped-lists"))]
+        let _ = enable;
+        self
+    }
+
     /// Set the maximum recursion depth for deserialization of nested structures.
     ///
     /// If the XML nesting exceeds this limit, [`DeError::TooDeeplyNested`] will
@@ -2859,8 +2929,15 @@ where
     /// buffer from which they can be retrieved later. You MUST call
     /// [`Self::start_replay()`] after calling this to give access to the skipped
     /// events and release internal buffers.
+    ///
+    /// Returns `Ok(false)` without consuming anything when support for overlapped
+    /// lists was disabled by [`Self::overlapped_lists()`], and `Ok(true)` when
+    /// the events were skipped.
     #[cfg(feature = "overlapped-lists")]
-    fn skip(&mut self) -> Result<(), DeError> {
+    fn skip(&mut self) -> Result<bool, DeError> {
+        if !self.skip_unknown {
+            return Ok(false);
+        }
         let event = self.next()?;
         self.skip_event(event)?;
         // Skip all subtree, if we skip a start event
@@ -2889,7 +2966,7 @@ where
                 }
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     #[cfg(feature = "overlapped-lists")]
@@ -3776,7 +3853,7 @@ mod tests {
             assert_eq!(checkpoint, 0);
 
             // Should skip first <inner> tree
-            de.skip().unwrap();
+            assert!(de.skip().unwrap());
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -3830,7 +3907,7 @@ mod tests {
             assert_eq!(checkpoint, 0);
 
             // Skip `$text` node and consume <inner/> after it
-            de.skip().unwrap();
+            assert!(de.skip().unwrap());
             assert_eq!(
                 de.read,
                 vec![
@@ -3907,7 +3984,7 @@ mod tests {
             assert_eq!(checkpoint, 0);
 
             // Skip the <skip> tree
-            de.skip().unwrap();
+            assert!(de.skip().unwrap());
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -4001,8 +4078,8 @@ mod tests {
             assert_eq!(checkpoint1, 0);
 
             // Should skip first and second <skipped-N/> elements
-            de.skip().unwrap(); // skipped-1
-            de.skip().unwrap(); // skipped-2
+            assert!(de.skip().unwrap()); // skipped-1
+            assert!(de.skip().unwrap()); // skipped-2
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -4041,8 +4118,8 @@ mod tests {
             assert_eq!(checkpoint2, 4);
 
             // Should skip third and forth <skipped-N/> elements
-            de.skip().unwrap(); // skipped-3
-            de.skip().unwrap(); // skipped-4
+            assert!(de.skip().unwrap()); // skipped-3
+            assert!(de.skip().unwrap()); // skipped-4
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -4202,6 +4279,42 @@ mod tests {
             }
         }
 
+        /// Checks that disabling overlapped lists prevents buffering of events
+        #[test]
+        fn disabled() {
+            use serde::Deserialize;
+
+            #[derive(Debug, Deserialize)]
+            #[allow(unused)]
+            struct List {
+                item: Vec<()>,
+            }
+
+            let mut de = make_de(
+                "\
+                <any-name>\
+                    <item/>\
+                    <another-item>\
+                        <some-element>with text</some-element>\
+                        <yet-another-element/>\
+                    </another-item>\
+                    <item/>\
+                    <item/>\
+                </any-name>\
+                ",
+            );
+            de.overlapped_lists(false);
+
+            match List::deserialize(&mut de) {
+                Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+                e => panic!(
+                    r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
+                    e
+                ),
+            }
+            assert_eq!(de.write, vec![]);
+        }
+
         /// Without handling Eof in `skip` this test failed with memory allocation
         #[test]
         fn invalid_xml() {
@@ -4211,7 +4324,7 @@ mod tests {
 
             // Cache all events
             let checkpoint = de.skip_checkpoint();
-            de.skip().unwrap();
+            assert!(de.skip().unwrap());
             de.start_replay(checkpoint);
             assert_eq!(de.read, vec![Start(BytesStart::new("root")), Eof]);
         }
