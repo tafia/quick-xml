@@ -123,6 +123,48 @@ pub struct Config {
     /// [`expand_empty_elements`]: Self::expand_empty_elements
     pub check_end_names: bool,
 
+    /// Whether the input must be one [document]: exactly one element, with only
+    /// comments, processing instructions, and whitespace outside it.
+    ///
+    /// Default: `false`
+    ///
+    /// Fragments stay accepted unless this is set. `<a/><b/>`, a text node on
+    /// its own, and an XML declaration with no element are all read successfully
+    /// by default.
+    ///
+    /// When `true`:
+    /// - a second top-level element yields [`MultipleDocumentElements`]
+    /// - text, CDATA, or a reference outside the element yields
+    ///   [`TextOutsideDocumentElement`]
+    /// - end of input with no element yields [`MissingDocumentElement`]
+    ///   (an XML declaration alone is not a document)
+    ///
+    /// Not switched by [`enable_all_checks`]. That helper also runs on fragments,
+    /// and this check rejects them.
+    ///
+    /// ```
+    /// # use quick_xml::errors::{Error, IllFormedError};
+    /// # use quick_xml::events::{BytesStart, Event};
+    /// # use quick_xml::reader::Reader;
+    /// # use pretty_assertions::assert_eq;
+    /// let mut reader = Reader::from_str("<a/><b/>");
+    /// reader.config_mut().check_document = true;
+    ///
+    /// assert_eq!(reader.read_event().unwrap(), Event::Empty(BytesStart::new("a")));
+    /// match reader.read_event() {
+    ///     Err(Error::IllFormed(IllFormedError::MultipleDocumentElements)) => {}
+    ///     e => panic!("unexpected {e:?}"),
+    /// }
+    /// ```
+    ///
+    /// [document]: https://www.w3.org/TR/xml11/#NT-document
+    /// [`MultipleDocumentElements`]: crate::errors::IllFormedError::MultipleDocumentElements
+    /// [`TextOutsideDocumentElement`]: crate::errors::IllFormedError::TextOutsideDocumentElement
+    /// [`MissingDocumentElement`]: crate::errors::IllFormedError::MissingDocumentElement
+    /// [`enable_all_checks`]: Self::enable_all_checks
+    #[cfg_attr(feature = "serde-types", serde(default))]
+    pub check_document: bool,
+
     /// Whether empty elements should be split into an `Open` and a `Close` event.
     ///
     /// When set to `true`, all [`Empty`] events produced by a self-closing tag
@@ -251,9 +293,13 @@ impl Config {
         self.trim_text_end = trim;
     }
 
-    /// Turn on or off all checks for well-formedness. Currently it is that settings:
+    /// Turn on or off all checks for well-formedness of individual constructs.
+    /// Currently it is that settings:
     /// - [`check_comments`](Self::check_comments)
     /// - [`check_end_names`](Self::check_end_names)
+    ///
+    /// [`check_document`](Self::check_document) is separate. It rejects fragments,
+    /// while these checks do not.
     #[inline]
     pub fn enable_all_checks(&mut self, enable: bool) {
         self.check_comments = enable;
@@ -267,6 +313,7 @@ impl Default for Config {
             allow_dangling_amp: false,
             allow_unmatched_ends: false,
             check_comments: false,
+            check_document: false,
             check_end_names: true,
             expand_empty_elements: false,
             trim_markup_names_in_closing_tags: true,
@@ -312,6 +359,7 @@ macro_rules! read_event_impl {
                         // Emit reference, go to InsideText state
                         ReadRefResult::Ref(bytes) => {
                             $self.state.state = ParseState::InsideText;
+                            $self.state.reject_reference_outside_element(start)?;
                             // +1 to skip start `&`
                             // -1 to skip end `;`
                             Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..bytes.len() - 1])))
@@ -383,6 +431,7 @@ macro_rules! read_event_impl {
                             // Trim bytes from end if required
                             let event = $self.state.emit_text(bytes)?;
                             if event.is_empty() {
+                                $self.state.finish_document()?;
                                 Ok(Event::Eof)
                             } else {
                                 Ok(Event::Text(event))
@@ -394,7 +443,10 @@ macro_rules! read_event_impl {
                 // Go to InsideText state in next two arms
                 ParseState::InsideMarkup => $self.$read_until_close($buf) $(.$await)?,
                 ParseState::InsideEmpty => Ok(Event::End($self.state.close_expanded_empty())),
-                ParseState::Done => Ok(Event::Eof),
+                ParseState::Done => {
+                    $self.state.finish_document()?;
+                    Ok(Event::Eof)
+                }
             };
         };
         match event {

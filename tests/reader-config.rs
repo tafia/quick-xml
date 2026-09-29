@@ -346,6 +346,252 @@ mod check_comments {
     }
 }
 
+mod check_document {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    fn checked(xml: &str) -> Reader<&[u8]> {
+        let mut reader = Reader::from_str(xml);
+        reader.config_mut().check_document = true;
+        reader
+    }
+
+    #[test]
+    fn off_accepts_a_fragment() {
+        let mut reader = Reader::from_str("<a/><b/>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("b"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn enable_all_checks_does_not_require_a_document() {
+        let mut reader = Reader::from_str("<a/><b/>");
+        reader.config_mut().enable_all_checks(true);
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("b"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn one_element_with_misc_around_it() {
+        let mut reader = checked(" \n<!-- c --><a>t</a><?pi ?> \t");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::new(" \n"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Comment(BytesComment::new(" c ").unwrap())
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::new("t"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        assert_eq!(reader.read_event().unwrap(), Event::PI(BytesPI::new("pi ")));
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::new(" \t"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn nested_empty_element() {
+        let mut reader = checked("<a><b/></a>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("b"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn second_empty_element() {
+        let mut reader = checked("<a/><b/>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::MultipleDocumentElements);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position()..reader.buffer_position(), 4..8);
+    }
+
+    #[test]
+    fn second_element_after_a_pair() {
+        let mut reader = checked("<a></a><b></b>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::MultipleDocumentElements);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 7);
+    }
+
+    #[test]
+    fn expanded_empty_elements_still_count_as_one() {
+        let mut reader = checked("<a/><b/>");
+        reader.config_mut().expand_empty_elements = true;
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::MultipleDocumentElements);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+    }
+
+    #[test]
+    fn text_before_the_element() {
+        let mut reader = checked("x<a/>");
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::TextOutsideDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 0);
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn text_after_the_element() {
+        let mut reader = checked("<a/>x");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("a"))
+        );
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::TextOutsideDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 4);
+    }
+
+    #[test]
+    fn cdata_outside() {
+        let mut reader = checked("<![CDATA[x]]>");
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::TextOutsideDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 0);
+    }
+
+    #[test]
+    fn cdata_inside() {
+        let mut reader = checked("<a><![CDATA[x]]></a>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::CData(BytesCData::new("x"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn reference_outside() {
+        let mut reader = checked("&amp;");
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::TextOutsideDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 0);
+    }
+
+    #[test]
+    fn reference_inside() {
+        let mut reader = checked("<a>&amp;</a>");
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("a"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::GeneralRef(BytesRef::new("amp"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn declaration_alone() {
+        let mut reader = checked("<?xml version=\"1.0\"?>");
+        assert!(matches!(reader.read_event().unwrap(), Event::Decl(_)));
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::MissingDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn empty_input() {
+        let mut reader = checked("");
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::MissingDocumentElement);
+            }
+            e => panic!("unexpected {e:?}"),
+        }
+        assert_eq!(reader.error_position(), 0);
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+}
+
 mod check_end_names {
     use super::*;
 

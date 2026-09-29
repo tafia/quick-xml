@@ -18,6 +18,9 @@
 
 ### New Features
 
+- [#848]: Opt-in `Config::check_document`. When set, the reader requires one element
+  and rejects character data outside it. An XML declaration alone is an error.
+  Fragments still parse when the check is left off.
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
 - [#1015]: Implement `From<LocalName>` on `QName`.
 
@@ -30,6 +33,7 @@
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
 
+[#848]: https://github.com/tafia/quick-xml/issues/848
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
 [#1009]: https://github.com/tafia/quick-xml/pull/1009

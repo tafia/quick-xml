@@ -143,6 +143,30 @@ pub enum IllFormedError {
     /// The parser started to parse entity or character reference (`&...;`) in text,
     /// but the input ended before the closing `;` character was found.
     UnclosedReference,
+    /// The input ended without an element.
+    ///
+    /// A [document] has exactly one element. An XML declaration, a comment, or
+    /// whitespace alone does not satisfy that. Returned only when
+    /// [`Config::check_document`] is enabled.
+    ///
+    /// [document]: https://www.w3.org/TR/xml11/#NT-document
+    /// [`Config::check_document`]: crate::reader::Config::check_document
+    MissingDocumentElement,
+    /// A second element was found after the document element had already started.
+    ///
+    /// Returned only when [`Config::check_document`] is enabled. With the check
+    /// off, a fragment such as `<a/><b/>` is still accepted.
+    ///
+    /// [`Config::check_document`]: crate::reader::Config::check_document
+    MultipleDocumentElements,
+    /// Character data was found outside the document element.
+    ///
+    /// Text, CDATA, and references are allowed inside the element. Outside it,
+    /// only whitespace is allowed. Returned only when [`Config::check_document`]
+    /// is enabled.
+    ///
+    /// [`Config::check_document`]: crate::reader::Config::check_document
+    TextOutsideDocumentElement,
 }
 
 impl fmt::Display for IllFormedError {
@@ -183,6 +207,11 @@ impl fmt::Display for IllFormedError {
             Self::UnclosedReference => f.write_str(
                 "entity or character reference not closed: `;` not found before end of input",
             ),
+            Self::MissingDocumentElement => f.write_str("document has no element"),
+            Self::MultipleDocumentElements => f.write_str("document has more than one element"),
+            Self::TextOutsideDocumentElement => {
+                f.write_str("character data outside the document element")
+            }
         }
     }
 }

@@ -51,6 +51,14 @@ pub(super) struct ReaderState {
     /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
     /// for that field for details
     opened_starts: Vec<usize>,
+    /// Set when [`Config::check_document`] has already accepted one element.
+    /// A later element at the top level is an error.
+    ///
+    /// [`Config::check_document`]: crate::reader::Config::check_document
+    seen_document_element: bool,
+    /// The missing-element error is reported once. The next read at EOF is
+    /// [`Event::Eof`], so a caller can stop.
+    reported_missing_document: bool,
 
     #[cfg(feature = "encoding")]
     /// Reference to the encoding used to read an XML
@@ -63,6 +71,12 @@ impl ReaderState {
     /// # Parameters
     /// - `buf`: data from the start of stream to the first `<` or from `>` to `<`
     pub fn emit_text<'b>(&mut self, buf: &'b str) -> Result<BytesText<'b>> {
+        if self.config.check_document && self.opened_starts.is_empty() {
+            if let Some(skip) = buf.bytes().position(|b| !is_whitespace(b)) {
+                self.last_error_offset = self.offset - buf.len() as u64 + skip as u64;
+                return Err(Error::IllFormed(IllFormedError::TextOutsideDocumentElement));
+            }
+        }
         let content = if self.config.trim_text_end {
             // Skip the ending '<'
             let len = buf
@@ -153,6 +167,11 @@ impl ReaderState {
                     "CDATA must end with ']]>':\n{:?}",
                     crate::utils::Bytes(buf_bytes)
                 );
+                if self.config.check_document && self.opened_starts.is_empty() {
+                    // `<![CDATA[...]]>` — report at `<`
+                    self.last_error_offset = self.offset - len as u64;
+                    return Err(Error::IllFormed(IllFormedError::TextOutsideDocumentElement));
+                }
                 Ok(Event::CData(BytesCData::wrap(
                     // Cut of `<![CDATA[` and `]]>` from start and end
                     &buf[9..len - 3],
@@ -326,6 +345,15 @@ impl ReaderState {
             crate::utils::Bytes(buf_bytes)
         );
 
+        if self.config.check_document && self.opened_starts.is_empty() {
+            if self.seen_document_element {
+                // Report at `<` of this tag. `self.offset` is already after `>`.
+                self.last_error_offset = self.offset - buf.len() as u64;
+                return Err(Error::IllFormed(IllFormedError::MultipleDocumentElements));
+            }
+            self.seen_document_element = true;
+        }
+
         // strip `<`
         let content = &buf[1..];
         let content_bytes = &buf_bytes[1..];
@@ -365,6 +393,28 @@ impl ReaderState {
             .split_off(self.opened_starts.pop().unwrap());
         BytesEnd::wrap(Cow::Owned(name))
     }
+
+    /// A reference at the top level is character data, which a document does not allow there.
+    pub fn reject_reference_outside_element(&mut self, at: u64) -> Result<()> {
+        if self.config.check_document && self.opened_starts.is_empty() {
+            self.last_error_offset = at;
+            return Err(Error::IllFormed(IllFormedError::TextOutsideDocumentElement));
+        }
+        Ok(())
+    }
+
+    /// EOF with no element is not a document. Reported once so the following read is EOF.
+    pub fn finish_document(&mut self) -> Result<()> {
+        if self.config.check_document
+            && !self.seen_document_element
+            && !self.reported_missing_document
+        {
+            self.reported_missing_document = true;
+            self.last_error_offset = self.offset;
+            return Err(Error::IllFormed(IllFormedError::MissingDocumentElement));
+        }
+        Ok(())
+    }
 }
 
 impl Default for ReaderState {
@@ -376,6 +426,8 @@ impl Default for ReaderState {
             config: Config::default(),
             opened_buffer: String::new(),
             opened_starts: Vec::new(),
+            seen_document_element: false,
+            reported_missing_document: false,
 
             #[cfg(feature = "encoding")]
             encoding: EncodingRef::Implicit(UTF_8),
