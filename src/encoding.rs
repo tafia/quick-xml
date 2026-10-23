@@ -442,8 +442,26 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
             if prefix.len == 0 {
                 self.prefix = None;
             } else {
-                // Decode from prefix buffer
-                let src = &prefix.buf[..prefix.len];
+                // Decode from prefix buffer.
+                //
+                // While the decoder is still the default UTF-8 one, the encoding
+                // named in the XML declaration has not been applied yet:
+                // set_encoding() runs only after the reader has parsed the `Decl`
+                // event. Decoding the whole prefix now would consume the bytes
+                // that follow the declaration using UTF-8 instead of the declared
+                // encoding, which silently mis-decodes (multi-byte encodings) or
+                // rejects as malformed (single-byte encodings) any non-ASCII
+                // content that happens to land within the prefix. Markup
+                // delimiters are ASCII in every ASCII-compatible encoding, so stop
+                // at the first `>`: that yields the complete `<?xml ... ?>`
+                // declaration and nothing past it, letting set_encoding() take
+                // effect before the remainder of the prefix is decoded.
+                let end = if self.decoder.encoding() == encoding_rs::UTF_8 {
+                    memchr::memchr(b'>', &prefix.buf[..prefix.len]).map_or(prefix.len, |i| i + 1)
+                } else {
+                    prefix.len
+                };
+                let src = &prefix.buf[..end];
                 let (result, read, written) = self.decoder.decode_to_utf8_without_replacement(
                     src,
                     &mut self.out_buf[..],
