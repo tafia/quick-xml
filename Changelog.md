@@ -25,6 +25,11 @@
 
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
+- [#1023]: `DecodingReader` now decodes content that follows the XML declaration using the
+  declared encoding even when that content falls within the first 64 bytes of the input.
+  Previously such bytes were decoded with the default UTF-8 decoder before `set_encoding()`
+  took effect, which rejected documents in single-byte encodings and silently mis-decoded
+  documents in multi-byte encodings.
 
 ### Misc Changes
 
@@ -35,6 +40,7 @@
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
+[#1023]: https://github.com/tafia/quick-xml/pull/1023
 
 
 ## 0.42.0 -- 2026-08-22

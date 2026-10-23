@@ -190,6 +190,40 @@ mod xml_decoding_reader {
         check_decoding_reader!(windows_1258, WINDOWS_1258, "windows-1258");
         check_decoding_reader!(x_mac_cyrillic, X_MAC_CYRILLIC, "x-mac-cyrillic");
         check_decoding_reader!(x_user_defined, X_USER_DEFINED, "x-user-defined");
+
+        /// Non-ASCII content that falls within the first 64 bytes (the prefix used
+        /// for encoding detection) must still be decoded with the encoding named in
+        /// the declaration, not with the default UTF-8 decoder. The document files
+        /// above all have a long ASCII header, so they never exercise this.
+        ///
+        /// `Shift_JIS` is multi-byte: `あい` is `82 A0 82 A2`. Before the fix these
+        /// bytes were decoded as UTF-8 while still in the prefix (before
+        /// `set_encoding()` took effect), silently yielding the wrong characters.
+        #[test]
+        fn non_ascii_within_prefix() {
+            let mut bytes = b"<?xml version='1.0' encoding='Shift_JIS'?><d>".to_vec();
+            bytes.extend_from_slice(&[0x82, 0xA0, 0x82, 0xA2]);
+            bytes.extend_from_slice(b"</d>");
+
+            let mut r = Reader::from_reader(DecodingReader::new(bytes.as_ref()));
+            let mut buf = Vec::new();
+            let mut text = String::new();
+            loop {
+                buf.clear();
+                match r.read_event_into(&mut buf).unwrap() {
+                    Decl(e) => {
+                        if let Some(encoding) = e.encoder() {
+                            r.get_mut().set_encoding(encoding);
+                        }
+                    }
+                    Text(e) => text.push_str(&e),
+                    Eof => break,
+                    _ => {}
+                }
+            }
+            assert_eq!(r.get_ref().encoding(), SHIFT_JIS);
+            assert_eq!(text, "\u{3042}\u{3044}");
+        }
     }
 }
 
