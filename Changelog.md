@@ -30,6 +30,11 @@
   Previously such bytes were decoded with the default UTF-8 decoder before `set_encoding()`
   took effect, which rejected documents in single-byte encodings and silently mis-decoded
   documents in multi-byte encodings.
+- [#1024]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns="..."` declarations
+  that bind the default namespace to `http://www.w3.org/XML/1998/namespace` or
+  `http://www.w3.org/2000/xmlns/`, as required by the Namespaces in XML specification.
+  New `NamespaceError::DefaultBoundToXml` and `NamespaceError::DefaultBoundToXmlns`
+  variants are returned in that case.
 
 ### Misc Changes
 
@@ -41,6 +46,7 @@
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
 [#1023]: https://github.com/tafia/quick-xml/pull/1023
+[#1024]: https://github.com/tafia/quick-xml/pull/1024
 
 
 ## 0.42.0 -- 2026-08-22

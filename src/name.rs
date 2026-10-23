@@ -38,6 +38,16 @@ pub enum NamespaceError {
     ///
     /// Contains the prefix that is tried to be bound.
     InvalidPrefixForXmlns(String),
+    /// Attempts to declare `http://www.w3.org/XML/1998/namespace` as the default
+    /// namespace (`xmlns="http://www.w3.org/XML/1998/namespace"`).
+    ///
+    /// That namespace can be bound only to the `xml` prefix.
+    DefaultBoundToXml,
+    /// Attempts to declare `http://www.w3.org/2000/xmlns/` as the default
+    /// namespace (`xmlns="http://www.w3.org/2000/xmlns/"`).
+    ///
+    /// That namespace cannot be bound to anything, including the default namespace.
+    DefaultBoundToXmlns,
     /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
     /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
     /// the configured limit.
@@ -86,6 +96,12 @@ impl fmt::Display for NamespaceError {
                     prefix
                 )
             }
+            Self::DefaultBoundToXml => f.write_str(
+                "the default namespace cannot be bound to 'http://www.w3.org/XML/1998/namespace'",
+            ),
+            Self::DefaultBoundToXmlns => f.write_str(
+                "the default namespace cannot be bound to 'http://www.w3.org/2000/xmlns/'",
+            ),
             Self::TooManyBindings(limit) => {
                 write!(
                     f,
@@ -646,7 +662,8 @@ impl NamespaceResolver {
     /// Binding will be added on current nesting level and will be removed, when
     /// level will be [popped out].
     ///
-    /// The operation may fail if you try to (re-)declare reserved prefixes `xml` and `xmlns`.
+    /// The operation may fail if you try to (re-)declare reserved prefixes `xml` and `xmlns`,
+    /// or bind their namespaces to another prefix or to the default namespace.
     ///
     /// Note, that method does not check if namespace was already added on that level.
     /// Use `resolver.bindings_of(resolver.level()).any()` if you want to check that.
@@ -704,6 +721,14 @@ impl NamespaceResolver {
         let level = self.nesting_level;
         match prefix {
             PrefixDeclaration::Default => {
+                if namespace == RESERVED_NAMESPACE_XML.1 {
+                    // error, default namespace set to xml uri
+                    return Err(NamespaceError::DefaultBoundToXml);
+                } else if namespace == RESERVED_NAMESPACE_XMLNS.1 {
+                    // error, default namespace set to xmlns uri
+                    return Err(NamespaceError::DefaultBoundToXmlns);
+                }
+
                 if self
                     .bindings
                     .len()
@@ -1773,6 +1798,21 @@ mod namespaces {
                 );
                 assert_eq!(&resolver.buffer[s..], "");
             }
+
+            /// `xml` namespace cannot be declared as the default namespace
+            #[test]
+            fn default_bound_to_xml_namespace() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns='http://www.w3.org/XML/1998/namespace'",
+                        0,
+                    )),
+                    Err(NamespaceError::DefaultBoundToXml),
+                );
+                assert_eq!(&resolver.buffer[s..], "");
+            }
         }
 
         mod xmlns {
@@ -1857,6 +1897,21 @@ mod namespaces {
                     Err(NamespaceError::InvalidPrefixForXmlns(
                         "not_xmlns".to_string()
                     )),
+                );
+                assert_eq!(&resolver.buffer[s..], "");
+            }
+
+            /// `xmlns` namespace cannot be declared as the default namespace
+            #[test]
+            fn default_bound_to_xmlns_namespace() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns='http://www.w3.org/2000/xmlns/'",
+                        0,
+                    )),
+                    Err(NamespaceError::DefaultBoundToXmlns),
                 );
                 assert_eq!(&resolver.buffer[s..], "");
             }
