@@ -25,9 +25,11 @@
 
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
-- `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns="..."` declarations
+- [#1024]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns="..."` declarations
   that bind the default namespace to `http://www.w3.org/XML/1998/namespace` or
   `http://www.w3.org/2000/xmlns/`, as required by the Namespaces in XML specification.
+  New `NamespaceError::DefaultBoundToXml` and `NamespaceError::DefaultBoundToXmlns`
+  variants are returned in that case.
 
 ### Misc Changes
 
@@ -38,6 +40,7 @@
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
 [#1010]: https://github.com/tafia/quick-xml/pull/1010
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
+[#1024]: https://github.com/tafia/quick-xml/pull/1024
 
 
 ## 0.42.0 -- 2026-08-22

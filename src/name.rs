@@ -29,19 +29,25 @@ pub enum NamespaceError {
     /// Attempts to bind some prefix (except `xml`) to `http://www.w3.org/XML/1998/namespace`.
     ///
     /// Only `xml` prefix can be bound to `http://www.w3.org/XML/1998/namespace`.
-    /// It also cannot be declared as the default namespace.
     ///
-    /// Contains the prefix that is tried to be bound, or an empty string for
-    /// the default namespace.
+    /// Contains the prefix that is tried to be bound.
     InvalidPrefixForXml(String),
     /// Attempts to bind some prefix to `http://www.w3.org/2000/xmlns/`.
     ///
     /// `http://www.w3.org/2000/xmlns/` cannot be bound to any prefix, even to `xmlns`.
-    /// It also cannot be declared as the default namespace.
     ///
-    /// Contains the prefix that is tried to be bound, or an empty string for
-    /// the default namespace.
+    /// Contains the prefix that is tried to be bound.
     InvalidPrefixForXmlns(String),
+    /// Attempts to declare `http://www.w3.org/XML/1998/namespace` as the default
+    /// namespace (`xmlns="http://www.w3.org/XML/1998/namespace"`).
+    ///
+    /// That namespace can be bound only to the `xml` prefix.
+    DefaultBoundToXml,
+    /// Attempts to declare `http://www.w3.org/2000/xmlns/` as the default
+    /// namespace (`xmlns="http://www.w3.org/2000/xmlns/"`).
+    ///
+    /// That namespace cannot be bound to anything, including the default namespace.
+    DefaultBoundToXmlns,
     /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
     /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
     /// the configured limit.
@@ -76,18 +82,12 @@ impl fmt::Display for NamespaceError {
                     namespace
                 )
             }
-            Self::InvalidPrefixForXml(prefix) if prefix.is_empty() => f.write_str(
-                "the default namespace cannot be 'http://www.w3.org/XML/1998/namespace'",
-            ),
             Self::InvalidPrefixForXml(prefix) => {
                 write!(
                     f,
                     "the namespace prefix '{}' cannot be bound to 'http://www.w3.org/XML/1998/namespace'",
                     prefix
                 )
-            }
-            Self::InvalidPrefixForXmlns(prefix) if prefix.is_empty() => {
-                f.write_str("the default namespace cannot be 'http://www.w3.org/2000/xmlns/'")
             }
             Self::InvalidPrefixForXmlns(prefix) => {
                 write!(
@@ -96,6 +96,12 @@ impl fmt::Display for NamespaceError {
                     prefix
                 )
             }
+            Self::DefaultBoundToXml => f.write_str(
+                "the default namespace cannot be bound to 'http://www.w3.org/XML/1998/namespace'",
+            ),
+            Self::DefaultBoundToXmlns => f.write_str(
+                "the default namespace cannot be bound to 'http://www.w3.org/2000/xmlns/'",
+            ),
             Self::TooManyBindings(limit) => {
                 write!(
                     f,
@@ -717,10 +723,10 @@ impl NamespaceResolver {
             PrefixDeclaration::Default => {
                 if namespace == RESERVED_NAMESPACE_XML.1 {
                     // error, default namespace set to xml uri
-                    return Err(NamespaceError::InvalidPrefixForXml(String::new()));
+                    return Err(NamespaceError::DefaultBoundToXml);
                 } else if namespace == RESERVED_NAMESPACE_XMLNS.1 {
                     // error, default namespace set to xmlns uri
-                    return Err(NamespaceError::InvalidPrefixForXmlns(String::new()));
+                    return Err(NamespaceError::DefaultBoundToXmlns);
                 }
 
                 if self
@@ -1803,7 +1809,7 @@ mod namespaces {
                         " xmlns='http://www.w3.org/XML/1998/namespace'",
                         0,
                     )),
-                    Err(NamespaceError::InvalidPrefixForXml("".to_string())),
+                    Err(NamespaceError::DefaultBoundToXml),
                 );
                 assert_eq!(&resolver.buffer[s..], "");
             }
@@ -1905,7 +1911,7 @@ mod namespaces {
                         " xmlns='http://www.w3.org/2000/xmlns/'",
                         0,
                     )),
-                    Err(NamespaceError::InvalidPrefixForXmlns("".to_string())),
+                    Err(NamespaceError::DefaultBoundToXmlns),
                 );
                 assert_eq!(&resolver.buffer[s..], "");
             }
