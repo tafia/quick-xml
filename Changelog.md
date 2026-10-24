@@ -35,6 +35,9 @@
   `http://www.w3.org/2000/xmlns/`, as required by the Namespaces in XML specification.
   New `NamespaceError::DefaultBoundToXml` and `NamespaceError::DefaultBoundToXmlns`
   variants are returned in that case.
+- Character references `&#xFFFE;` and `&#xFFFF;` are now rejected with
+  `ParseCharRefError::IllegalCharacter`, like `&#0;`. These code points are not allowed
+  in XML 1.0 or XML 1.1 documents.
 
 ### Misc Changes
 
