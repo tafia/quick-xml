@@ -18,7 +18,10 @@ pub enum ParseCharRefError {
     InvalidCodepoint(u32),
     /// Character reference expanded to a not permitted character for an XML.
     ///
-    /// Currently, only `0x0` character produces this error.
+    /// Currently, only `0x0`, `0xFFFE` and `0xFFFF` characters produce this error.
+    /// They are excluded from the [`Char`] production in both XML 1.0 and XML 1.1.
+    ///
+    /// [`Char`]: https://www.w3.org/TR/xml11/#NT-Char
     IllegalCharacter(u32),
 }
 
@@ -2366,7 +2369,7 @@ pub(crate) fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
     } else {
         from_str_radix(num, 10)?
     };
-    if code == 0 {
+    if matches!(code, 0 | 0xFFFE | 0xFFFF) {
         return Err(ParseCharRefError::IllegalCharacter(code));
     }
     match std::char::from_u32(code) {

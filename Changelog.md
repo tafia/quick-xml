@@ -35,6 +35,9 @@
   `http://www.w3.org/2000/xmlns/`, as required by the Namespaces in XML specification.
   New `NamespaceError::DefaultBoundToXml` and `NamespaceError::DefaultBoundToXmlns`
   variants are returned in that case.
+- [#1025]: Character references `&#xFFFE;` and `&#xFFFF;` are now rejected with
+  `ParseCharRefError::IllegalCharacter`, like `&#0;`. These code points are not allowed
+  in XML 1.0 or XML 1.1 documents.
 
 ### Misc Changes
 
@@ -47,6 +50,7 @@
 [#1015]: https://github.com/tafia/quick-xml/pull/1015
 [#1023]: https://github.com/tafia/quick-xml/pull/1023
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
+[#1025]: https://github.com/tafia/quick-xml/pull/1025
 
 
 ## 0.42.0 -- 2026-08-22
