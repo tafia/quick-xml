@@ -150,6 +150,29 @@ fn unescape_sign() {
 }
 
 #[test]
+fn unescape_illegal_char() {
+    for (raw, code) in [
+        ("&#0;", 0x0),
+        ("&#x0;", 0x0),
+        ("&#65534;", 0xFFFE),
+        ("&#xFFFE;", 0xFFFE),
+        ("&#65535;", 0xFFFF),
+        ("&#xFFFF;", 0xFFFF),
+    ] {
+        assert_eq!(
+            escape::unescape(raw),
+            Err(EscapeError::InvalidCharRef(
+                ParseCharRefError::IllegalCharacter(code)
+            )),
+            "{raw}",
+        );
+    }
+    // Neighbours of the excluded code points are still allowed
+    assert_eq!(escape::unescape("&#xFFFD;"), Ok("\u{FFFD}".into()));
+    assert_eq!(escape::unescape("&#x10000;"), Ok("\u{10000}".into()));
+}
+
+#[test]
 fn unescape_with() {
     let custom_entities = |ent: &str| match ent {
         "foo" => Some("BAR"),
