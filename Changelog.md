@@ -38,6 +38,9 @@
 - [#1025]: Character references `&#xFFFE;` and `&#xFFFF;` are now rejected with
   `ParseCharRefError::IllegalCharacter`, like `&#0;`. These code points are not allowed
   in XML 1.0 or XML 1.1 documents.
+- [#1026]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns:="..."` declarations
+  with an empty prefix. Previously such a declaration was silently treated as a declaration of
+  the default namespace. New `NamespaceError::EmptyPrefixBind` variant is returned in that case.
 
 ### Misc Changes
 
@@ -51,6 +54,7 @@
 [#1023]: https://github.com/tafia/quick-xml/pull/1023
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
+[#1026]: https://github.com/tafia/quick-xml/pull/1026
 
 
 ## 0.42.0 -- 2026-08-22
