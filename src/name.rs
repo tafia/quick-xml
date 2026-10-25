@@ -48,6 +48,13 @@ pub enum NamespaceError {
     ///
     /// That namespace cannot be bound to anything, including the default namespace.
     DefaultBoundToXmlns,
+    /// Attempts to bind an empty prefix (`xmlns:="..."`).
+    ///
+    /// A prefix in a namespace declaration must be a non-empty name. Use `xmlns="..."`
+    /// to declare the default namespace.
+    ///
+    /// Contains the namespace to which the empty prefix tried to be bound.
+    EmptyPrefixBind(String),
     /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
     /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
     /// the configured limit.
@@ -102,6 +109,13 @@ impl fmt::Display for NamespaceError {
             Self::DefaultBoundToXmlns => f.write_str(
                 "the default namespace cannot be bound to 'http://www.w3.org/2000/xmlns/'",
             ),
+            Self::EmptyPrefixBind(namespace) => {
+                write!(
+                    f,
+                    "an empty namespace prefix cannot be bound to '{}'",
+                    namespace
+                )
+            }
             Self::TooManyBindings(limit) => {
                 write!(
                     f,
@@ -760,6 +774,11 @@ impl NamespaceResolver {
                 return Err(NamespaceError::InvalidXmlnsPrefixBind(
                     namespace.0.to_string(),
                 ));
+            }
+            PrefixDeclaration::Named("") => {
+                // error, `xmlns:` without a prefix name. Storing it would produce a binding
+                // indistinguishable from the default namespace
+                return Err(NamespaceError::EmptyPrefixBind(namespace.0.to_string()));
             }
             PrefixDeclaration::Named(prefix) => {
                 if namespace == RESERVED_NAMESPACE_XML.1 {
@@ -1916,6 +1935,23 @@ mod namespaces {
                 assert_eq!(&resolver.buffer[s..], "");
             }
         }
+    }
+
+    /// `xmlns:` without a prefix name is not a valid namespace declaration and must not
+    /// be treated as a declaration of the default namespace
+    #[test]
+    fn empty_prefix() {
+        let mut resolver = NamespaceResolver::default();
+        let s = resolver.buffer.len();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(" xmlns:='namespace'", 0)),
+            Err(NamespaceError::EmptyPrefixBind("namespace".to_string())),
+        );
+        assert_eq!(&resolver.buffer[s..], "");
+        assert_eq!(
+            resolver.resolve(QName("simple"), true),
+            (Unbound, LocalName("simple"))
+        );
     }
 
     #[test]
