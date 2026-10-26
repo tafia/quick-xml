@@ -3,7 +3,7 @@
 //!
 //! [spec]: https://www.w3.org/TR/xml-names11
 
-use crate::events::attributes::Attribute;
+use crate::events::attributes::{AttrError, Attribute, Attributes};
 use crate::events::{BytesStart, Event};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
@@ -55,6 +55,14 @@ pub enum NamespaceError {
     ///
     /// Contains the namespace to which the empty prefix tried to be bound.
     EmptyPrefixBind(String),
+    /// The same namespace prefix is declared more than once on a single element,
+    /// for example `<e xmlns:p="a" xmlns:p="b"/>`.
+    ///
+    /// Contains the name of the prefix (`p` in the example).
+    DuplicateBinding(String),
+    /// The same default namespace is declared more than once on a single element,
+    /// for example `<e xmlns="a" xmlns="b"/>`.
+    DuplicateXmlnsBinding,
     /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
     /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
     /// the configured limit.
@@ -115,6 +123,12 @@ impl fmt::Display for NamespaceError {
                     "an empty namespace prefix cannot be bound to '{}'",
                     namespace
                 )
+            }
+            Self::DuplicateBinding(name) => {
+                write!(f, "duplicated declaration of a namespace prefix '{}'", name)
+            }
+            Self::DuplicateXmlnsBinding => {
+                f.write_str("duplicated declaration of a default namespace")
             }
             Self::TooManyBindings(limit) => {
                 write!(
@@ -821,14 +835,35 @@ impl NamespaceResolver {
             .checked_add(1)
             .ok_or(NamespaceError::TooDeeplyNested(u16::MAX as usize))?;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
-        // (default namespace) attribute.
-        for a in start.attributes().with_checks(false) {
-            if let Ok(Attribute { key: k, value: v }) = a {
-                if let Some(prefix) = k.as_namespace_binding() {
-                    self.add(prefix, Namespace(&v))?;
+        // (default namespace) attribute. Checks are left enabled so that a duplicated
+        // declaration is reported instead of silently letting the last one win
+        for a in start.attributes() {
+            match a {
+                Ok(Attribute { key: k, value: v }) => {
+                    if let Some(prefix) = k.as_namespace_binding() {
+                        self.add(prefix, Namespace(&v))?;
+                    }
                 }
-            } else {
-                break;
+                Err(AttrError::Duplicated(_, prev)) => {
+                    // AttrError::Duplicated contains offsets from the start of `BytesStart` buffer,
+                    // which is returned from AsRef<str> implementation of `BytesStart`. Create a new
+                    // iterator that starts from the beginning of the previously found attribute.
+                    let mut iter = Attributes::new(start.as_ref(), prev);
+                    // SAFETY: Previous attribute was successfully parsed, so it is here and correct
+                    let attr = iter.next().unwrap().unwrap();
+                    match attr.key.as_namespace_binding() {
+                        Some(PrefixDeclaration::Default) => {
+                            return Err(NamespaceError::DuplicateXmlnsBinding);
+                        }
+                        Some(PrefixDeclaration::Named(p)) => {
+                            return Err(NamespaceError::DuplicateBinding(p.to_string()));
+                        }
+                        None => break,
+                    }
+                }
+                // Syntax errors are left to the caller, which iterates attributes itself
+                // and may be lenient about them (for example, when parsing HTML)
+                Err(_) => break,
             }
         }
         Ok(())
@@ -1951,6 +1986,56 @@ mod namespaces {
         assert_eq!(
             resolver.resolve(QName("simple"), true),
             (Unbound, LocalName("simple"))
+        );
+    }
+
+    /// Declaring the same prefix twice on one element is not well-formed and must not
+    /// let the last declaration win
+    #[test]
+    fn duplicated_binding() {
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t xmlns:p='first' xmlns:p='second'",
+                1
+            )),
+            Err(NamespaceError::DuplicateBinding("p".to_string())),
+        );
+
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t xmlns='first' xmlns='second'",
+                1
+            )),
+            Err(NamespaceError::DuplicateXmlnsBinding),
+        );
+
+        // Only duplication of namespace declarations should be caught
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t xmlns='first' a='1' a='2'", 1))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("name"), true),
+            (Bound(Namespace("first")), LocalName("name"))
+        );
+
+        // Redeclaration in a nested element is allowed
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t xmlns:p='first' xmlns='a'", 1))
+            .unwrap();
+        resolver
+            .push(&BytesStart::from_content("t xmlns:p='second' xmlns='b'", 1))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("name"), true),
+            (Bound(Namespace("b")), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Bound(Namespace("second")), LocalName("name"))
         );
     }
 
