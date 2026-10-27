@@ -41,6 +41,10 @@
 - [#1026]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns:="..."` declarations
   with an empty prefix. Previously such a declaration was silently treated as a declaration of
   the default namespace. New `NamespaceError::EmptyPrefixBind` variant is returned in that case.
+- [#1028]: `Attribute::normalized_value_with()` and `escape::normalize_attribute_value()` now
+  stop with new `EscapeError::TooLargeEntityExpansion` error when replacement texts of expanded
+  entities exceed 10 000 000 bytes. Previously only nesting depth was limited, so entities that
+  reference each other many times ("billion laughs") could expand a small document into gigabytes.
 
 ### Misc Changes
 
@@ -55,6 +59,7 @@
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
+[#1028]: https://github.com/tafia/quick-xml/pull/1028
 
 
 ## 0.42.0 -- 2026-08-22
