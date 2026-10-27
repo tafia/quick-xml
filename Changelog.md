@@ -23,6 +23,9 @@
 
 ### Bug Fixes
 
+- Check that map visitors consume an entire XML element, preventing internal panics
+  and silently omitted sibling elements for partially consumed mappings (#928).
+
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
 - [#1023]: `DecodingReader` now decodes content that follows the XML declaration using the
