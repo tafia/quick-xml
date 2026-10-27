@@ -193,6 +193,8 @@ where
     /// If `true`, then the deserialized struct has a field with a special name:
     /// [`TEXT_KEY`].
     has_text_field: bool,
+    /// Whether the matching end tag has been consumed.
+    finished: bool,
 }
 
 impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
@@ -218,7 +220,51 @@ where
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
             has_text_field: fields.contains(&TEXT_KEY),
+            finished: false,
         })
+    }
+
+    /// Visits one element and checks that no attributes or content were left unread.
+    pub fn deserialize<V>(
+        de: &'d mut Deserializer<'de, R, E>,
+        start: BytesStart<'de>,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        let mut access = Self::new(de, start, fields)?;
+        let value = visitor.visit_map(&mut access)?;
+        access.end()?;
+        Ok(value)
+    }
+
+    fn end(&mut self) -> Result<(), DeError> {
+        if self.finished {
+            return Ok(());
+        }
+        let unread =
+            || DeError::Custom("map visitor did not consume the entire XML element".into());
+        if self.source != ValueSource::Unknown
+            || self
+                .iter
+                .next(self.start.buf.as_bytes())
+                .transpose()?
+                .is_some()
+        {
+            return Err(unread());
+        }
+        self.skip_whitespaces()?;
+        match self.de.peek()? {
+            DeEvent::End(end) if end.name() == self.start.name() => {
+                self.de.next()?;
+                self.finished = true;
+                Ok(())
+            }
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            _ => Err(unread()),
+        }
     }
 
     /// Skips whitespaces when they are not preserved
@@ -250,6 +296,9 @@ where
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Self::Error> {
+        if self.finished {
+            return Ok(None);
+        }
         debug_assert_eq!(self.source, ValueSource::Unknown);
 
         // FIXME: There error positions counted from the start of tag name - need global position
@@ -322,6 +371,7 @@ where
                     debug_assert_eq!(self.start.name(), e.name());
                     // Consume End
                     self.de.next()?;
+                    self.finished = true;
                     Ok(None)
                 }
                 // We cannot get `Eof` legally, because we always inside of the
@@ -794,7 +844,7 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+            DeEvent::Start(e) => ElementMapAccess::deserialize(self.map.de, e, fields, visitor),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }
@@ -1134,7 +1184,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
+        ElementMapAccess::deserialize(self.de, self.start, fields, visitor)
     }
 
     fn deserialize_enum<V>(
