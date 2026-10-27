@@ -1453,3 +1453,198 @@ mod issue990 {
         assert_eq!(parsed.value, "hello\nworld");
     }
 }
+
+mod issue928_checked_element_completion {
+    use serde::de::{self, MapAccess, Visitor};
+    use serde::{Deserialize, Deserializer};
+    use std::fmt;
+
+    #[derive(Debug, PartialEq)]
+    struct First(u64);
+    impl<'de> Deserialize<'de> for First {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct FirstVisitor;
+            impl<'de> Visitor<'de> for FirstVisitor {
+                type Value = First;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str("a map with one numeric value")
+                }
+                fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<First, A::Error> {
+                    let (_, value) = map
+                        .next_entry::<String, u64>()?
+                        .ok_or_else(|| de::Error::custom("missing entry"))?;
+                    Ok(First(value))
+                }
+            }
+            deserializer.deserialize_map(FirstVisitor)
+        }
+    }
+    #[test]
+    fn rejects_unread_child() {
+        assert!(quick_xml::de::from_str::<First>("<root><a>1</a><b>2</b></root>").is_err());
+    }
+    #[test]
+    fn rejects_unread_attribute() {
+        assert!(quick_xml::de::from_str::<First>("<root a=\"1\" b=\"2\"/>").is_err());
+    }
+    #[test]
+    fn accepts_last_child_without_extra_next_key() {
+        assert_eq!(
+            quick_xml::de::from_str::<First>("<root><a>1</a></root>").unwrap(),
+            First(1)
+        );
+    }
+    #[test]
+    fn accepts_last_attribute_without_extra_next_key() {
+        assert_eq!(
+            quick_xml::de::from_str::<First>("<root a=\"1\"/>").unwrap(),
+            First(1)
+        );
+    }
+    #[test]
+    fn rejects_unread_child_from_buffered_input() {
+        assert!(
+            quick_xml::de::from_reader::<_, First>("<root><a>1</a><b>2</b></root>".as_bytes())
+                .is_err()
+        );
+    }
+    #[test]
+    fn accepts_complete_child_from_buffered_input() {
+        assert_eq!(
+            quick_xml::de::from_reader::<_, First>("<root><a>1</a></root>".as_bytes()).unwrap(),
+            First(1)
+        );
+    }
+    #[derive(Debug, Deserialize)]
+    struct Outer {
+        item: First,
+    }
+    #[test]
+    fn rejects_unread_nested_child() {
+        assert!(
+            quick_xml::de::from_str::<Outer>("<outer><item><a>1</a><b>2</b></item></outer>")
+                .is_err()
+        );
+    }
+    #[test]
+    fn preserves_supported_nested_value() {
+        assert_eq!(
+            quick_xml::de::from_str::<Outer>("<outer><item><a>1</a></item></outer>")
+                .unwrap()
+                .item,
+            First(1)
+        );
+    }
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Known {
+        a: u64,
+    }
+    #[test]
+    fn preserves_derived_unknown_field_skipping() {
+        assert_eq!(
+            quick_xml::de::from_str::<Known>(
+                "<root extra=\"yes\"><a>1</a><other><x/></other></root>"
+            )
+            .unwrap(),
+            Known { a: 1 }
+        );
+    }
+    #[test]
+    fn malformed_xml_still_fails() {
+        assert!(quick_xml::de::from_str::<First>("<root><a>1</a></wrong>").is_err());
+    }
+
+    #[derive(Debug)]
+    struct KeyOnly;
+    impl<'de> Deserialize<'de> for KeyOnly {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> Visitor<'de> for V {
+                type Value = KeyOnly;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str("one key")
+                }
+                fn visit_map<A: MapAccess<'de>>(self, mut m: A) -> Result<KeyOnly, A::Error> {
+                    let _ = m.next_key::<String>()?;
+                    Ok(KeyOnly)
+                }
+            }
+            d.deserialize_map(V)
+        }
+    }
+    #[test]
+    fn rejects_pending_attribute_value() {
+        assert!(quick_xml::de::from_str::<KeyOnly>("<root a=\"1\"/>").is_err());
+    }
+    #[test]
+    fn rejects_pending_child_value() {
+        assert!(quick_xml::de::from_str::<KeyOnly>("<root><a>1</a></root>").is_err());
+    }
+    #[test]
+    fn accepts_empty_element() {
+        assert!(quick_xml::de::from_str::<KeyOnly>("<root/>").is_ok());
+    }
+    #[derive(Debug, Deserialize)]
+    struct SameName {
+        item: Vec<First>,
+    }
+    #[test]
+    fn preserves_same_name_nested_siblings() {
+        let result = quick_xml::de::from_str::<SameName>(
+            "<item><item><item>1</item></item><item><item>2</item></item></item>",
+        )
+        .unwrap();
+        assert_eq!(result.item, vec![First(1), First(2)]);
+    }
+
+    #[cfg(feature = "serde-types")]
+    mod macro_mapping {
+        use quick_xml::impl_deserialize_for_internally_tagged_enum;
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        struct Root {
+            #[serde(rename = "$value")]
+            actions: Vec<Action>,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(rename_all = "kebab-case")]
+        enum Element {
+            Node {
+                #[serde(rename = "@id")]
+                id: u64,
+            },
+        }
+
+        #[derive(Debug, PartialEq)]
+        enum Action {
+            Create(Element),
+        }
+
+        impl_deserialize_for_internally_tagged_enum! {
+            Action, "@type",
+            ("create" => Create(Element))
+        }
+
+        #[test]
+        fn unsupported_inner_enum_must_not_panic_or_silently_drop_siblings() {
+            let xml = r#"<root><action type="create"><node id="1"/></action><action type="create"><node id="2"/></action></root>"#;
+            let outcome = std::panic::catch_unwind(|| quick_xml::de::from_str::<Root>(xml));
+            assert!(
+                outcome.is_ok(),
+                "deserialization should return a Result rather than panic"
+            );
+            if let Ok(Ok(root)) = outcome {
+                assert_eq!(
+                    root.actions,
+                    vec![
+                        Action::Create(Element::Node { id: 1 }),
+                        Action::Create(Element::Node { id: 2 })
+                    ],
+                    "successful decoding must not silently discard sibling actions"
+                );
+            }
+        }
+    }
+}
