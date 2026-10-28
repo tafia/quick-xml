@@ -892,10 +892,11 @@ impl<'i> BytesCData<'i> {
     ///
     /// This function performs following replacements:
     ///
-    /// | Character | Replacement
-    /// |-----------|------------
-    /// | `<`       | `&lt;`
-    /// | `&`       | `&amp;`
+    /// | Character      | Replacement
+    /// |----------------|------------
+    /// | `<`            | `&lt;`
+    /// | `>` after `]]` | `&gt;`
+    /// | `&`            | `&amp;`
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#syntax
     pub fn minimal_escape(self) -> Result<BytesText<'i>, EncodingError> {

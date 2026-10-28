@@ -41,6 +41,9 @@
 - [#1026]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns:="..."` declarations
   with an empty prefix. Previously such a declaration was silently treated as a declaration of
   the default namespace. New `NamespaceError::EmptyPrefixBind` variant is returned in that case.
+- [#1030]: `escape::minimal_escape`, `BytesCData::minimal_escape` and the serializer with
+  `QuoteLevel::Minimal` now escape `>` as `&gt;` when it closes a `]]>` sequence in text content.
+  Previously they produced text containing `]]>`, which is not allowed in XML documents.
 
 ### Misc Changes
 
@@ -55,6 +58,7 @@
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
+[#1030]: https://github.com/tafia/quick-xml/pull/1030
 
 
 ## 0.42.0 -- 2026-08-22
