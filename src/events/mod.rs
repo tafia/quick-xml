@@ -1694,6 +1694,21 @@ impl<'i> BytesDecl<'i> {
     /// If encoding in not known, or `encoding` key was not found, returns `None`.
     /// In case of duplicated `encoding` key, encoding, corresponding to the first
     /// one, is returned.
+    ///
+    /// The labels come from the WHATWG Encoding Standard, which maps some names
+    /// differently than the [IANA character sets registry] that XML refers to.
+    /// In particular, `ISO-8859-1`, `latin1` and `US-ASCII` are labels of
+    /// `windows-1252`. In a document declared as `ISO-8859-1`, bytes 0x80 to 0x9F
+    /// are therefore decoded as `windows-1252` characters (for example, 0x80 as `€`),
+    /// and not as the C1 control characters U+0080 to U+009F.
+    ///
+    /// ```
+    /// # use quick_xml::events::BytesDecl;
+    /// let decl = BytesDecl::new("1.0", Some("ISO-8859-1"), None);
+    /// assert_eq!(decl.encoder(), Some(encoding_rs::WINDOWS_1252));
+    /// ```
+    ///
+    /// [IANA character sets registry]: https://www.iana.org/assignments/character-sets/character-sets.xhtml
     #[cfg(feature = "encoding")]
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
