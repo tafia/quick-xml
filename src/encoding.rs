@@ -44,7 +44,7 @@ impl From<Utf8Error> for EncodingError {
 impl std::error::Error for EncodingError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Utf8(e) => Some(e),
+            Self::Utf8(e) => e.source(),
             #[cfg(feature = "encoding")]
             Self::Other(_) => None,
         }
@@ -54,7 +54,7 @@ impl std::error::Error for EncodingError {
 impl std::fmt::Display for EncodingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Utf8(e) => write!(f, "cannot decode input using UTF-8: {}", e),
+            Self::Utf8(e) => e.fmt(f),
             #[cfg(feature = "encoding")]
             Self::Other(encoding) => write!(f, "cannot decode input using {}", encoding.name()),
         }
