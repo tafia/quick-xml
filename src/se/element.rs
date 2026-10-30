@@ -164,19 +164,24 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
-        self,
-        name: &'static str,
+        mut self,
+        _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        Err(SeError::Unsupported(
-            format!(
-                "cannot serialize enum newtype variant `{}::{}`",
-                name, variant
-            )
-            .into(),
-        ))
+        self.ser.write_indent()?;
+        self.ser.indent.increase();
+
+        self.ser.writer.write_char('<')?;
+        self.ser.writer.write_str(self.key.0)?;
+        let mut st = Struct {
+            ser: self,
+            children: String::new(),
+            write_indent: true,
+        };
+        st.write_element(variant, value)?;
+        SerializeStruct::end(st)
     }
 
     #[inline]
@@ -733,8 +738,7 @@ mod tests {
         serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<root>&lt;&quot;&amp;&apos;&gt;</root>");
 
         serialize_as!(newtype: Newtype(42) => "<root>42</root>");
-        err!(enum_newtype: Enum::Newtype(42)
-            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype`"));
+        serialize_as!(enum_newtype: Enum::Newtype(42) => "<root><Newtype>42</Newtype></root>");
 
         serialize_as!(seq: vec![1, 2, 3]
             => "<root>1</root>\
@@ -1447,8 +1451,10 @@ mod tests {
         serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<root>&lt;&quot;&amp;&apos;&gt;</root>");
 
         serialize_as!(newtype: Newtype(42) => "<root>42</root>");
-        err!(enum_newtype: Enum::Newtype(42)
-            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype`"));
+        serialize_as!(enum_newtype: Enum::Newtype(42)
+        	=> "<root>\n  \
+                <Newtype>42</Newtype>\n\
+                </root>");
 
         serialize_as!(seq: vec![1, 2, 3]
             => "<root>1</root>\n\
