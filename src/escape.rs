@@ -62,7 +62,8 @@ pub enum EscapeError {
     /// If more than 128 entities would be expanded, this error is returned.
     TooManyNestedEntities,
     /// Replacement texts of entities expanded during attribute normalization
-    /// exceeded 10 000 000 bytes in total.
+    /// exceeded the limit on their total length. Unless another limit was passed
+    /// to [`normalize_attribute_value`], it is [`DEFAULT_MAX_ENTITY_EXPANSION`] bytes.
     ///
     /// This bounds the size of a normalized attribute value when entities reference
     /// each other many times (a so-called "billion laughs" attack), which the nesting
@@ -562,6 +563,7 @@ where
     normalize_attribute_value(
         value,
         depth,
+        DEFAULT_MAX_ENTITY_EXPANSION,
         is_xml10_normalization_char,
         normalize_xml10_eol_step,
         resolve_entity,
@@ -593,6 +595,7 @@ where
     normalize_attribute_value(
         value,
         depth,
+        DEFAULT_MAX_ENTITY_EXPANSION,
         is_xml11_normalization_char,
         normalize_xml11_eol_step,
         resolve_entity,
@@ -615,10 +618,10 @@ const fn is_xml11_normalization_char(b: &u8) -> bool {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Maximum total length of entity replacement texts that can be expanded while
-/// normalizing a single attribute value. The same limit is used by libxml2
+/// Default maximum total length of entity replacement texts that can be expanded
+/// while normalizing a single attribute value. The same limit is used by libxml2
 /// (`XML_MAX_TEXT_LENGTH`) when `XML_PARSE_HUGE` is not set.
-const MAX_ENTITY_EXPANSION: usize = 10_000_000;
+pub const DEFAULT_MAX_ENTITY_EXPANSION: usize = 10_000_000;
 
 /// Returns the attribute value normalized as per [the XML specification],
 /// using a custom entity resolver.
@@ -636,9 +639,10 @@ const MAX_ENTITY_EXPANSION: usize = 10_000_000;
 ///
 /// - `value`: unnormalized attribute value
 /// - `depth`: maximum number of nested entities that can be expanded. If expansion
-///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`].
-///   Independently of `depth`, if replacement texts of all expanded entities exceed
-///   10 000 000 bytes in total, [`EscapeError::TooLargeEntityExpansion`] is returned
+///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`]
+/// - `max_expansion`: maximum total length in bytes of replacement texts of all expanded
+///   entities. If they will be longer, the function will return [`EscapeError::TooLargeEntityExpansion`].
+///   [`DEFAULT_MAX_ENTITY_EXPANSION`] is used where this limit cannot be specified
 /// - `is_normalization_char`: a function to check if byte is the start byte of character
 ///   that should be normalized (UTF-8 encoding is assumed)
 /// - `normalize_eol_step`: a function that performs EOL normalization of a character
@@ -656,6 +660,7 @@ const MAX_ENTITY_EXPANSION: usize = 10_000_000;
 pub fn normalize_attribute_value<'input, 'entity, C, E, F>(
     value: &'input str,
     depth: usize,
+    max_expansion: usize,
     is_normalization_char: C,
     normalize_eol_step: E,
     mut resolve_entity: F,
@@ -672,7 +677,7 @@ where
     // version of the attribute, otherwise return the value unchanged
     if let Some(i) = iter.position(&is_normalization_char) {
         let mut normalized = String::with_capacity(value.len());
-        let mut expanded = 0;
+        let mut expansion_budget = max_expansion;
         let pos = normalize_attr_step(
             &mut normalized,
             &mut iter,
@@ -680,7 +685,7 @@ where
             0,
             i,
             depth,
-            &mut expanded,
+            &mut expansion_budget,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -692,7 +697,7 @@ where
             value,
             pos,
             depth,
-            &mut expanded,
+            &mut expansion_budget,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -708,7 +713,7 @@ fn normalize_attr_steps<'entity, C, E, F>(
     input: &str,
     mut pos: usize,
     depth: usize,
-    expanded: &mut usize,
+    expansion_budget: &mut usize,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -727,7 +732,7 @@ where
             pos,
             pos + i,
             depth,
-            expanded,
+            expansion_budget,
             is_normalization_char,
             normalize_eol_step,
             resolve_entity,
@@ -767,8 +772,8 @@ where
 /// - `seen_cr`: `\r\n` and `\r\x85` sequences should be normalized into one space
 ///   so this parameter tracks if we seen the `\r` before processing the current byte
 /// - `depth`: Current recursion depth. Too deep recursion will interrupt the algorithm
-/// - `expanded`: Total length of replacement texts of entities expanded so far.
-///   Too large expansion will interrupt the algorithm
+/// - `expansion_budget`: Total length of replacement texts of entities that can still
+///   be expanded. Too large expansion will interrupt the algorithm
 /// - `is_normalization_char`: a function to check if byte is the start byte of character
 ///   that should be normalized (UTF-8 encoding is assumed)
 /// - `normalize_eol_step`: a function that performs EOL normalization of a character
@@ -787,7 +792,7 @@ fn normalize_attr_step<'entity, C, E, F>(
     last_pos: usize,
     index: usize,
     depth: usize,
-    expanded: &mut usize,
+    expansion_budget: &mut usize,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -835,17 +840,16 @@ where
             // 2. For an entity reference, recursively apply this algorithm
             //    to the replacement text of the entity.
             if let Some(value) = resolve_entity(pat) {
-                *expanded += value.len();
-                if *expanded > MAX_ENTITY_EXPANSION {
-                    return Err(EscapeError::TooLargeEntityExpansion);
-                }
+                *expansion_budget = expansion_budget
+                    .checked_sub(value.len())
+                    .ok_or(EscapeError::TooLargeEntityExpansion)?;
                 normalize_attr_steps(
                     normalized,
                     &mut value.as_bytes().iter(),
                     value,
                     0,
                     depth.saturating_sub(1),
-                    expanded,
+                    expansion_budget,
                     is_normalization_char,
                     normalize_eol_step,
                     resolve_entity,
@@ -3280,6 +3284,64 @@ mod normalization {
             assert_eq!(
                 normalize_xml11_attribute_value("&l8;", 9, resolve),
                 Err(EscapeError::TooLargeEntityExpansion)
+            );
+        }
+
+        /// The limit is inclusive and also counts replacement texts of nested entities
+        #[test]
+        fn custom_expansion_limit() {
+            let normalize = |value, max_expansion| {
+                normalize_attribute_value(
+                    value,
+                    5,
+                    max_expansion,
+                    is_xml10_normalization_char,
+                    normalize_xml10_eol_step,
+                    |entity| match entity {
+                        "outer" => Some("&inner;&inner;"),
+                        "inner" => Some("text"),
+                        _ => None,
+                    },
+                )
+            };
+
+            // 14 bytes of `outer` and 4 bytes of `inner` two times
+            assert_eq!(normalize("&outer;", 22), Ok("texttext".into()));
+            assert_eq!(
+                normalize("&outer;", 21),
+                Err(EscapeError::TooLargeEntityExpansion)
+            );
+            assert_eq!(normalize("&outer;", usize::MAX), Ok("texttext".into()));
+
+            // Character references and `&amp;` are not entities that could be expanded
+            assert_eq!(normalize("&#32;&amp;\t", 0), Ok(" & ".into()));
+            assert_eq!(
+                normalize("&inner;", 0),
+                Err(EscapeError::TooLargeEntityExpansion)
+            );
+        }
+
+        /// `normalize_attribute_value` can expand more than the default limit allows
+        #[test]
+        fn expansion_limit_over_default() {
+            let entity = "x".repeat(DEFAULT_MAX_ENTITY_EXPANSION + 1);
+            let resolve = |_: &str| Some(entity.as_str());
+
+            assert_eq!(
+                normalize_xml10_attribute_value("&e;", 5, resolve),
+                Err(EscapeError::TooLargeEntityExpansion)
+            );
+            assert_eq!(
+                normalize_attribute_value(
+                    "&e;",
+                    5,
+                    entity.len(),
+                    is_xml10_normalization_char,
+                    normalize_xml10_eol_step,
+                    resolve,
+                )
+                .map(|v| v.len()),
+                Ok(entity.len())
             );
         }
     }
