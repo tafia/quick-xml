@@ -214,7 +214,7 @@ pub enum Error {
 
 impl Error {
     pub(crate) fn missed_end(name: QName) -> Self {
-        IllFormedError::MissingEndTag(name.as_ref().to_string()).into()
+        Error::IllFormed(IllFormedError::MissingEndTag(name.as_ref().to_string()))
     }
 }
 
@@ -403,28 +403,28 @@ pub mod serialize {
     impl From<EscapeError> for DeError {
         #[inline]
         fn from(e: EscapeError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Escape(e))
         }
     }
 
     impl From<EncodingError> for DeError {
         #[inline]
         fn from(e: EncodingError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Encoding(e))
         }
     }
 
     impl From<AttrError> for DeError {
         #[inline]
         fn from(e: AttrError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::InvalidAttr(e))
         }
     }
 
     impl From<NamespaceError> for DeError {
         #[inline]
         fn from(e: NamespaceError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Namespace(e))
         }
     }
 
