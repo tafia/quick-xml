@@ -110,7 +110,9 @@ impl<'a> Attribute<'a> {
     /// # Parameters
     ///
     /// - `depth`: maximum number of nested entities that can be expanded. If expansion
-    ///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`]
+    ///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`].
+    ///   Independently of `depth`, if replacement texts of all expanded entities exceed
+    ///   10 000 000 bytes in total, [`EscapeError::TooLargeEntityExpansion`] is returned
     /// - `resolve_entity`: a function to resolve entity. This function could be called
     ///   multiple times on the same input and can return different values in each case
     ///   for the same input, although it is not recommended
@@ -119,6 +121,7 @@ impl<'a> Attribute<'a> {
     /// [for 1.0]: https://www.w3.org/TR/xml/#AVNormalize
     /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
     /// [`EscapeError::TooManyNestedEntities`]: crate::escape::EscapeError::TooManyNestedEntities
+    /// [`EscapeError::TooLargeEntityExpansion`]: crate::escape::EscapeError::TooLargeEntityExpansion
     pub fn normalized_value_with<'entity>(
         &self,
         version: XmlVersion,

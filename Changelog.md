@@ -16,6 +16,10 @@
 
 ### Breaking Changes
 
+- [#1029]: `escape::normalize_attribute_value()` takes new `max_expansion` parameter that limits
+  the total length of expanded entities. Use `escape::DEFAULT_MAX_ENTITY_EXPANSION` for the limit
+  that is used everywhere else.
+
 ### New Features
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
@@ -41,6 +45,10 @@
 - [#1026]: `NamespaceResolver` (and therefore `NsReader`) now rejects `xmlns:="..."` declarations
   with an empty prefix. Previously such a declaration was silently treated as a declaration of
   the default namespace. New `NamespaceError::EmptyPrefixBind` variant is returned in that case.
+- [#1029]: `Attribute::normalized_value_with()` and `escape::normalize_attribute_value()` now
+  stop with new `EscapeError::TooLargeEntityExpansion` error when replacement texts of expanded
+  entities exceed 10 000 000 bytes by default. Previously only nesting depth was limited, so entities
+  that reference each other many times ("billion laughs") could expand a small document into gigabytes.
 - [#1030]: `escape::minimal_escape`, `BytesCData::minimal_escape` and the serializer with
   `QuoteLevel::Minimal` now escape `>` as `&gt;` when it closes a `]]>` sequence in text content.
   Previously they produced text containing `]]>`, which is not allowed in XML documents.
@@ -58,6 +66,7 @@
 [#1024]: https://github.com/tafia/quick-xml/pull/1024
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
+[#1029]: https://github.com/tafia/quick-xml/pull/1029
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 
 
