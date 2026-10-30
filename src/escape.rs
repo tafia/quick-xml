@@ -119,7 +119,7 @@ impl std::error::Error for EscapeError {
 /// | `"`       | `&quot;`
 /// | `\r`      | `&#13;`
 pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| {
+    _escape(raw, |ch, _| {
         matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r')
     })
 }
@@ -140,26 +140,33 @@ pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `&`       | `&amp;`
 /// | `\r`      | `&#13;`
 pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\r'))
+    _escape(raw, |ch, _| matches!(ch, b'<' | b'>' | b'&' | b'\r'))
 }
 
 /// XML standard [requires] that only `<` and `&` was escaped in text content or
-/// attribute value. All other characters not necessary to be escaped, although
+/// attribute value, and that `>` was escaped when it appears in the string `]]>`
+/// in text content. All other characters not necessary to be escaped, although
 /// for compatibility with SGML they also should be escaped. Practically, escaping
 /// only those characters is enough. Also escapes `\r` which would otherwise be
 /// converted to `\n` by XML end-of-line normalization.
 ///
 /// This function performs following replacements:
 ///
-/// | Character | Replacement
-/// |-----------|------------
-/// | `<`       | `&lt;`
-/// | `&`       | `&amp;`
-/// | `\r`      | `&#13;`
+/// | Character        | Replacement
+/// |------------------|------------
+/// | `<`              | `&lt;`
+/// | `>` after `]]`   | `&gt;`
+/// | `&`              | `&amp;`
+/// | `\r`             | `&#13;`
 ///
 /// [requires]: https://www.w3.org/TR/xml11/#syntax
 pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'&' | b'\r'))
+    _escape(raw, |ch, before| match ch {
+        b'<' | b'&' | b'\r' => true,
+        // `]]>` is not allowed in text content
+        b'>' => before.ends_with(b"]]"),
+        _ => false,
+    })
 }
 
 /// Escapes a `&str` for use in an XML attribute value. In addition to the
@@ -179,7 +186,7 @@ pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
 /// | `\n`      | `&#10;`
 /// | `\t`      | `&#9;`
 pub(crate) fn escape_attribute<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
-    _escape(raw, |ch| {
+    _escape(raw, |ch, _| {
         matches!(
             ch,
             b'<' | b'>' | b'&' | b'\'' | b'\"' | b'\r' | b'\n' | b'\t'
@@ -212,18 +219,22 @@ where
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-fn _escape<'a, F: Fn(u8) -> bool>(raw: impl Into<Cow<'a, str>>, escape_chars: F) -> Cow<'a, str> {
+///
+/// `escape_chars` is called with each byte and the part of `raw` that precedes it.
+fn _escape<'a, F: Fn(u8, &[u8]) -> bool>(
+    raw: impl Into<Cow<'a, str>>,
+    escape_chars: F,
+) -> Cow<'a, str> {
     let raw = raw.into();
     let bytes = raw.as_bytes();
     let mut escaped = None;
-    let mut iter = bytes.iter();
+    let mut iter = bytes.iter().enumerate();
     let mut pos = 0;
-    while let Some(i) = iter.position(|&b| escape_chars(b)) {
+    while let Some((new_pos, _)) = iter.find(|&(i, &b)| escape_chars(b, &bytes[..i])) {
         if escaped.is_none() {
             escaped = Some(String::with_capacity(raw.len()));
         }
         let escaped = escaped.as_mut().expect("initialized");
-        let new_pos = pos + i;
         // SAFETY: It should fail only on OOM
         escape_char(escaped, &raw, pos, new_pos).unwrap();
         pos = new_pos + 1;

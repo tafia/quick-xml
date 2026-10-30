@@ -365,10 +365,11 @@ pub enum QuoteLevel {
     ///
     /// Characters that will be replaced:
     ///
-    /// Original | Replacement
-    /// ---------|------------
-    /// `<`      | `&lt;`
-    /// `&`      | `&amp;`
+    /// Original                        | Replacement
+    /// --------------------------------|------------
+    /// `<`                             | `&lt;`
+    /// `>` after `]]` in text content  | `&gt;`
+    /// `&`                             | `&amp;`
     Minimal,
 }
 

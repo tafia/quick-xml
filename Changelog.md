@@ -49,6 +49,9 @@
   stop with new `EscapeError::TooLargeEntityExpansion` error when replacement texts of expanded
   entities exceed 10 000 000 bytes by default. Previously only nesting depth was limited, so entities
   that reference each other many times ("billion laughs") could expand a small document into gigabytes.
+- [#1030]: `escape::minimal_escape`, `BytesCData::minimal_escape` and the serializer with
+  `QuoteLevel::Minimal` now escape `>` as `&gt;` when it closes a `]]>` sequence in text content.
+  Previously they produced text containing `]]>`, which is not allowed in XML documents.
 
 ### Misc Changes
 
@@ -64,6 +67,7 @@
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
 [#1029]: https://github.com/tafia/quick-xml/pull/1029
+[#1030]: https://github.com/tafia/quick-xml/pull/1030
 
 
 ## 0.42.0 -- 2026-08-22

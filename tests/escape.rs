@@ -56,6 +56,10 @@ fn minimal_escape() {
         "prefix_\"a\"b&amp;&lt;>c"
     );
     assert_eq!(escape::minimal_escape("hello\rworld"), "hello&#13;world");
+    // `]]>` is not allowed in text content
+    assert_eq!(escape::minimal_escape("a]]>b"), "a]]&gt;b");
+    assert_eq!(escape::minimal_escape("a]]]>b]>c] ]>"), "a]]]&gt;b]>c] ]>");
+    assert_eq!(escape::minimal_escape("]]<>"), "]]&lt;>");
 }
 
 #[test]

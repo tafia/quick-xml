@@ -25,16 +25,16 @@ pub enum QuoteTarget {
     CData,
 }
 
+/// `escape_chars` is called with each byte and the part of `value` that precedes it.
 fn escape_into<W, F>(mut writer: W, value: &str, escape_chars: F) -> fmt::Result
 where
     W: Write,
-    F: Fn(u8) -> bool,
+    F: Fn(u8, &[u8]) -> bool,
 {
     let bytes = value.as_bytes();
-    let mut iter = bytes.iter();
+    let mut iter = bytes.iter().enumerate();
     let mut pos = 0;
-    while let Some(i) = iter.position(|&b| escape_chars(b)) {
-        let new_pos = pos + i;
+    while let Some((new_pos, _)) = iter.find(|&(i, &b)| escape_chars(b, &bytes[..i])) {
         escape_char(&mut writer, value, pos, new_pos)?;
         pos = new_pos + 1;
     }
@@ -66,7 +66,7 @@ where
             }
             Ok(())
         }
-        (_, Full) => escape_into(writer, value, |ch| match ch {
+        (_, Full) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -74,22 +74,24 @@ where
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (Text, Partial) => escape_into(writer, value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch, before| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
             b'&' | b'<' => true,
+            // `]]>` is not allowed in text content
+            b'>' => before.ends_with(b"]]"),
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -98,7 +100,7 @@ where
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items, cannot be used in the item
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -108,7 +110,7 @@ where
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -117,7 +119,7 @@ where
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch, _| match ch {
             // Spaces used as delimiters of list items
             b' ' | b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -152,29 +154,31 @@ where
             }
             Ok(())
         }
-        (Text, Full) => escape_into(writer, value, |ch| match ch {
+        (Text, Full) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL normalization (Section 2.11) would convert \r to \n
             b'\r' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
             _ => false,
         }),
-        (Text, Partial) => escape_into(writer, value, |ch| match ch {
+        (Text, Partial) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL normalization (Section 2.11) would convert \r to \n
             b'\r' => true,
             // Required characters to escape
             b'&' | b'<' | b'>' => true,
             _ => false,
         }),
-        (Text, Minimal) => escape_into(writer, value, |ch| match ch {
+        (Text, Minimal) => escape_into(writer, value, |ch, before| match ch {
             // XML EOL normalization (Section 2.11) would convert \r to \n
             b'\r' => true,
             // Required characters to escape
             b'&' | b'<' => true,
+            // `]]>` is not allowed in text content
+            b'>' => before.ends_with(b"]]"),
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (_, Full) => escape_into(writer, value, |ch| match ch {
+        (_, Full) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL normalization (Section 2.11) and attribute-value normalization
             // (Section 3.3.3) would convert these to \n and space respectively
             b'\r' | b'\n' | b'\t' => true,
@@ -183,7 +187,7 @@ where
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+        (DoubleQAttr, Partial) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
             b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -192,7 +196,7 @@ where
             b'"' => true,
             _ => false,
         }),
-        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+        (DoubleQAttr, Minimal) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
             b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -202,7 +206,7 @@ where
             _ => false,
         }),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => escape_into(writer, value, |ch| match ch {
+        (SingleQAttr, Partial) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
             b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -211,7 +215,7 @@ where
             b'\'' => true,
             _ => false,
         }),
-        (SingleQAttr, Minimal) => escape_into(writer, value, |ch| match ch {
+        (SingleQAttr, Minimal) => escape_into(writer, value, |ch, _| match ch {
             // XML EOL / attribute-value normalization (Section 2.11, Section 3.3.3)
             b'\r' | b'\n' | b'\t' => true,
             // Required characters to escape
@@ -849,6 +853,14 @@ mod tests {
             }
 
             #[test]
+            fn text_cdata_end() {
+                assert_eq!(
+                    escape_item("a]]>b]>c", QuoteTarget::Text, QuoteLevel::Minimal),
+                    "a]]&gt;b]>c"
+                );
+            }
+
+            #[test]
             fn double_quote_attr() {
                 assert_eq!(
                     escape_item(
@@ -1004,6 +1016,14 @@ mod tests {
                         QuoteLevel::Minimal
                     ),
                     "text&lt;\"'&amp;> \t\n&#13;text"
+                );
+            }
+
+            #[test]
+            fn text_cdata_end() {
+                assert_eq!(
+                    escape_list("a]]>b]>c", QuoteTarget::Text, QuoteLevel::Minimal),
+                    "a]]&gt;b]>c"
                 );
             }
 
