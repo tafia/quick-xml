@@ -39,7 +39,7 @@ impl std::fmt::Display for ParseCharRefError {
 impl std::error::Error for ParseCharRefError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::InvalidNumber(e) => Some(e),
+            Self::InvalidNumber(e) => e.source(),
             _ => None,
         }
     }
@@ -74,9 +74,7 @@ impl std::fmt::Display for EscapeError {
                 "Error while escaping character at range {:?}: Cannot find ';' after '&'",
                 e
             ),
-            Self::InvalidCharRef(e) => {
-                write!(f, "invalid character reference: {}", e)
-            }
+            Self::InvalidCharRef(_) => f.write_str("invalid character reference"),
             Self::TooManyNestedEntities => {
                 f.write_str("too many nested entities in an attribute value")
             }
