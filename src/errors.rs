@@ -291,13 +291,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "I/O error: {}", e),
-            Self::Syntax(e) => write!(f, "syntax error: {}", e),
-            Self::IllFormed(e) => write!(f, "ill-formed document: {}", e),
-            Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
-            Self::Encoding(e) => e.fmt(f),
-            Self::Escape(e) => e.fmt(f),
-            Self::Namespace(e) => e.fmt(f),
+            Self::Io(_) => f.write_str("unreadable XML"),
+            Self::Encoding(_) => f.write_str("undecodable XML"),
+            Self::Syntax(_) => f.write_str("syntax error"),
+            Self::IllFormed(_) | Self::InvalidAttr(_) | Self::Escape(_) | Self::Namespace(_) => {
+                f.write_str("ill-formed XML")
+            }
         }
     }
 }
