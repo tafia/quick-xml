@@ -80,14 +80,8 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             }
             Ok((_, Event::Comment(e))) => format!("Comment({})", e.as_ref()),
             Ok((_, Event::CData(e))) => format!("CData({})", e.as_ref()),
-            Ok((_, Event::Text(e))) => match unescape(e.as_ref()) {
-                Ok(c) => format!("Characters({})", &c),
-                Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
-            },
-            Ok((_, Event::GeneralRef(e))) => match unescape(e.as_ref()) {
-                Ok(c) => format!("Reference({})", &c),
-                Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
-            },
+            Ok((_, Event::Text(e))) => format!("Characters({})", e.as_ref()),
+            Ok((_, Event::GeneralRef(e))) => format!("Reference({})", e.as_ref()),
             Ok((_, Event::Eof)) => "EndDocument".to_string(),
             Err(e) => format!("Error: {}", e),
         };
