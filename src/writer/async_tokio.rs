@@ -87,6 +87,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
@@ -126,6 +127,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesCData;
     /// # use tokio::io::AsyncWriteExt;
@@ -168,6 +170,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesPI;
     /// # use tokio::io::AsyncWriteExt;
@@ -209,6 +212,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
@@ -244,6 +248,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
