@@ -5,13 +5,14 @@
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.write_fmt(format_args!("{}", value))?;
+            self.writer.write_fmt(format_args!("{}", value))?;
             Ok(self.writer)
         }
     };
     () => {
         fn serialize_bool(mut self, value: bool) -> Result<Self::Ok, Self::Error> {
-            self.write_str(if value { "true" } else { "false" })?;
+            self.writer
+                .write_str(if value { "true" } else { "false" })?;
             Ok(self.writer)
         }
 

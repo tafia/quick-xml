@@ -492,17 +492,6 @@ pub struct SimpleTypeSerializer<W: Write> {
     pub level: QuoteLevel,
 }
 
-impl<W: Write> SimpleTypeSerializer<W> {
-    #[inline]
-    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
-        Ok(self.writer.write_str(value)?)
-    }
-    #[inline]
-    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<(), SeError> {
-        Ok(self.writer.write_fmt(args)?)
-    }
-}
-
 impl<W: Write> Serializer for SimpleTypeSerializer<W> {
     type Ok = W;
     type Error = SeError;
