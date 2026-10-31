@@ -324,12 +324,12 @@ pub mod serialize {
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
 
-    /// (De)serialization error
+    /// Deserialization error
     #[derive(Clone, Debug)]
     pub enum DeError {
-        /// Serde custom error
+        /// Type cannot be deserialized due to violation of some type-specific rules.
         Custom(String),
-        /// Xml parsing error
+        /// Type cannot be deserialized due to unparsable or invalid XML.
         InvalidXml(Error),
         /// This error indicates an error in the [`Deserialize`](serde::Deserialize)
         /// implementation when read a map or a struct: `MapAccess::next_value[_seed]`
@@ -380,7 +380,7 @@ pub mod serialize {
     impl std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                Self::InvalidXml(e) => Some(e),
+                Self::InvalidXml(e) => e.source(),
                 _ => None,
             }
         }
