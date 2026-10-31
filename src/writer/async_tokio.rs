@@ -26,14 +26,14 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             Event::Empty(e) => self.write_wrapped_async("<", &e, "/>").await,
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write_async(e.as_bytes()).await
+                self.writer.write_all(e.as_bytes()).await
             }
             Event::Comment(e) => self.write_wrapped_async("<!--", &e, "-->").await,
             Event::CData(e) => {
                 next_should_line_break = false;
-                self.write_async(b"<![CDATA[").await?;
-                self.write_async(e.as_bytes()).await?;
-                self.write_async(b"]]>").await
+                self.writer.write_all(b"<![CDATA[").await?;
+                self.writer.write_all(e.as_bytes()).await?;
+                self.writer.write_all(b"]]>").await
             }
             Event::Decl(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::PI(e) => self.write_wrapped_async("<?", &e, "?>").await,
@@ -60,11 +60,6 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     }
 
     #[inline]
-    async fn write_async(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value).await
-    }
-
-    #[inline]
     async fn write_wrapped_async(
         &mut self,
         before: &str,
@@ -77,9 +72,9 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 self.writer.write_all(i.current().as_bytes()).await?;
             }
         }
-        self.write_async(before.as_bytes()).await?;
-        self.write_async(value.as_bytes()).await?;
-        self.write_async(after.as_bytes()).await?;
+        self.writer.write_all(before.as_bytes()).await?;
+        self.writer.write_all(value.as_bytes()).await?;
+        self.writer.write_all(after.as_bytes()).await?;
         Ok(())
     }
 }

@@ -251,7 +251,7 @@ impl<W: Write> Writer<W> {
     /// ```
     /// [Byte-Order-Mark]: https://unicode.org/faq/utf_bom.html#BOM
     pub fn write_bom(&mut self) -> io::Result<()> {
-        self.write(UTF8_BOM)
+        self.writer.write_all(UTF8_BOM)
     }
 
     /// Writes the given event to the underlying writer.
@@ -282,14 +282,14 @@ impl<W: Write> Writer<W> {
             ),
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write(e.as_bytes())
+                self.writer.write_all(e.as_bytes())
             }
             Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
             Event::CData(e) => {
                 next_should_line_break = false;
-                self.write(b"<![CDATA[")?;
-                self.write(e.as_bytes())?;
-                self.write(b"]]>")
+                self.writer.write_all(b"<![CDATA[")?;
+                self.writer.write_all(e.as_bytes())?;
+                self.writer.write_all(b"]]>")
             }
             Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
             Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
@@ -303,12 +303,6 @@ impl<W: Write> Writer<W> {
         result
     }
 
-    /// Writes bytes
-    #[inline]
-    pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value)
-    }
-
     #[inline]
     fn write_wrapped(&mut self, before: &str, value: &str, after: &str) -> io::Result<()> {
         if let Some(ref i) = self.indent {
@@ -317,9 +311,9 @@ impl<W: Write> Writer<W> {
                 self.writer.write_all(i.current().as_bytes())?;
             }
         }
-        self.write(before.as_bytes())?;
-        self.write(value.as_bytes())?;
-        self.write(after.as_bytes())?;
+        self.writer.write_all(before.as_bytes())?;
+        self.writer.write_all(value.as_bytes())?;
+        self.writer.write_all(after.as_bytes())?;
         Ok(())
     }
 
