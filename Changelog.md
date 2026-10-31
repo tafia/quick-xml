@@ -16,6 +16,10 @@
 
 ### Breaking Changes
 
+- [#1031]: Async writing methods on `Writer` now returns `tokio::io::Result` instead of `quick_xml::Result`.
+  That corresponds to how non-async writing methods returns `io::Result`.
+  `quick_xml::Error` used only for reader errors in the rest of library.
+
 ### New Features
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
@@ -68,6 +72,7 @@
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
 [#1027]: https://github.com/tafia/quick-xml/pull/1027
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
+[#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 
 
