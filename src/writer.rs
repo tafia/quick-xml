@@ -174,11 +174,9 @@ impl<W> Writer<W> {
     /// # Example
     ///
     /// ```
-    /// # use quick_xml::Result;
-    /// # fn main() -> Result<()> {
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// # fn main() -> std::io::Result<()> {
+    /// use quick_xml::events::BytesText;
     /// use quick_xml::writer::Writer;
-    /// use quick_xml::Error;
     /// use std::io::Cursor;
     ///
     /// let mut writer = Writer::new(Cursor::new(Vec::new()));
@@ -229,11 +227,9 @@ impl<W: Write> Writer<W> {
     /// # Example
     ///
     /// ```rust
-    /// # use quick_xml::Result;
-    /// # fn main() -> Result<()> {
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// # use pretty_assertions::assert_eq;
+    /// # fn main() -> std::io::Result<()> {
     /// use quick_xml::writer::Writer;
-    /// use quick_xml::Error;
     /// use std::io::Cursor;
     ///
     /// let mut buffer = Vec::new();
