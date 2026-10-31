@@ -136,21 +136,21 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 
         match self.empty_element_handling {
             EmptyElementHandling::SelfClosed => {
-                self.writer.write_char('<')?;
+                self.writer.write_str("<")?;
                 self.writer.write_str(name.0)?;
                 self.writer.write_str("/>")?;
             }
             EmptyElementHandling::SelfClosedWithSpace => {
-                self.writer.write_char('<')?;
+                self.writer.write_str("<")?;
                 self.writer.write_str(name.0)?;
                 self.writer.write_str(" />")?;
             }
             EmptyElementHandling::Expanded => {
-                self.writer.write_char('<')?;
+                self.writer.write_str("<")?;
                 self.writer.write_str(name.0)?;
                 self.writer.write_str("></")?;
                 self.writer.write_str(name.0)?;
-                self.writer.write_char('>')?;
+                self.writer.write_str(">")?;
             }
         }
 
@@ -167,15 +167,15 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         S: for<'a> FnOnce(SimpleTypeSerializer<&'a mut W>) -> Result<&'a mut W, SeError>,
     {
         self.write_indent()?;
-        self.writer.write_char('<')?;
+        self.writer.write_str("<")?;
         self.writer.write_str(name.0)?;
-        self.writer.write_char('>')?;
+        self.writer.write_str(">")?;
 
         let writer = serialize(self.into_simple_type_serializer_impl())?;
 
         writer.write_str("</")?;
         writer.write_str(name.0)?;
-        writer.write_char('>')?;
+        writer.write_str(">")?;
         Ok(WriteResult::Element)
     }
 

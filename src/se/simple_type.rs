@@ -271,7 +271,7 @@ impl<W: Write> AtomicSerializer<W> {
     fn write_delimiter(&mut self) -> fmt::Result {
         if self.write_delimiter {
             // TODO: Customization point -- possible non-XML compatible extension to specify delimiter char
-            return self.writer.write_char(' ');
+            return self.writer.write_str(" ");
         }
         Ok(())
     }
