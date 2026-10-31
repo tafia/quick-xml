@@ -324,7 +324,6 @@ pub mod serialize {
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
-    use std::str::Utf8Error;
 
     /// (De)serialization error
     #[derive(Clone, Debug)]
@@ -449,8 +448,6 @@ pub mod serialize {
         ///
         /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
         Unsupported(Cow<'static, str>),
-        /// Some value could not be turned to UTF-8
-        NonEncodable(Utf8Error),
     }
 
     impl fmt::Display for SeError {
@@ -460,7 +457,6 @@ pub mod serialize {
                 Self::Io(e) => write!(f, "I/O error: {}", e),
                 Self::Fmt(e) => write!(f, "formatting error: {}", e),
                 Self::Unsupported(s) => write!(f, "unsupported value: {}", s),
-                Self::NonEncodable(e) => write!(f, "malformed UTF-8: {}", e),
             }
         }
     }
@@ -484,13 +480,6 @@ pub mod serialize {
         #[inline]
         fn from(e: IoError) -> Self {
             Self::Io(Arc::new(e))
-        }
-    }
-
-    impl From<Utf8Error> for SeError {
-        #[inline]
-        fn from(e: Utf8Error) -> Self {
-            Self::NonEncodable(e)
         }
     }
 

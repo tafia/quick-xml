@@ -19,6 +19,7 @@
 - [#1031]: Async writing methods on `Writer` now returns `tokio::io::Result` instead of `quick_xml::Result`.
   That corresponds to how non-async writing methods returns `io::Result`.
   `quick_xml::Error` used only for reader errors in the rest of library.
+- [#1031]: Remove `quick_xml::SeError::NonEncodable` variant. It is unused since [#963] (0.42.0).
 
 ### New Features
 
@@ -61,6 +62,7 @@
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
 
+[#963]: https://github.com/tafia/quick-xml/pull/963
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
 [#1009]: https://github.com/tafia/quick-xml/pull/1009

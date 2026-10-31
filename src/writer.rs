@@ -346,8 +346,7 @@ impl<W: Write> Writer<W> {
     /// # use serde::Serialize;
     /// # use quick_xml::events::{BytesStart, Event};
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::se::SeError;
-    /// # fn main() -> Result<(), SeError> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct MyData {
     ///     question: String,
