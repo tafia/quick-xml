@@ -5,12 +5,11 @@ use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
-use crate::se::{EmptyElementHandling, SeError, WriteResult, XmlName};
+use crate::se::{EmptyElementHandling, SeError, Write, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
 };
-use std::fmt::Write;
 
 /// Writes simple type content between [`ElementSerializer::key`] tags.
 macro_rules! write_primitive {

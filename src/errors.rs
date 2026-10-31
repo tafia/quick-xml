@@ -436,8 +436,6 @@ pub mod serialize {
         ///
         /// Contains the reference-counted I/O error to make the error type `Clone`able.
         Io(Arc<IoError>),
-        /// Some value could not be formatted
-        Fmt(std::fmt::Error),
         /// Serialized type cannot be represented in an XML due to violation of the
         /// XML rules in the final XML document. For example, attempt to serialize
         /// a `HashMap<{integer}, ...>` would cause this error because [XML name]
@@ -453,14 +451,13 @@ pub mod serialize {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 Self::Custom(s) => f.write_str(s),
-                Self::Io(e) => write!(f, "I/O error: {}", e),
-                Self::Fmt(e) => write!(f, "formatting error: {}", e),
+                Self::Io(_) => f.write_str("cannot write XML"),
                 Self::Unsupported(s) => write!(f, "unsupported value: {}", s),
             }
         }
     }
 
-    impl ::std::error::Error for SeError {
+    impl std::error::Error for SeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
                 Self::Io(e) => Some(e),
@@ -479,13 +476,6 @@ pub mod serialize {
         #[inline]
         fn from(e: IoError) -> Self {
             Self::Io(Arc::new(e))
-        }
-    }
-
-    impl From<fmt::Error> for SeError {
-        #[inline]
-        fn from(e: fmt::Error) -> Self {
-            Self::Fmt(e)
         }
     }
 }

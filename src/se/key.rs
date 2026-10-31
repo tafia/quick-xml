@@ -1,6 +1,5 @@
-use crate::se::SeError;
+use crate::se::{SeError, Write};
 use serde::ser::{Impossible, Serialize, Serializer};
-use std::fmt::Write;
 
 /// A serializer, that ensures, that only plain types can be serialized,
 /// so result can be used as an XML tag or attribute name.

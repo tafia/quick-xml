@@ -386,11 +386,11 @@ impl<W: Write> Writer<W> {
         tag_name: &str,
         content: &T,
     ) -> Result<(), SeError> {
-        use crate::se::{Indent, Serializer};
+        use crate::se::{Indent, Serializer, Utf8Writer};
 
         self.write_indent()?;
-        let mut fmt = ToFmtWrite(&mut self.writer);
-        let mut serializer = Serializer::with_root(&mut fmt, Some(tag_name))?;
+        let mut writer = Utf8Writer(&mut self.writer);
+        let mut serializer = Serializer::with_root(&mut writer, Some(tag_name))?;
 
         if let Some(indent) = &mut self.indent {
             serializer.set_indent(Indent::Borrow(indent));
@@ -641,18 +641,6 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)
-    }
-}
-#[cfg(feature = "serialize")]
-pub(crate) struct ToFmtWrite<T>(pub T);
-
-#[cfg(feature = "serialize")]
-impl<T> std::fmt::Write for ToFmtWrite<T>
-where
-    T: std::io::Write,
-{
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
     }
 }
 

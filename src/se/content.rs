@@ -4,12 +4,11 @@ use crate::de::TEXT_KEY;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
 use crate::se::{
-    EmptyElementHandling, Indent, QuoteLevel, SeError, TextFormat, WriteResult, XmlName,
+    EmptyElementHandling, Indent, QuoteLevel, SeError, TextFormat, Write, WriteResult, XmlName,
 };
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
-use std::fmt::Write;
 
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {

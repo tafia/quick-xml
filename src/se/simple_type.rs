@@ -3,14 +3,14 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::escape::escape_char;
-use crate::se::{QuoteLevel, SeError};
+use crate::se::{QuoteLevel, SeError, Write};
 use crate::utils::CDataIterator;
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
 };
-use std::fmt::{self, Write};
+use std::fmt;
+use std::io;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteTarget {
@@ -25,8 +25,32 @@ pub enum QuoteTarget {
     CData,
 }
 
+// TODO: Unfortunately, copy of crate::escape::escape_char. It would be nice to merge both...
+fn escape_char<W>(writer: &mut W, value: &str, from: usize, to: usize) -> io::Result<()>
+where
+    W: Write,
+{
+    writer.write_str(&value[from..to])?;
+    match value.as_bytes()[to] {
+        b'<' => writer.write_str("&lt;")?,
+        b'>' => writer.write_str("&gt;")?,
+        b'\'' => writer.write_str("&apos;")?,
+        b'&' => writer.write_str("&amp;")?,
+        b'"' => writer.write_str("&quot;")?,
+
+        // Whitespace characters: used as delimiters in xs:list elements,
+        // and subject to XML EOL / attribute-value normalization
+        b'\t' => writer.write_str("&#9;")?,
+        b'\n' => writer.write_str("&#10;")?,
+        b'\r' => writer.write_str("&#13;")?,
+        b' ' => writer.write_str("&#32;")?,
+        _ => unreachable!("Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"),
+    }
+    Ok(())
+}
+
 /// `escape_chars` is called with each byte and the part of `value` that precedes it.
-fn escape_into<W, F>(mut writer: W, value: &str, escape_chars: F) -> fmt::Result
+fn escape_into<W, F>(mut writer: W, value: &str, escape_chars: F) -> io::Result<()>
 where
     W: Write,
     F: Fn(u8, &[u8]) -> bool,
@@ -47,7 +71,12 @@ where
 
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
-fn escape_item<W>(mut writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+fn escape_item<W>(
+    mut writer: W,
+    value: &str,
+    target: QuoteTarget,
+    level: QuoteLevel,
+) -> io::Result<()>
 where
     W: Write,
 {
@@ -138,7 +167,12 @@ where
 /// preservation because XML parsers normalize these characters on input
 /// (Section 2.11, Section 3.3.3). Character references bypass normalization.
 /// This matches the behavior of libxml2.
-fn escape_list<W>(mut writer: W, value: &str, target: QuoteTarget, level: QuoteLevel) -> fmt::Result
+fn escape_list<W>(
+    mut writer: W,
+    value: &str,
+    target: QuoteTarget,
+    level: QuoteLevel,
+) -> io::Result<()>
 where
     W: Write,
 {
@@ -268,7 +302,7 @@ pub struct AtomicSerializer<W: Write> {
 }
 
 impl<W: Write> AtomicSerializer<W> {
-    fn write_delimiter(&mut self) -> fmt::Result {
+    fn write_delimiter(&mut self) -> io::Result<()> {
         if self.write_delimiter {
             // TODO: Customization point -- possible non-XML compatible extension to specify delimiter char
             return self.writer.write_str(" ");

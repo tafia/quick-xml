@@ -16,10 +16,17 @@
 
 ### Breaking Changes
 
+- [#499]: Serde serializer now writes to objects that implements new `quick_xml::se::Write` trait.
+  It is implemented for `String` only. If you use another `std::fmt::Write` implementation,
+  implement new trait for it or use forwarding wrapper. To write to `std::io::Write`
+  a `quick_xml::se::Utf8Writer` is provided, as well as existing `quick_xml::se::to_utf8_io_writer()`.
 - [#1031]: Async writing methods on `Writer` now returns `tokio::io::Result` instead of `quick_xml::Result`.
   That corresponds to how non-async writing methods returns `io::Result`.
   `quick_xml::Error` used only for reader errors in the rest of library.
 - [#1031]: Remove `quick_xml::SeError::NonEncodable` variant. It is unused since [#963] (0.42.0).
+- [#1031]: Remove `quick_xml::SeError::Fmt` variant. It represented the error of writing XML into
+  the underlying writer (except for writing indentation bytes, which producing `Io` error variant).
+  `quick_xml::SeError::Io` now returned in both cases.
 
 ### New Features
 
@@ -62,6 +69,7 @@
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
 
+[#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
