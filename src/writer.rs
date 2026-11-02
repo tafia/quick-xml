@@ -174,11 +174,9 @@ impl<W> Writer<W> {
     /// # Example
     ///
     /// ```
-    /// # use quick_xml::Result;
-    /// # fn main() -> Result<()> {
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// # fn main() -> std::io::Result<()> {
+    /// use quick_xml::events::BytesText;
     /// use quick_xml::writer::Writer;
-    /// use quick_xml::Error;
     /// use std::io::Cursor;
     ///
     /// let mut writer = Writer::new(Cursor::new(Vec::new()));
@@ -229,11 +227,9 @@ impl<W: Write> Writer<W> {
     /// # Example
     ///
     /// ```rust
-    /// # use quick_xml::Result;
-    /// # fn main() -> Result<()> {
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// # use pretty_assertions::assert_eq;
+    /// # fn main() -> std::io::Result<()> {
     /// use quick_xml::writer::Writer;
-    /// use quick_xml::Error;
     /// use std::io::Cursor;
     ///
     /// let mut buffer = Vec::new();
@@ -255,7 +251,7 @@ impl<W: Write> Writer<W> {
     /// ```
     /// [Byte-Order-Mark]: https://unicode.org/faq/utf_bom.html#BOM
     pub fn write_bom(&mut self) -> io::Result<()> {
-        self.write(UTF8_BOM)
+        self.writer.write_all(UTF8_BOM)
     }
 
     /// Writes the given event to the underlying writer.
@@ -286,14 +282,14 @@ impl<W: Write> Writer<W> {
             ),
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write(e.as_bytes())
+                self.writer.write_all(e.as_bytes())
             }
             Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
             Event::CData(e) => {
                 next_should_line_break = false;
-                self.write(b"<![CDATA[")?;
-                self.write(e.as_bytes())?;
-                self.write(b"]]>")
+                self.writer.write_all(b"<![CDATA[")?;
+                self.writer.write_all(e.as_bytes())?;
+                self.writer.write_all(b"]]>")
             }
             Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
             Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
@@ -307,12 +303,6 @@ impl<W: Write> Writer<W> {
         result
     }
 
-    /// Writes bytes
-    #[inline]
-    pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
-        self.writer.write_all(value)
-    }
-
     #[inline]
     fn write_wrapped(&mut self, before: &str, value: &str, after: &str) -> io::Result<()> {
         if let Some(ref i) = self.indent {
@@ -321,9 +311,9 @@ impl<W: Write> Writer<W> {
                 self.writer.write_all(i.current().as_bytes())?;
             }
         }
-        self.write(before.as_bytes())?;
-        self.write(value.as_bytes())?;
-        self.write(after.as_bytes())?;
+        self.writer.write_all(before.as_bytes())?;
+        self.writer.write_all(value.as_bytes())?;
+        self.writer.write_all(after.as_bytes())?;
         Ok(())
     }
 
@@ -356,8 +346,7 @@ impl<W: Write> Writer<W> {
     /// # use serde::Serialize;
     /// # use quick_xml::events::{BytesStart, Event};
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::se::SeError;
-    /// # fn main() -> Result<(), SeError> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct MyData {
     ///     question: String,
@@ -397,11 +386,11 @@ impl<W: Write> Writer<W> {
         tag_name: &str,
         content: &T,
     ) -> Result<(), SeError> {
-        use crate::se::{Indent, Serializer};
+        use crate::se::{Indent, Serializer, Utf8Writer};
 
         self.write_indent()?;
-        let mut fmt = ToFmtWrite(&mut self.writer);
-        let mut serializer = Serializer::with_root(&mut fmt, Some(tag_name))?;
+        let mut writer = Utf8Writer(&mut self.writer);
+        let mut serializer = Serializer::with_root(&mut writer, Some(tag_name))?;
 
         if let Some(indent) = &mut self.indent {
             serializer.set_indent(Indent::Borrow(indent));
@@ -652,18 +641,6 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)
-    }
-}
-#[cfg(feature = "serialize")]
-pub(crate) struct ToFmtWrite<T>(pub T);
-
-#[cfg(feature = "serialize")]
-impl<T> std::fmt::Write for ToFmtWrite<T>
-where
-    T: std::io::Write,
-{
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
     }
 }
 

@@ -1,15 +1,13 @@
 use std::future::Future;
-use std::result::Result as StdResult;
 
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncWrite, AsyncWriteExt};
 
-use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesPI, BytesText, Event};
 use crate::{ElementWriter, Writer};
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
     /// Writes the given event to the underlying writer. Async version of [`Writer::write_event`].
-    pub async fn write_event_async<'a, E: Into<Event<'a>>>(&mut self, event: E) -> Result<()> {
+    pub async fn write_event_async<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
         let mut next_should_line_break = true;
         let result = match event.into() {
             Event::Start(e) => {
@@ -28,14 +26,14 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             Event::Empty(e) => self.write_wrapped_async("<", &e, "/>").await,
             Event::Text(e) => {
                 next_should_line_break = false;
-                self.write_async(e.as_bytes()).await
+                self.writer.write_all(e.as_bytes()).await
             }
             Event::Comment(e) => self.write_wrapped_async("<!--", &e, "-->").await,
             Event::CData(e) => {
                 next_should_line_break = false;
-                self.write_async(b"<![CDATA[").await?;
-                self.write_async(e.as_bytes()).await?;
-                self.write_async(b"]]>").await
+                self.writer.write_all(b"<![CDATA[").await?;
+                self.writer.write_all(e.as_bytes()).await?;
+                self.writer.write_all(b"]]>").await
             }
             Event::Decl(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::PI(e) => self.write_wrapped_async("<?", &e, "?>").await,
@@ -53,7 +51,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     /// [`Writer::write_indent`].
     ///
     /// This method will do nothing if `Writer` was not constructed with [`Writer::new_with_indent`].
-    pub async fn write_indent_async(&mut self) -> Result<()> {
+    pub async fn write_indent_async(&mut self) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").await?;
             self.writer.write_all(i.current().as_bytes()).await?;
@@ -62,21 +60,21 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     }
 
     #[inline]
-    async fn write_async(&mut self, value: &[u8]) -> Result<()> {
-        self.writer.write_all(value).await.map_err(Into::into)
-    }
-
-    #[inline]
-    async fn write_wrapped_async(&mut self, before: &str, value: &str, after: &str) -> Result<()> {
+    async fn write_wrapped_async(
+        &mut self,
+        before: &str,
+        value: &str,
+        after: &str,
+    ) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n").await?;
                 self.writer.write_all(i.current().as_bytes()).await?;
             }
         }
-        self.write_async(before.as_bytes()).await?;
-        self.write_async(value.as_bytes()).await?;
-        self.write_async(after.as_bytes()).await?;
+        self.writer.write_all(before.as_bytes()).await?;
+        self.writer.write_all(value.as_bytes()).await?;
+        self.writer.write_all(after.as_bytes()).await?;
         Ok(())
     }
 }
@@ -87,6 +85,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
@@ -110,7 +109,10 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     ///     r#"<paired attr1="value1" attr2="value2">text</paired>"#
     /// );
     /// # }
-    pub async fn write_text_content_async(self, text: BytesText<'_>) -> Result<&'a mut Writer<W>> {
+    pub async fn write_text_content_async(
+        self,
+        text: BytesText<'_>,
+    ) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))
             .await?;
@@ -126,6 +128,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesCData;
     /// # use tokio::io::AsyncWriteExt;
@@ -152,7 +155,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     pub async fn write_cdata_content_async(
         self,
         text: BytesCData<'_>,
-    ) -> Result<&'a mut Writer<W>> {
+    ) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))
             .await?;
@@ -168,6 +171,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesPI;
     /// # use tokio::io::AsyncWriteExt;
@@ -193,7 +197,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// </paired>"#
     /// );
     /// # }
-    pub async fn write_pi_content_async(self, text: BytesPI<'_>) -> Result<&'a mut Writer<W>> {
+    pub async fn write_pi_content_async(self, text: BytesPI<'_>) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))
             .await?;
@@ -209,6 +213,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
@@ -232,7 +237,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     ///     r#"<empty attr1="value1" attr2="value2"/>"#
     /// );
     /// # }
-    pub async fn write_empty_async(self) -> Result<&'a mut Writer<W>> {
+    pub async fn write_empty_async(self) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event_async(Event::Empty(self.start_tag))
             .await?;
@@ -244,10 +249,10 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # Example
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
-    /// # use tokio::io::AsyncWriteExt;
-    /// use quick_xml::Error;
+    /// # use tokio::io::{AsyncWriteExt, Error};
     ///
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
@@ -295,11 +300,11 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     pub async fn write_inner_content_async<F, Fut, E>(
         mut self,
         closure: F,
-    ) -> StdResult<&'a mut Writer<W>, E>
+    ) -> Result<&'a mut Writer<W>, E>
     where
         F: FnOnce(&'a mut Writer<W>) -> Fut,
-        Fut: Future<Output = StdResult<&'a mut Writer<W>, E>>,
-        E: From<Error>,
+        Fut: Future<Output = Result<&'a mut Writer<W>, E>>,
+        E: From<io::Error>,
     {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))

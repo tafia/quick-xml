@@ -30,8 +30,8 @@ impl std::fmt::Display for ParseCharRefError {
         match self {
             Self::UnexpectedSign => f.write_str("unexpected number sign"),
             Self::InvalidNumber(e) => e.fmt(f),
-            Self::InvalidCodepoint(n) => write!(f, "`{}` is not a valid codepoint", n),
-            Self::IllegalCharacter(n) => write!(f, "0x{:x} character is not permitted in XML", n),
+            Self::InvalidCodepoint(n) => write!(f, "0x{:X} is not a valid codepoint", n),
+            Self::IllegalCharacter(n) => write!(f, "0x{:X} character is not permitted in XML", n),
         }
     }
 }
@@ -39,7 +39,7 @@ impl std::fmt::Display for ParseCharRefError {
 impl std::error::Error for ParseCharRefError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::InvalidNumber(e) => Some(e),
+            Self::InvalidNumber(e) => e.source(),
             _ => None,
         }
     }
@@ -71,12 +71,10 @@ impl std::fmt::Display for EscapeError {
             }
             Self::UnterminatedEntity(e) => write!(
                 f,
-                "Error while escaping character at range {:?}: Cannot find ';' after '&'",
+                "at {:?}: entity or character reference not closed: `;` not found after `&`",
                 e
             ),
-            Self::InvalidCharRef(e) => {
-                write!(f, "invalid character reference: {}", e)
-            }
+            Self::InvalidCharRef(_) => f.write_str("invalid character reference"),
             Self::TooManyNestedEntities => {
                 f.write_str("too many nested entities in an attribute value")
             }

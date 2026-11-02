@@ -5,13 +5,14 @@
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.write_fmt(format_args!("{}", value))?;
+            self.writer.write_fmt(format_args!("{}", value))?;
             Ok(self.writer)
         }
     };
     () => {
         fn serialize_bool(mut self, value: bool) -> Result<Self::Ok, Self::Error> {
-            self.write_str(if value { "true" } else { "false" })?;
+            self.writer
+                .write_str(if value { "true" } else { "false" })?;
             Ok(self.writer)
         }
 
@@ -80,12 +81,69 @@ mod text;
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
-use crate::writer::{Indentation, ToFmtWrite};
+use crate::writer::Indentation;
 use serde::ser::{self, Serialize};
-use std::fmt::Write;
+use std::fmt::Arguments;
+use std::io;
 
 pub use self::simple_type::SimpleTypeSerializer;
 pub use crate::errors::serialize::SeError;
+
+/// A trait for writing XML into Unicode-accepting buffers or streams.
+///
+/// This trait mirrors API of [`std::fmt::Write`], but returns [`std::io::Result`].
+/// It is implemented for [`String`], so you may directly serialize XMLs into strings.
+/// To write into byte buffers you need to choose the encoding in which you will
+/// write, because XML is a text-based format. To use UTF-8 you may use [`Utf8Writer`].
+pub trait Write {
+    /// Writes a string slice into this writer, returning whether the write
+    /// succeeded.
+    ///
+    /// This method can only succeed if the entire string slice was successfully
+    /// written, and this method will not return until all data has been
+    /// written or an error occurs.
+    fn write_str(&mut self, s: &str) -> io::Result<()>;
+
+    /// Glue for usage of the [`write!`] macro with implementors of this trait.
+    ///
+    /// This method should generally not be invoked manually, but rather through
+    /// the [`write!`] macro itself.
+    fn write_fmt(&mut self, args: Arguments<'_>) -> io::Result<()>;
+}
+
+impl<W: Write + ?Sized> Write for &mut W {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        (**self).write_str(s)
+    }
+
+    fn write_fmt(&mut self, args: Arguments<'_>) -> io::Result<()> {
+        (**self).write_fmt(args)
+    }
+}
+
+impl Write for String {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        std::fmt::Write::write_str(self, s).map_err(|e| io::Error::other(e))
+    }
+
+    fn write_fmt(&mut self, args: Arguments<'_>) -> io::Result<()> {
+        std::fmt::Write::write_fmt(self, args).map_err(|e| io::Error::other(e))
+    }
+}
+
+/// XML Writer that writes XML using UTF-8 encoding to the underlying `io::Write` implementation.
+pub struct Utf8Writer<W: std::io::Write>(pub W);
+impl<W: std::io::Write> Write for Utf8Writer<W> {
+    fn write_str(&mut self, s: &str) -> io::Result<()> {
+        self.0.write_all(s.as_bytes())
+    }
+
+    fn write_fmt(&mut self, args: Arguments<'_>) -> io::Result<()> {
+        self.0.write_fmt(args)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Serialize struct into a `Write`r.
 ///
@@ -176,7 +234,7 @@ where
     W: std::io::Write,
     T: ?Sized + Serialize,
 {
-    value.serialize(Serializer::new(&mut ToFmtWrite(writer)))
+    value.serialize(Serializer::new(&mut Utf8Writer(writer)))
 }
 
 /// Serialize struct into a `String`.
@@ -546,15 +604,15 @@ impl<'i> Indent<'i> {
         }
     }
 
-    pub fn write_indent<W: std::fmt::Write>(&mut self, mut writer: W) -> Result<(), SeError> {
+    pub fn write_indent<W: Write>(&mut self, mut writer: W) -> Result<(), SeError> {
         match self {
             Self::None => {}
             Self::Owned(i) => {
-                writer.write_char('\n')?;
+                writer.write_str("\n")?;
                 writer.write_str(i.current())?;
             }
             Self::Borrow(i) => {
-                writer.write_char('\n')?;
+                writer.write_str("\n")?;
                 writer.write_str(i.current())?;
             }
         }

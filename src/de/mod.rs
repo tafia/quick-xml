@@ -3000,7 +3000,7 @@ where
                 // Reached by trivial::{...}::{field_tag_after, tag_after}
                 DeEvent::Start(e) => Err(DeError::MixedContent(e.name().as_ref().to_owned())),
                 // Reached by struct_::non_closed::elements_child
-                DeEvent::Eof => Err(Error::missed_end(name).into()),
+                DeEvent::Eof => Err(DeError::InvalidXml(Error::missed_end(name))),
             },
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
@@ -3010,7 +3010,7 @@ where
             // Reached by trivial::{...}::{field_nested, field_tag_before, nested, tag_before}
             DeEvent::Start(s) => Err(DeError::MixedContent(s.name().as_ref().to_owned())),
             // Reached by struct_::non_closed::elements_child
-            DeEvent::Eof => Err(Error::missed_end(name).into()),
+            DeEvent::Eof => Err(DeError::InvalidXml(Error::missed_end(name))),
         }
     }
 
@@ -3650,7 +3650,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end_into(name, &mut self.buf) {
-            Err(e) => Err(e.into()),
+            Err(e) => Err(DeError::InvalidXml(e)),
             Ok(_) => Ok(()),
         }
     }
@@ -3719,7 +3719,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end(name) {
-            Err(e) => Err(e.into()),
+            Err(e) => Err(DeError::InvalidXml(e)),
             Ok(_) => Ok(()),
         }
     }

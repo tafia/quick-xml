@@ -1533,7 +1533,7 @@ impl<'i> BytesDecl<'i> {
                 ))))
             }
             // error parsing attributes
-            Some(Err(e)) => Err(e.into()),
+            Some(Err(e)) => Err(Error::InvalidAttr(e)),
             // no attributes
             None => Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))),
         }

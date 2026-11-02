@@ -1,6 +1,5 @@
-use crate::se::SeError;
+use crate::se::{SeError, Write};
 use serde::ser::{Impossible, Serialize, Serializer};
-use std::fmt::{self, Write};
 
 /// A serializer, that ensures, that only plain types can be serialized,
 /// so result can be used as an XML tag or attribute name.
@@ -13,17 +12,6 @@ use std::fmt::{self, Write};
 pub struct QNameSerializer<W: Write> {
     /// Writer to which this serializer writes content
     pub writer: W,
-}
-
-impl<W: Write> QNameSerializer<W> {
-    #[inline]
-    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
-        Ok(self.writer.write_str(value)?)
-    }
-    #[inline]
-    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<(), SeError> {
-        Ok(self.writer.write_fmt(args)?)
-    }
 }
 
 impl<W: Write> Serializer for QNameSerializer<W> {
@@ -41,7 +29,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     write_primitive!();
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
-        self.write_str(value)?;
+        self.writer.write_str(value)?;
         Ok(self.writer)
     }
 

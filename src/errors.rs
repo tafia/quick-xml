@@ -214,7 +214,7 @@ pub enum Error {
 
 impl Error {
     pub(crate) fn missed_end(name: QName) -> Self {
-        IllFormedError::MissingEndTag(name.as_ref().to_string()).into()
+        Error::IllFormed(IllFormedError::MissingEndTag(name.as_ref().to_string()))
     }
 }
 
@@ -291,13 +291,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Io(e) => write!(f, "I/O error: {}", e),
-            Self::Syntax(e) => write!(f, "syntax error: {}", e),
-            Self::IllFormed(e) => write!(f, "ill-formed document: {}", e),
-            Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
-            Self::Encoding(e) => e.fmt(f),
-            Self::Escape(e) => e.fmt(f),
-            Self::Namespace(e) => e.fmt(f),
+            Self::Io(_) => f.write_str("unreadable XML"),
+            Self::Encoding(_) => f.write_str("undecodable XML"),
+            Self::Syntax(_) => f.write_str("syntax error"),
+            Self::IllFormed(_) | Self::InvalidAttr(_) | Self::Escape(_) | Self::Namespace(_) => {
+                f.write_str("ill-formed XML")
+            }
         }
     }
 }
@@ -324,14 +323,13 @@ pub mod serialize {
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
-    use std::str::Utf8Error;
 
-    /// (De)serialization error
+    /// Deserialization error
     #[derive(Clone, Debug)]
     pub enum DeError {
-        /// Serde custom error
+        /// Type cannot be deserialized due to violation of some type-specific rules.
         Custom(String),
-        /// Xml parsing error
+        /// Type cannot be deserialized due to unparsable or invalid XML.
         InvalidXml(Error),
         /// This error indicates an error in the [`Deserialize`](serde::Deserialize)
         /// implementation when read a map or a struct: `MapAccess::next_value[_seed]`
@@ -382,7 +380,7 @@ pub mod serialize {
     impl std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                Self::InvalidXml(e) => Some(e),
+                Self::InvalidXml(e) => e.source(),
                 _ => None,
             }
         }
@@ -404,28 +402,28 @@ pub mod serialize {
     impl From<EscapeError> for DeError {
         #[inline]
         fn from(e: EscapeError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Escape(e))
         }
     }
 
     impl From<EncodingError> for DeError {
         #[inline]
         fn from(e: EncodingError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Encoding(e))
         }
     }
 
     impl From<AttrError> for DeError {
         #[inline]
         fn from(e: AttrError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::InvalidAttr(e))
         }
     }
 
     impl From<NamespaceError> for DeError {
         #[inline]
         fn from(e: NamespaceError) -> Self {
-            Self::InvalidXml(e.into())
+            Self::InvalidXml(Error::Namespace(e))
         }
     }
 
@@ -438,8 +436,6 @@ pub mod serialize {
         ///
         /// Contains the reference-counted I/O error to make the error type `Clone`able.
         Io(Arc<IoError>),
-        /// Some value could not be formatted
-        Fmt(std::fmt::Error),
         /// Serialized type cannot be represented in an XML due to violation of the
         /// XML rules in the final XML document. For example, attempt to serialize
         /// a `HashMap<{integer}, ...>` would cause this error because [XML name]
@@ -449,23 +445,19 @@ pub mod serialize {
         ///
         /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
         Unsupported(Cow<'static, str>),
-        /// Some value could not be turned to UTF-8
-        NonEncodable(Utf8Error),
     }
 
     impl fmt::Display for SeError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 Self::Custom(s) => f.write_str(s),
-                Self::Io(e) => write!(f, "I/O error: {}", e),
-                Self::Fmt(e) => write!(f, "formatting error: {}", e),
+                Self::Io(_) => f.write_str("cannot write XML"),
                 Self::Unsupported(s) => write!(f, "unsupported value: {}", s),
-                Self::NonEncodable(e) => write!(f, "malformed UTF-8: {}", e),
             }
         }
     }
 
-    impl ::std::error::Error for SeError {
+    impl std::error::Error for SeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
                 Self::Io(e) => Some(e),
@@ -484,20 +476,6 @@ pub mod serialize {
         #[inline]
         fn from(e: IoError) -> Self {
             Self::Io(Arc::new(e))
-        }
-    }
-
-    impl From<Utf8Error> for SeError {
-        #[inline]
-        fn from(e: Utf8Error) -> Self {
-            Self::NonEncodable(e)
-        }
-    }
-
-    impl From<fmt::Error> for SeError {
-        #[inline]
-        fn from(e: fmt::Error) -> Self {
-            Self::Fmt(e)
         }
     }
 }
