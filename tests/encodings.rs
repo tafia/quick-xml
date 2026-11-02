@@ -224,6 +224,49 @@ mod xml_decoding_reader {
             assert_eq!(r.get_ref().encoding(), SHIFT_JIS);
             assert_eq!(text, "\u{3042}\u{3044}");
         }
+
+        /// A UTF-16 document declares just `encoding="UTF-16"` for both byte orders
+        /// and the byte order is given by the BOM or by the first bytes. That label
+        /// resolves to UTF-16LE, which must not replace the detected UTF-16BE: the
+        /// document files above do not have an encoding declaration, so they never
+        /// exercise this.
+        ///
+        /// Before the fix `set_encoding()` tried to switch the decoder to UTF-16LE
+        /// which byte-swapped the rest of the document or, because a complete
+        /// declaration does not fit in the detection prefix, panicked.
+        #[test]
+        fn utf16be_declared_as_utf16() {
+            for bom in [true, false] {
+                let mut bytes = Vec::new();
+                if bom {
+                    bytes.extend_from_slice(&[0xFE, 0xFF]);
+                }
+                for unit in
+                    "<?xml version='1.0' encoding='UTF-16'?><d>\u{3042}\u{3044}</d>".encode_utf16()
+                {
+                    bytes.extend_from_slice(&unit.to_be_bytes());
+                }
+
+                let mut r = Reader::from_reader(DecodingReader::new(bytes.as_ref()));
+                let mut buf = Vec::new();
+                let mut text = String::new();
+                loop {
+                    buf.clear();
+                    match r.read_event_into(&mut buf).unwrap() {
+                        Decl(e) => {
+                            if let Some(encoding) = e.encoder() {
+                                r.get_mut().set_encoding(encoding);
+                            }
+                        }
+                        Text(e) => text.push_str(&e),
+                        Eof => break,
+                        _ => {}
+                    }
+                }
+                assert_eq!(r.get_ref().encoding(), UTF_16BE);
+                assert_eq!(text, "\u{3042}\u{3044}");
+            }
+        }
     }
 }
 
