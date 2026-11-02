@@ -305,8 +305,16 @@ impl<'i> BytesStart<'i> {
         let s = self.buf.to_mut();
         s.push_str(attr.key.as_ref());
         s.push_str("=\"");
-        // FIXME: need to escape attribute content
-        s.push_str(&attr.value);
+        // The value is already escaped, but if it was read from a single-quoted
+        // or unquoted attribute it may contain `"`, which would end the value here
+        let mut parts = attr.value.split('"');
+        if let Some(first) = parts.next() {
+            s.push_str(first);
+        }
+        for part in parts {
+            s.push_str("&quot;");
+            s.push_str(part);
+        }
         s.push('"');
     }
 
