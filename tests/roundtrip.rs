@@ -444,3 +444,46 @@ fn partial_rewrite() {
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), expected);
 }
+
+/// Attributes copied from a parsed element keep their raw value. A single-quoted
+/// value can contain `"`, which must not end the value when the attribute is
+/// written into a new element
+#[test]
+fn partial_rewrite_single_quoted_attribute() {
+    let str_from = r#"<source attr='x" injected="1'></source>"#;
+    let expected = r#"<copy attr="x&quot; injected=&quot;1"></copy>"#;
+    let mut reader = Reader::from_str(str_from);
+    let mut writer = Writer::new(Vec::new());
+    loop {
+        let event = match reader.read_event().unwrap() {
+            Eof => break,
+            Start(elem) => {
+                let mut copy = BytesStart::new("copy");
+                copy.extend_attributes(elem.attributes().map(|a| a.unwrap()));
+                Start(copy)
+            }
+            End(_) => End(BytesEnd::new("copy")),
+            e => e,
+        };
+        assert!(writer.write_event(event).is_ok());
+    }
+
+    let result = String::from_utf8(writer.into_inner()).unwrap();
+    assert_eq!(result, expected);
+
+    let mut reader = Reader::from_str(&result);
+    match reader.read_event().unwrap() {
+        Start(e) => {
+            let attrs = e
+                .attributes()
+                .map(|a| {
+                    let a = a.unwrap();
+                    let value = a.normalized_value(XmlVersion::Implicit1_0).unwrap();
+                    (a.key.into_inner(), value.into_owned())
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(attrs, vec![("attr", r#"x" injected="1"#.to_string())]);
+        }
+        e => panic!("Expected Start event, got {e:?}"),
+    }
+}

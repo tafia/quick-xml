@@ -48,6 +48,10 @@
 - [#1030]: `escape::minimal_escape`, `BytesCData::minimal_escape` and the serializer with
   `QuoteLevel::Minimal` now escape `>` as `&gt;` when it closes a `]]>` sequence in text content.
   Previously they produced text containing `]]>`, which is not allowed in XML documents.
+- [#1032]: `BytesStart::push_attribute` (and therefore `extend_attributes`, `with_attributes`
+  and `ElementWriter::with_attribute`) now writes `"` in an attribute value as `&quot;`.
+  Previously an attribute copied from a single-quoted attribute of a parsed document, such as
+  `a='x" b="y'`, was written as `a="x" b="y"`, producing an extra attribute.
 
 ### Misc Changes
 
@@ -64,6 +68,7 @@
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
 [#1027]: https://github.com/tafia/quick-xml/pull/1027
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
+[#1032]: https://github.com/tafia/quick-xml/pull/1032
 
 
 ## 0.42.0 -- 2026-08-22
