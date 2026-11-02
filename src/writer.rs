@@ -131,7 +131,7 @@ impl<W> Writer<W> {
     }
 
     /// Creates a `Writer` with configured indents from a generic writer.
-    pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
+    pub fn new_with_indent(inner: W, indent_char: char, indent_size: usize) -> Writer<W> {
         Writer {
             writer: inner,
             config: Config {
@@ -233,7 +233,7 @@ impl<W: Write> Writer<W> {
     /// use std::io::Cursor;
     ///
     /// let mut buffer = Vec::new();
-    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
     ///
     /// writer.write_bom()?;
     /// writer
@@ -359,7 +359,7 @@ impl<W: Write> Writer<W> {
     /// };
     ///
     /// let mut buffer = Vec::new();
-    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
     ///
     /// let start = BytesStart::new("root");
     /// let end = start.to_end();
@@ -482,7 +482,7 @@ impl<'a, W> ElementWriter<'a, W> {
     /// ```
     /// # use quick_xml::writer::Writer;
     /// let mut buffer = Vec::new();
-    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
+    /// let mut writer = Writer::new_with_indent(&mut buffer, ' ', 2);
     /// writer
     ///   .create_element("element")
     ///     //.new_line() (1)
@@ -655,13 +655,12 @@ pub(crate) struct Indentation {
     indent_size: usize,
     /// Used as a cache for the string used for indentation
     indents: String,
-    /// The current amount of indentation
+    /// The current amount of indentation, in bytes of `indents`
     current_indent_len: usize,
 }
 
 impl Indentation {
-    pub fn new(indent_char: u8, indent_size: usize) -> Self {
-        let indent_char = char::from(indent_char);
+    pub fn new(indent_char: char, indent_size: usize) -> Self {
         Self {
             should_line_break: false,
             indent_char,
@@ -671,15 +670,21 @@ impl Indentation {
         }
     }
 
+    /// Size of one indentation level in bytes
+    #[inline]
+    const fn level_len(&self) -> usize {
+        self.indent_size * self.indent_char.len_utf8()
+    }
+
     /// Increase indentation by one level
     pub fn grow(&mut self) {
-        self.current_indent_len += self.indent_size;
+        self.current_indent_len += self.level_len();
         self.ensure(self.current_indent_len);
     }
 
     /// Decrease indentation by one level. Do nothing, if level already zero
     pub fn shrink(&mut self) {
-        self.current_indent_len = self.current_indent_len.saturating_sub(self.indent_size);
+        self.current_indent_len = self.current_indent_len.saturating_sub(self.level_len());
     }
 
     /// Returns indent string for current level
@@ -688,8 +693,10 @@ impl Indentation {
     }
 
     /// Returns indent with current indent plus additional indent
+    ///
+    /// `additional_indent` is counted in characters, not bytes.
     pub fn additional(&mut self, additional_indent: usize) -> &str {
-        let new_len = self.current_indent_len + additional_indent;
+        let new_len = self.current_indent_len + additional_indent * self.indent_char.len_utf8();
         self.ensure(new_len);
         &self.indents[..new_len]
     }

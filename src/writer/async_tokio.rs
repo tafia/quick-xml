@@ -92,7 +92,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
-    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, ' ', 4);
     ///
     /// writer
     ///     .create_element("paired")
@@ -135,7 +135,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
-    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, ' ', 4);
     ///
     /// writer
     ///     .create_element("paired")
@@ -178,7 +178,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
-    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, ' ', 4);
     ///
     /// writer
     ///     .create_element("paired")
@@ -220,7 +220,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
-    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, ' ', 4);
     ///
     /// writer
     ///     .create_element("empty")
@@ -257,7 +257,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
-    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, ' ', 4);
     ///
     /// writer
     ///     .create_element("outer")
@@ -400,7 +400,7 @@ mod indentation_async {
     #[tokio::test]
     async fn self_closed() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let tag = BytesStart::new("self-closed")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
@@ -418,7 +418,7 @@ mod indentation_async {
     #[tokio::test]
     async fn empty_paired() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
@@ -442,7 +442,7 @@ mod indentation_async {
     #[tokio::test]
     async fn paired_with_inner() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
@@ -473,7 +473,7 @@ mod indentation_async {
     #[tokio::test]
     async fn paired_with_text() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
@@ -502,7 +502,7 @@ mod indentation_async {
     #[tokio::test]
     async fn mixed_content() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
@@ -537,7 +537,7 @@ mod indentation_async {
     #[tokio::test]
     async fn nested() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());

@@ -62,7 +62,7 @@ const BOOKS: &[Book] = &[
 fn write_high_level() -> Result<String, quick_xml::Error> {
     // `new_with_indent` pretty-prints the output. Use plain `Writer::new` for
     // compact, unindented XML.
-    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), ' ', 4);
 
     // Write out the Xml Declaration
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))?;
@@ -112,7 +112,7 @@ fn write_high_level() -> Result<String, quick_xml::Error> {
 /// pairing every `Start` with an `End`, which is easy to get wrong — hence the
 /// builder API above is usually preferable.
 fn write_low_level() -> Result<String, quick_xml::Error> {
-    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), ' ', 4);
 
     writer.write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))?;
     writer.write_event(Event::Start(BytesStart::new("catalog")))?;
