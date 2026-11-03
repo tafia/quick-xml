@@ -19,6 +19,20 @@ pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
+/// Returns `true` if `encoding` is UTF-16 in any byte order.
+///
+/// The byte order of a UTF-16 document is determined by its BOM or by the bytes
+/// of the XML declaration, not by the encoding name: the declaration says just
+/// `encoding="UTF-16"` for both byte orders. Because [`Encoding::for_label`]
+/// maps the `UTF-16` label to UTF-16LE, the encoding named in the declaration
+/// must not replace a byte order that was already detected from the content.
+///
+/// [`Encoding::for_label`]: encoding_rs::Encoding::for_label
+#[cfg(feature = "encoding")]
+pub(crate) fn is_utf16(encoding: &'static encoding_rs::Encoding) -> bool {
+    encoding == encoding_rs::UTF_16BE || encoding == encoding_rs::UTF_16LE
+}
+
 /// An error when decoding or encoding
 ///
 /// If feature [`encoding`] is disabled, the [`EncodingError`] is always [`EncodingError::Utf8`]
@@ -365,6 +379,10 @@ impl<R> DecodingReader<R> {
     /// Replaces the decoder with one for the given encoding. The encoding
     /// must be ASCII-compatible (the parser cannot read the declaration otherwise).
     ///
+    /// If the stream was detected as UTF-16, requesting UTF-16 of either byte
+    /// order keeps the detected byte order, because the `UTF-16` encoding name
+    /// does not specify it (the BOM or the first bytes of the document do).
+    ///
     /// # Panics
     ///
     /// Panics if the prefix buffer has already been drained. Must be called
@@ -374,7 +392,14 @@ impl<R> DecodingReader<R> {
         // No-op when the encoding matches - replacing the decoder would discard
         // its internal state (e.g. a partial multi-byte sequence), corrupting output.
         // This check is safe regardless of prefix state since nothing changes.
-        if self.decoder.encoding() == encoding {
+        //
+        // The same applies when both encodings are UTF-16: the byte order was
+        // detected from the BOM or from the first bytes of the document, and the
+        // name in the XML declaration (`UTF-16`, which resolves to UTF-16LE)
+        // cannot override it. Replacing the decoder would byte-swap the rest of
+        // a big-endian document.
+        let current = self.decoder.encoding();
+        if current == encoding || (is_utf16(current) && is_utf16(encoding)) {
             return;
         }
         assert!(
@@ -949,6 +974,44 @@ mod decoding_reader {
             // Read the rest - combined output must equal the original string
             let rest = read_all(&mut reader).unwrap();
             assert_eq!(format!("{first_chunk}{rest}"), "Hello, World!");
+        }
+
+        /// The `UTF-16` label resolves to UTF-16LE, but the byte order of the
+        /// stream is given by its BOM: requesting UTF-16 of the other byte order
+        /// must keep the detected one instead of byte-swapping the remaining data.
+        #[test]
+        fn set_encoding_utf16_keeps_detected_byte_order() {
+            for (data, detected, requested) in [
+                (
+                    utf16be_with_bom("Hello, World!"),
+                    encoding_rs::UTF_16BE,
+                    encoding_rs::UTF_16LE,
+                ),
+                (
+                    utf16le_with_bom("Hello, World!"),
+                    encoding_rs::UTF_16LE,
+                    encoding_rs::UTF_16BE,
+                ),
+            ] {
+                let mut reader = DecodingReader::new(&data[..]);
+
+                // Trigger detection and consume the first chunk
+                let first_chunk;
+                {
+                    let buf = reader.fill_buf().unwrap();
+                    assert!(buf.len() > 0);
+                    first_chunk = std::str::from_utf8(buf).unwrap().to_string();
+                    let n = buf.len();
+                    reader.consume(n);
+                }
+                assert_eq!(reader.encoding(), detected);
+
+                reader.set_encoding(requested);
+                assert_eq!(reader.encoding(), detected);
+
+                let rest = read_all(&mut reader).unwrap();
+                assert_eq!(format!("{first_chunk}{rest}"), "Hello, World!");
+            }
         }
 
         /// set_encoding mid-stream: read some UTF-8 data, switch encoding,
