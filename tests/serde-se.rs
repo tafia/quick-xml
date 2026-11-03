@@ -498,10 +498,11 @@ mod without_root {
                     // `Root::field` contains text content, and because text content is empty,
                     // `<field/>` is written
                     serialize_as!(unit: Root { field: Unit::Text } => "<Root><field/></Root>");
-                    err!(newtype:
+                    serialize_as!(newtype:
                         Root { field: Newtype::Text("newtype text") }
-                        => Unsupported("cannot serialize enum newtype variant `Newtype::$text`"),
-                        "<Root");
+                        => "<Root>\
+                                <field>newtype text</field>\
+                            </Root>");
                     err!(tuple:
                         Root { field: Tuple::Text(42.0, "tuple-text".into()) }
                         => Unsupported("cannot serialize enum tuple variant `Tuple::$text`"),
@@ -645,10 +646,9 @@ mod without_root {
                     => "<Root>\
                             <field>Unit</field>\
                         </Root>");
-                err!(newtype:
+                serialize_as!(newtype:
                     Root { field: ExternallyTagged::Newtype(true) }
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype`"),
-                    "<Root");
+                    => "<Root><field><Newtype>true</Newtype></field></Root>");
                 err!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
                     => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple`"),
@@ -689,10 +689,15 @@ mod without_root {
                                 <inner>Unit</inner>\
                             </field>\
                         </Root>");
-                err!(newtype:
+                serialize_as!(newtype:
                     Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype`"),
-                    "<Root");
+                    => "<Root>\
+                            <field>\
+                                <inner>\
+                                    <Newtype>true</Newtype>\
+                                </inner>\
+                            </field>\
+                        </Root>");
                 err!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
                     => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple`"),
