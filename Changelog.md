@@ -82,7 +82,7 @@
   or from the first bytes of the document when the XML declaration names `UTF-16` (which resolves
   to UTF-16LE). Previously a UTF-16BE document with such a declaration was decoded byte-swapped
   after the declaration, or `set_encoding()` panicked.
-- Deserialization of an `xs:list` (a sequence of atomic values in a text content or in an
+- [#1034]: Deserialization of an `xs:list` (a sequence of atomic values in a text content or in an
   attribute value) now splits it on any XML whitespace character - space, tab, carriage return
   and line feed, as the XML Schema specification requires. Previously only the space was
   treated as a delimiter, so `<item>first\tsecond</item>` or `<item a="first&#9;second"/>`
@@ -143,6 +143,7 @@
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
+[#1034]: https://github.com/tafia/quick-xml/pull/1034
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1040]: https://github.com/tafia/quick-xml/issues/1040
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
