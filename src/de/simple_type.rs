@@ -7,8 +7,7 @@ use crate::XmlVersion;
 use crate::de::Text;
 use crate::errors::serialize::DeError;
 use crate::escape::resolve_predefined_entity;
-use crate::utils::{CowRef, trim_xml_spaces};
-use memchr::memchr;
+use crate::utils::{CowRef, is_whitespace, trim_xml_spaces};
 use serde::de::value::UnitDeserializer;
 use serde::de::{
     DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
@@ -345,7 +344,8 @@ impl<'de> VariantAccess<'de> for UnitOnly {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Iterator over string sub-slices delimited by one or several spaces.
+/// Iterator over string sub-slices delimited by one or several XML whitespace
+/// characters.
 /// Contains decoded value of the `simpleType`.
 /// Iteration ends when list contains `None`.
 struct ListIter<'de, 'a> {
@@ -360,14 +360,12 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         T: DeserializeSeed<'de>,
     {
         if let Some(mut content) = self.content.take() {
-            const DELIMITER: u8 = b' ';
-
             loop {
                 let string = content.as_str();
                 if string.is_empty() {
                     return Ok(None);
                 }
-                return match memchr(DELIMITER, string.as_bytes()) {
+                return match string.as_bytes().iter().position(|b| is_whitespace(*b)) {
                     // No delimiters in the `content`, deserialize it as a whole atomic
                     None => match content {
                         Content::Input(s) => seed.deserialize(AtomicDeserializer {
@@ -383,12 +381,12 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                             content: CowRef::Slice(s.split_at(offset).1),
                         }),
                     },
-                    // `content` started with a space, skip them all
+                    // `content` started with a delimiter, skip them all
                     Some(0) => {
-                        // Skip all spaces
-                        let start = string.as_bytes().iter().position(|ch| *ch != DELIMITER);
+                        // Skip all delimiters
+                        let start = string.as_bytes().iter().position(|ch| !is_whitespace(*ch));
                         content = match (start, content) {
-                            // We cannot find any non-space character, so string contains only spaces
+                            // We cannot find any non-delimiter character, so string contains only delimiters
                             (None, _) => return Ok(None),
                             // Borrow result from input or deserializer depending on the initial borrowing
                             (Some(start), Content::Input(s)) => Content::Input(s.split_at(start).1),
@@ -1058,6 +1056,54 @@ mod tests {
 
             assert_eq!(seq.next_element::<&str>().unwrap(), None);
             assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        /// Any XML whitespace character is a delimiter, not only the space.
+        /// See the `xs:list` definition in the XML Schema specification
+        #[test]
+        fn each_delimiter_is_a_separator() {
+            for content in ["abc def", "abc\tdef", "abc\ndef", "abc\rdef"] {
+                let mut seq = ListIter {
+                    content: Some(Content::Input(content)),
+                };
+
+                assert_eq!(
+                    seq.next_element::<&str>().unwrap(),
+                    Some("abc"),
+                    "{content:?}"
+                );
+                assert_eq!(
+                    seq.next_element::<&str>().unwrap(),
+                    Some("def"),
+                    "{content:?}"
+                );
+                assert_eq!(seq.next_element::<&str>().unwrap(), None, "{content:?}");
+            }
+        }
+
+        /// Consequent delimiters of any kind separate the same two items
+        #[test]
+        fn mixed_delimiters() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("\t one \n two\r\nthree \t")),
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("one"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("two"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("three"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn only_delimiters() {
+            for content in ["\t", "\n", "\r", " \t\n\r "] {
+                let mut seq = ListIter {
+                    content: Some(Content::Input(content)),
+                };
+
+                assert_eq!(seq.next_element::<&str>().unwrap(), None, "{content:?}");
+                assert_eq!(seq.next_element::<&str>().unwrap(), None, "{content:?}");
+            }
         }
 
         #[test]
