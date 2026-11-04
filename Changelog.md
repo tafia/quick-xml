@@ -68,7 +68,7 @@
   and `ElementWriter::with_attribute`) now writes `"` in an attribute value as `&quot;`.
   Previously an attribute copied from a single-quoted attribute of a parsed document, such as
   `a='x" b="y'`, was written as `a="x" b="y"`, producing an extra attribute.
-- Deserialization of an `xs:list` (a sequence of atomic values in a text content or in an
+- [#1034]: Deserialization of an `xs:list` (a sequence of atomic values in a text content or in an
   attribute value) now splits it on any XML whitespace character - space, tab, carriage return
   and line feed, as the XML Schema specification requires. Previously only the space was
   treated as a delimiter, so `<item>first\tsecond</item>` or `<item a="first&#9;second"/>`
@@ -94,6 +94,7 @@
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
+[#1034]: https://github.com/tafia/quick-xml/pull/1034
 
 
 ## 0.42.0 -- 2026-08-22
