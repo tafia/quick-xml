@@ -72,6 +72,11 @@
   or from the first bytes of the document when the XML declaration names `UTF-16` (which resolves
   to UTF-16LE). Previously a UTF-16BE document with such a declaration was decoded byte-swapped
   after the declaration, or `set_encoding()` panicked.
+- Deserialization of an `xs:list` (a sequence of atomic values in a text content or in an
+  attribute value) now splits it on any XML whitespace character - space, tab, carriage return
+  and line feed, as the XML Schema specification requires. Previously only the space was
+  treated as a delimiter, so `<item>first\tsecond</item>` or `<item a="first&#9;second"/>`
+  were deserialized as a single item containing a tab character instead of two items.
 - [#1038]: With the `escape-html` feature, 444 HTML entities resolved to wrong characters.
   Most lost the last hex digit of their code point, so `&alpha;` became `;` and `&Aopf;`
   became `ᵓ`. This hit Latin Extended-A, Greek, Cyrillic and the script, fraktur and

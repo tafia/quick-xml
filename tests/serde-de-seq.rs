@@ -885,6 +885,48 @@ mod fixed_name {
                 assert_eq!(data, List { item: [] });
             }
 
+            /// Items of an `xs:list` are separated by any XML whitespace
+            /// character, not only by the space
+            #[test]
+            fn whitespace_delimiters() {
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct List {
+                    item: [Vec<String>; 1],
+                }
+
+                for (xml, expected) in [
+                    (
+                        "<root><item>first list</item></root>",
+                        vec!["first", "list"],
+                    ),
+                    (
+                        "<root><item>first\tlist</item></root>",
+                        vec!["first", "list"],
+                    ),
+                    (
+                        "<root><item>first\nlist</item></root>",
+                        vec!["first", "list"],
+                    ),
+                    (
+                        "<root><item>first\rlist</item></root>",
+                        vec!["first", "list"],
+                    ),
+                    (
+                        "<root><item> first \t list </item></root>",
+                        vec!["first", "list"],
+                    ),
+                ] {
+                    let data: List = from_str(xml).unwrap();
+                    assert_eq!(
+                        data,
+                        List {
+                            item: [expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()]
+                        },
+                        "{xml:?}"
+                    );
+                }
+            }
+
             /// Special case: one element
             #[test]
             fn one() {
