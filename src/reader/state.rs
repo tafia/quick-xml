@@ -298,7 +298,19 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesPI::wrap(content, name_len(content_bytes))))
+                let target_len = name_len(content_bytes);
+                // The XML declaration above matches only the exact lowercase `xml`
+                // target, but the PITarget production reserves `xml` in any case.
+                // Reject the remaining spellings (`<?XML?>`, `<?XmL?>`, ...) instead
+                // of emitting them as processing instructions.
+                if content_bytes[..target_len].eq_ignore_ascii_case(b"xml") {
+                    // Point at the target, which starts right after `<?`.
+                    self.last_error_offset = self.offset - buf.len() as u64 + 2;
+                    return Err(Error::IllFormed(IllFormedError::ReservedPiTarget(
+                        content[..target_len].to_string(),
+                    )));
+                }
+                Ok(Event::PI(BytesPI::wrap(content, target_len)))
             }
         } else {
             // <?...?>

@@ -143,6 +143,15 @@ pub enum IllFormedError {
     /// The parser started to parse entity or character reference (`&...;`) in text,
     /// but the input ended before the closing `;` character was found.
     UnclosedReference,
+    /// A processing instruction has `xml` (in any case) as its target.
+    ///
+    /// According to the [specification], the target of a processing instruction
+    /// cannot be the string `xml` in any combination of upper and lower case,
+    /// because that form is reserved for the XML declaration. The provided string
+    /// is the target as it appeared in the document.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#NT-PI
+    ReservedPiTarget(String),
 }
 
 impl fmt::Display for IllFormedError {
@@ -182,6 +191,11 @@ impl fmt::Display for IllFormedError {
             }
             Self::UnclosedReference => f.write_str(
                 "entity or character reference not closed: `;` not found before end of input",
+            ),
+            Self::ReservedPiTarget(target) => write!(
+                f,
+                "processing instruction target `{}` is reserved and cannot be used",
+                target,
             ),
         }
     }

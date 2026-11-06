@@ -68,6 +68,10 @@
   and `ElementWriter::with_attribute`) now writes `"` in an attribute value as `&quot;`.
   Previously an attribute copied from a single-quoted attribute of a parsed document, such as
   `a='x" b="y'`, was written as `a="x" b="y"`, producing an extra attribute.
+- [#1034]: The reader now rejects processing instructions whose target is `xml` in any case
+  other than the lowercase `<?xml?>` declaration (for example `<?XML?>` or `<?XmL?>`).
+  Previously such input was emitted as a `PI` event, although the XML grammar reserves the
+  `xml` target for the declaration. New `IllFormedError::ReservedPiTarget` variant is returned.
 
 ### Misc Changes
 
@@ -89,6 +93,7 @@
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
+[#1034]: https://github.com/tafia/quick-xml/pull/1034
 
 
 ## 0.42.0 -- 2026-08-22

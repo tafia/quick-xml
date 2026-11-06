@@ -653,6 +653,15 @@ mod ill_formed {
     err!(double_hyphen_in_comment4("<!-- -- -->") => 5: IllFormedError::DoubleHyphenInComment);
     //                                   ^= 5
 
+    // A processing instruction target cannot be `xml` in any case: that form is
+    // reserved for the XML declaration (https://www.w3.org/TR/xml11/#NT-PI).
+    // The exact lowercase `<?xml?>` is parsed as a declaration (see the `decl`
+    // module above); the other spellings are ill-formed.
+    err!(reserved_pi_target1("<?XML?>")      => 2: IllFormedError::ReservedPiTarget("XML".to_string()));
+    err!(reserved_pi_target2("<?XmL?>")      => 2: IllFormedError::ReservedPiTarget("XmL".to_string()));
+    err!(reserved_pi_target3("<?xMl?>")      => 2: IllFormedError::ReservedPiTarget("xMl".to_string()));
+    err!(reserved_pi_target4("<?XML v='1'?>") => 2: IllFormedError::ReservedPiTarget("XML".to_string()));
+
     mod reference {
         use super::*;
         use quick_xml::events::BytesRef;
