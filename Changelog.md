@@ -68,6 +68,12 @@
   and `ElementWriter::with_attribute`) now writes `"` in an attribute value as `&quot;`.
   Previously an attribute copied from a single-quoted attribute of a parsed document, such as
   `a='x" b="y'`, was written as `a="x" b="y"`, producing an extra attribute.
+- [#0000]: With the `escape-html` feature, 444 HTML entities resolved to wrong characters.
+  Most lost the last hex digit of their code point, so `&alpha;` became `;` and `&Aopf;`
+  became `ᵓ`. This hit Latin Extended-A, Greek, Cyrillic and the script, fraktur and
+  double-struck letters. All entities now resolve as listed in the HTML specification's
+  `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
+  `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
 
 ### Misc Changes
 
@@ -89,6 +95,7 @@
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
+[#0000]: https://github.com/tafia/quick-xml/pull/0000
 
 
 ## 0.42.0 -- 2026-08-22
