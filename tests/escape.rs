@@ -283,3 +283,52 @@ fn unescape_with_sign() {
         )),
     );
 }
+
+/// Values from <https://html.spec.whatwg.org/entities.json>: at least one entity
+/// from each Unicode block that had wrong values, and some neighbours that did not.
+#[test]
+#[cfg(feature = "escape-html")]
+fn resolve_html5_entity() {
+    use escape::resolve_html5_entity as resolve;
+
+    // Latin Extended-A and -B
+    assert_eq!(resolve("Amacr"), Some("\u{100}"));
+    assert_eq!(resolve("scaron"), Some("\u{161}"));
+    assert_eq!(resolve("fnof"), Some("\u{192}"));
+    // Spacing modifier letters and combining marks
+    assert_eq!(resolve("circ"), Some("\u{2C6}"));
+    assert_eq!(resolve("DownBreve"), Some("\u{311}"));
+    // Greek, including the curly and straight forms of epsilon and phi
+    assert_eq!(resolve("alpha"), Some("\u{3B1}"));
+    assert_eq!(resolve("Omega"), Some("\u{3A9}"));
+    assert_eq!(resolve("epsilon"), Some("\u{3B5}"));
+    assert_eq!(resolve("epsi"), Some("\u{3B5}"));
+    assert_eq!(resolve("epsiv"), Some("\u{3F5}"));
+    assert_eq!(resolve("phi"), Some("\u{3C6}"));
+    assert_eq!(resolve("phiv"), Some("\u{3D5}"));
+    // Cyrillic
+    assert_eq!(resolve("Acy"), Some("\u{410}"));
+    assert_eq!(resolve("iocy"), Some("\u{451}"));
+    // Letterlike symbols and math operators
+    assert_eq!(resolve("ohm"), Some("\u{3A9}"));
+    assert_eq!(resolve("angst"), Some("\u{C5}"));
+    assert_eq!(resolve("OverBar"), Some("\u{203E}"));
+    assert_eq!(resolve("UnderBar"), Some("\u{5F}"));
+    assert_eq!(resolve("race"), Some("\u{223D}\u{331}"));
+    // Mathematical alphanumeric symbols
+    assert_eq!(resolve("Ascr"), Some("\u{1D49C}"));
+    assert_eq!(resolve("zfr"), Some("\u{1D537}"));
+    assert_eq!(resolve("Aopf"), Some("\u{1D538}"));
+    assert_eq!(resolve("zopf"), Some("\u{1D56B}"));
+
+    // Neighbours that already had the right value
+    assert_eq!(resolve("macr"), Some("\u{AF}"));
+    assert_eq!(resolve("strns"), Some("\u{AF}"));
+    assert_eq!(resolve("Copf"), Some("\u{2102}"));
+    assert_eq!(resolve("semi"), Some(";"));
+
+    assert_eq!(
+        escape::unescape("&alpha; &Acy; &Aopf;").unwrap(),
+        "\u{3B1} \u{410} \u{1D538}"
+    );
+}
