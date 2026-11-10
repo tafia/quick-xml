@@ -212,8 +212,9 @@ impl DetectedEncoding {
 }
 
 // Bytes read upfront so `set_encoding()` can be called before the main
-// decode loop. Kept small (just enough for an XML declaration) to limit
-// bytes decoded with a potentially wrong initial encoding.
+// decode loop. Kept small (enough for a typical XML declaration) to limit
+// bytes decoded with a potentially wrong initial encoding. A longer
+// declaration is read in several chunks of this size.
 #[cfg(feature = "encoding")]
 const PREFIX_CAP: usize = 64;
 
@@ -222,6 +223,9 @@ struct Prefix {
     buf: [u8; PREFIX_CAP],
     len: usize,
     detected: bool,
+    /// Whether the XML declaration may continue past the bytes read so far,
+    /// that is, the UTF-8 decoder has not decoded a `>` yet
+    decl_open: bool,
 }
 
 /// A reader wrapper that decodes a byte stream from any encoding into UTF-8.
@@ -334,6 +338,7 @@ impl<R> DecodingReader<R> {
                 buf: [0; PREFIX_CAP],
                 len: 0,
                 detected: false,
+                decl_open: true,
             })),
             inner_eof: false,
         }
@@ -365,6 +370,10 @@ impl<R> DecodingReader<R> {
     /// Replaces the decoder with one for the given encoding. The encoding
     /// must be ASCII-compatible (the parser cannot read the declaration otherwise).
     ///
+    /// If UTF-16 was detected from the BOM or the first bytes, a request for an
+    /// ASCII-compatible encoding is ignored: the declaration was read as UTF-16,
+    /// so the document cannot be in the encoding it names.
+    ///
     /// # Panics
     ///
     /// Panics if the prefix buffer has already been drained. Must be called
@@ -373,8 +382,11 @@ impl<R> DecodingReader<R> {
     pub fn set_encoding(&mut self, encoding: &'static encoding_rs::Encoding) {
         // No-op when the encoding matches - replacing the decoder would discard
         // its internal state (e.g. a partial multi-byte sequence), corrupting output.
+        // Also a no-op when a UTF-16 stream names an ASCII-compatible encoding.
         // This check is safe regardless of prefix state since nothing changes.
-        if self.decoder.encoding() == encoding {
+        let current = self.decoder.encoding();
+        if current == encoding || (!current.is_ascii_compatible() && encoding.is_ascii_compatible())
+        {
             return;
         }
         assert!(
@@ -400,24 +412,22 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
         self.out_len = 0;
 
         if let Some(prefix) = &mut self.prefix {
-            // On first access, fill the prefix buffer and detect encoding.
-            // The prefix is large enough to hold an entire XML declaration,
-            // ensuring set_encoding() can be called before the greedy main
-            // decode path consumes from inner.
+            // Fill the prefix buffer on first access, and again while the XML
+            // declaration is longer than what was read so far, ensuring
+            // set_encoding() can be called before the greedy main decode path
+            // consumes from inner.
+            while prefix.decl_open && !self.inner_eof && prefix.len < PREFIX_CAP {
+                match self.inner.read(&mut prefix.buf[prefix.len..]) {
+                    Ok(0) => self.inner_eof = true,
+                    Ok(n) => prefix.len += n,
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+
+            // On first access, detect encoding.
             if !prefix.detected {
                 prefix.detected = true;
-
-                while prefix.len < PREFIX_CAP {
-                    match self.inner.read(&mut prefix.buf[prefix.len..]) {
-                        Ok(0) => {
-                            self.inner_eof = true;
-                            break;
-                        }
-                        Ok(n) => prefix.len += n,
-                        Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
 
                 let detection_bytes = &prefix.buf[..prefix.len];
                 if let Some(detected) = detect_encoding(detection_bytes) {
@@ -457,8 +467,15 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
                 // declaration and nothing past it, letting set_encoding() take
                 // effect before the remainder of the prefix is decoded.
                 let end = if self.decoder.encoding() == encoding_rs::UTF_8 {
-                    memchr::memchr(b'>', &prefix.buf[..prefix.len]).map_or(prefix.len, |i| i + 1)
+                    match memchr::memchr(b'>', &prefix.buf[..prefix.len]) {
+                        Some(i) => {
+                            prefix.decl_open = false;
+                            i + 1
+                        }
+                        None => prefix.len,
+                    }
                 } else {
+                    prefix.decl_open = false;
                     prefix.len
                 };
                 let src = &prefix.buf[..end];
@@ -778,6 +795,26 @@ mod decoding_reader {
             let buf = reader.fill_buf().unwrap();
             assert!(!buf.is_empty());
             assert_eq!(buf[0], b',');
+        }
+
+        /// The prefix is not refilled after the XML declaration: everything past
+        /// the first 64 bytes is decoded by the main path in one chunk.
+        #[test]
+        fn prefix_ends_after_declaration() {
+            let mut data = b"<?xml version='1.0'?>".to_vec();
+            data.extend_from_slice(&[b'a'; 1000]);
+            let mut reader = DecodingReader::new(&data[..]);
+
+            let mut chunks = Vec::new();
+            loop {
+                let len = reader.fill_buf().unwrap().len();
+                if len == 0 {
+                    break;
+                }
+                chunks.push(len);
+                reader.consume(len);
+            }
+            assert_eq!(chunks, [21, PREFIX_CAP - 21, data.len() - PREFIX_CAP]);
         }
 
         /// Drain the reader via fill_buf/consume, then confirm it stays at EOF.
