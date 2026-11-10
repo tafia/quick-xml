@@ -68,6 +68,12 @@
   and `ElementWriter::with_attribute`) now writes `"` in an attribute value as `&quot;`.
   Previously an attribute copied from a single-quoted attribute of a parsed document, such as
   `a='x" b="y'`, was written as `a="x" b="y"`, producing an extra attribute.
+- [#1040]: `DecodingReader` now applies `set_encoding()` to everything after the XML declaration
+  even when the declaration does not fit in the first 64 bytes, for example when it is split over
+  several lines. Previously `set_encoding()` panicked, or reading failed with a UTF-8 error on
+  non-ASCII content. `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document
+  declares an ASCII-compatible encoding such as `UTF-8`, instead of panicking or switching to
+  the declared encoding and producing garbage.
 
 ### Misc Changes
 
@@ -89,6 +95,7 @@
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
+[#1040]: https://github.com/tafia/quick-xml/issues/1040
 
 
 ## 0.42.0 -- 2026-08-22
