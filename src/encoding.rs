@@ -651,6 +651,22 @@ mod decoding_reader {
         }
     }
 
+    /// Helper reader that fails with the given error kinds, one per `read`
+    /// call, before delegating to the wrapped data
+    struct FailingReader<'a> {
+        failures: Vec<io::ErrorKind>,
+        data: &'a [u8],
+    }
+
+    impl<'a> Read for FailingReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if let Some(kind) = self.failures.pop() {
+                return Err(kind.into());
+            }
+            self.data.read(buf)
+        }
+    }
+
     /// Encode a string as UTF-16 LE bytes with BOM
     fn utf16le_with_bom(s: &str) -> Vec<u8> {
         let mut out = vec![0xFF, 0xFE]; // UTF-16 LE BOM
@@ -815,6 +831,29 @@ mod decoding_reader {
                 reader.consume(len);
             }
             assert_eq!(chunks, [21, PREFIX_CAP - 21, data.len() - PREFIX_CAP]);
+        }
+
+        /// An interrupted read of the prefix is retried
+        #[test]
+        fn prefix_read_retries_interrupted() {
+            let inner = FailingReader {
+                failures: vec![io::ErrorKind::Interrupted; 2],
+                data: b"<?xml version='1.0'?><a/>",
+            };
+            let mut reader = DecodingReader::new(BufReader::with_capacity(1, inner));
+            assert_eq!(read_all(&mut reader).unwrap(), "<?xml version='1.0'?><a/>");
+        }
+
+        /// An I/O error while reading the prefix is returned to the caller
+        #[test]
+        fn prefix_read_propagates_error() {
+            let inner = FailingReader {
+                failures: vec![io::ErrorKind::BrokenPipe],
+                data: b"<?xml version='1.0'?><a/>",
+            };
+            let mut reader = DecodingReader::new(BufReader::new(inner));
+            let err = reader.fill_buf().unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::BrokenPipe);
         }
 
         /// Drain the reader via fill_buf/consume, then confirm it stays at EOF.
