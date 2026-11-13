@@ -862,7 +862,7 @@ enum State {
     /// to the beginning of the value. Recover should skip a value
     SkipValue(usize),
     /// The last attribute returns [`AttrError::Duplicated`], offset pointed to
-    /// the equal (`=`) sign. Recover should skip it and a value
+    /// the character after the equal (`=`) sign. Recover should skip a value
     SkipEqValue(usize),
 }
 
@@ -979,7 +979,7 @@ impl IterState {
         }
     }
 
-    /// Skip all characters up to first space symbol or end-of-input
+    /// Skip the attribute value starting after the `=` sign, quoted or not
     #[inline]
     fn skip_eq_value(&self, slice: &[u8], offset: usize) -> Option<usize> {
         let mut iter = (offset..).zip(slice[offset..].iter());
@@ -987,31 +987,31 @@ impl IterState {
         // Skip all up to the quote and get the quote type
         let quote = match iter.find(|&(_, &b)| !is_whitespace(b)) {
             // Input: `    key  =  "`
-            //                  |  ^
-            //             offset
+            //                   | ^
+            //              offset
             Some((_, b'"')) => b'"',
             // Input: `    key  =  '`
-            //                  |  ^
-            //             offset
+            //                   | ^
+            //              offset
             Some((_, b'\'')) => b'\'',
 
             // Input: `    key  =  x`
-            //                  |  ^
-            //             offset
+            //                   | ^
+            //              offset
             Some((offset, _)) => return self.skip_value(slice, offset),
             // Input: `    key  =  `
-            //                  |  ^
-            //             offset
+            //                   | ^
+            //              offset
             None => return None,
         };
 
         match iter.find(|&(_, &b)| b == quote) {
             // Input: `    key  =  "   "`
-            //                         ^
-            Some((e, b'"')) => Some(e),
+            //                     e = ^
+            Some((e, b'"')) => Some(e + 1), // +1 for `"`
             // Input: `    key  =  '   '`
-            //                         ^
-            Some((e, _)) => Some(e),
+            //                     e = ^
+            Some((e, _)) => Some(e + 1), // +1 for `'`
 
             // Input: `    key  =  "   `
             // Input: `    key  =  '   `
@@ -1187,7 +1187,7 @@ impl IterState {
 
         let key = match self.check_for_duplicates(slice, key) {
             Err(e) => {
-                self.state = State::SkipEqValue(offset);
+                self.state = State::SkipEqValue(offset + 1); // +1 to skip `=`
                 return Some(Err(e));
             }
             Ok(key) => key,
@@ -1986,6 +1986,36 @@ mod xml {
                 assert_eq!(iter.next(), None);
             }
 
+            /// Attribute have a quoted value with spaces. The whole value should be
+            /// skipped, its content should not be returned as attributes
+            #[test]
+            fn quoted_with_spaces() {
+                let mut iter = Attributes::new(
+                    r#"tag key='value' key="dup x='y'" key='dup x="y"' another=''"#,
+                    3,
+                );
+                //     0   ^ = 4       ^ = 16          ^ = 32
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: QName("key"),
+                        value: Cow::Borrowed("value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(32, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: QName("another"),
+                        value: Cow::Borrowed(""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
             /// Only attribute key is present
             #[test]
             fn key_only() {
@@ -2772,6 +2802,36 @@ mod html {
                     }))
                 );
                 assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: QName("another"),
+                        value: Cow::Borrowed(""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a quoted value with spaces. The whole value should be
+            /// skipped, its content should not be returned as attributes
+            #[test]
+            fn quoted_with_spaces() {
+                let mut iter = Attributes::html(
+                    r#"tag key='value' key="dup x='y'" key='dup x="y"' another=''"#,
+                    3,
+                );
+                //     0   ^ = 4       ^ = 16          ^ = 32
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: QName("key"),
+                        value: Cow::Borrowed("value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(32, 4))));
                 assert_eq!(
                     iter.next(),
                     Some(Ok(Attribute {
