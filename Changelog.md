@@ -45,7 +45,7 @@
   `Indentation` used a character count as a byte index into its indent buffer, and
   `Serializer::indent` truncated its `char` argument with `as u8`.
 - [#1023]: `DecodingReader` now decodes content that follows the XML declaration using the
-  declared encoding even when that content falls within the first 64 bytes of the input.
+  declared encoding even when that content falls within the first 128 bytes of the input.
   Previously such bytes were decoded with the default UTF-8 decoder before `set_encoding()`
   took effect, which rejected documents in single-byte encodings and silently mis-decoded
   documents in multi-byte encodings.
@@ -87,7 +87,7 @@
   `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
   `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
 - [#1040]: `DecodingReader` now applies `set_encoding()` to everything after the XML declaration
-  even when the declaration does not fit in the first 64 bytes, for example when it is split over
+  even when the declaration does not fit in the first 128 bytes, for example when it is split over
   several lines. Previously `set_encoding()` panicked, or reading failed with a UTF-8 error on
   non-ASCII content. `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document
   declares an ASCII-compatible encoding such as `UTF-8`, instead of panicking or switching to
