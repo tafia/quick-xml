@@ -617,6 +617,19 @@ impl<'a> FusedIterator for Attributes<'a> {}
 /// next attribute will be attempted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AttrError {
+    /// Attribute name was not found before `=`, position relative to the start of
+    /// the owning tag is provided.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag ="1" another="attribute"/>
+    /// <!-- ^    ^~~ recovery position (9) -->
+    /// <!-- '~~ error position (4) -->
+    /// ```
+    ///
+    /// This error can be raised only when the iterator is in XML mode.
+    ExpectedName(usize),
     /// Attribute key was not followed by `=`, position relative to the start of
     /// the owning tag is provided.
     ///
@@ -703,6 +716,9 @@ pub enum AttrError {
 impl Display for AttrError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            Self::ExpectedName(pos) => {
+                write!(f, r#"position {}: missing attribute name before `=`"#, pos)
+            }
             Self::ExpectedEq(pos) => write!(
                 f,
                 r#"position {}: attribute key must be directly followed by `=` or space"#,
@@ -1008,10 +1024,10 @@ impl IterState {
         match iter.find(|&(_, &b)| b == quote) {
             // Input: `    key  =  "   "`
             //                         ^
-            Some((e, b'"')) => Some(e),
+            Some((e, b'"')) => Some(e + 1),
             // Input: `    key  =  '   '`
             //                         ^
-            Some((e, _)) => Some(e),
+            Some((e, _)) => Some(e + 1),
 
             // Input: `    key  =  "   `
             // Input: `    key  =  '   `
@@ -1128,6 +1144,12 @@ impl IterState {
 
         // Index where next key started
         let start_key = match iter.find(|&(_, &b)| !is_whitespace(b)) {
+            // Input: `    ="value"`
+            //             ^
+            Some((s, b'=')) if !self.html => {
+                self.state = State::SkipEqValue(s + 1);
+                return Some(Err(AttrError::ExpectedName(s)));
+            }
             // Input: `    key`
             //             ^
             Some((s, _)) => s,
@@ -1187,7 +1209,7 @@ impl IterState {
 
         let key = match self.check_for_duplicates(slice, key) {
             Err(e) => {
-                self.state = State::SkipEqValue(offset);
+                self.state = State::SkipEqValue(offset + 1);
                 return Some(Err(e));
             }
             Ok(key) => key,
@@ -1768,29 +1790,60 @@ mod xml {
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::new(r#"tag key= regular ='attribute'"#, 3);
-            //                                0        ^ = 9               ^ = 29
+            //                                0        ^ = 9    ^ = 17
 
             // In that case "regular" considered as unquoted value
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
-            // In that case "='attribute'" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(29))));
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
             assert_eq!(iter.next(), None);
             assert_eq!(iter.next(), None);
 
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::new(r#"tag key= regular = 'attribute'"#, 3);
-            //                                0        ^ = 9     ^ = 19     ^ = 30
+            //                                0        ^ = 9    ^ = 17
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
-            // In that case second "=" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(19))));
-            // In that case "'attribute'" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(30))));
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
             assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute name is missing before `=`.
+        #[test]
+        fn missing_name() {
+            for (input, next_expected) in [
+                (r#"tag ="1" regular='attribute'"#, true),
+                (r#"tag = "1" regular='attribute'"#, true),
+                (r#"tag =="1" regular='attribute'"#, true),
+                (r#"tag =foo="1" regular='attribute'"#, true),
+                (r#"tag ="#, false),
+            ] {
+                let mut iter = Attributes::new(input, 3);
+                assert_eq!(
+                    iter.next(),
+                    Some(Err(AttrError::ExpectedName(4))),
+                    "{input}"
+                );
+                if next_expected {
+                    assert_eq!(
+                        iter.next(),
+                        Some(Ok(Attribute {
+                            key: QName("regular"),
+                            value: Cow::Borrowed("attribute"),
+                        })),
+                        "{input}"
+                    );
+                }
+                assert_eq!(iter.next(), None, "{input}");
+                assert_eq!(iter.next(), None, "{input}");
+            }
+
+            let mut iter = Attributes::new(r#"tag =="1""#, 3);
+            iter.with_checks(false);
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(4))));
             assert_eq!(iter.next(), None);
         }
     }
@@ -2201,6 +2254,29 @@ mod xml {
         );
         assert_eq!(iter.next(), None);
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn try_get_attribute_missing_name() {
+        use crate::events::BytesStart;
+
+        let start = BytesStart::from_content(r#"root ="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
+
+        let start = BytesStart::from_content(r#"root =="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
+
+        let start = BytesStart::from_content(r#"root =a="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
     }
 }
 

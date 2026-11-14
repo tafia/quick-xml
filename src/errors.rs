@@ -113,6 +113,13 @@ pub enum IllFormedError {
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
     MissingDoctypeName,
+    /// An element tag does not contain an element name (`<>`, `< />`, `</>`, etc.).
+    ///
+    /// According to the [specification], start, empty, and end tags MUST contain
+    /// a non-empty element name. If that name is missed, this error is returned.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-starttags
+    MissingElementName,
     /// The end tag was not found during reading of a sub-tree of elements due to
     /// encountering an EOF from the underlying reader. This error is returned from
     /// [`Reader::read_to_end`].
@@ -164,6 +171,7 @@ impl fmt::Display for IllFormedError {
             Self::MissingDoctypeName => {
                 f.write_str("`<!DOCTYPE>` declaration does not contain a name of a document type")
             }
+            Self::MissingElementName => f.write_str("element tag does not contain an element name"),
             Self::MissingEndTag(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",

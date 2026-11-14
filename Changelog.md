@@ -74,6 +74,12 @@
   double-struck letters. All entities now resolve as listed in the HTML specification's
   `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
   `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
+- [#1042]: Empty element and attribute names are now rejected in XML parsing and serde
+  serialization. `Reader` now returns `IllFormedError::MissingElementName` for tags without a
+  name (such as `<>`, `< />`, `< ="1"/>`, and `</>`), `Attributes` in XML mode returns
+  `AttrError::ExpectedName` when `=` appears without a preceding attribute name (such as
+  `<root ="1"/>` or `<root =="1"/>`), and serde serialization rejects empty element and
+  attribute names with `SeError::Unsupported`.
 
 ### Misc Changes
 
@@ -96,6 +102,7 @@
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
+[#1042]: https://github.com/tafia/quick-xml/issues/1042
 
 
 ## 0.42.0 -- 2026-08-22
