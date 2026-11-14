@@ -212,11 +212,11 @@ impl DetectedEncoding {
 }
 
 // Bytes read upfront so `set_encoding()` can be called before the main
-// decode loop. Kept small (enough for a typical XML declaration) to limit
+// decode loop. Kept small (enough for a standard XML declaration, even in UTF-16) to limit
 // bytes decoded with a potentially wrong initial encoding. A longer
 // declaration is read in several chunks of this size.
 #[cfg(feature = "encoding")]
-const PREFIX_CAP: usize = 64;
+const PREFIX_CAP: usize = 128;
 
 #[cfg(feature = "encoding")]
 struct Prefix {
@@ -814,7 +814,7 @@ mod decoding_reader {
         }
 
         /// The prefix is not refilled after the XML declaration: everything past
-        /// the first 64 bytes is decoded by the main path in one chunk.
+        /// the first `PREFIX_CAP` bytes is decoded by the main path in one chunk.
         #[test]
         fn prefix_ends_after_declaration() {
             let mut data = b"<?xml version='1.0'?>".to_vec();

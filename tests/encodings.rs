@@ -191,7 +191,7 @@ mod xml_decoding_reader {
         check_decoding_reader!(x_mac_cyrillic, X_MAC_CYRILLIC, "x-mac-cyrillic");
         check_decoding_reader!(x_user_defined, X_USER_DEFINED, "x-user-defined");
 
-        /// Non-ASCII content that falls within the first 64 bytes (the prefix used
+        /// Non-ASCII content that falls within the first 128 bytes (the prefix used
         /// for encoding detection) must still be decoded with the encoding named in
         /// the declaration, not with the default UTF-8 decoder. The document files
         /// above all have a long ASCII header, so they never exercise this.
@@ -225,12 +225,14 @@ mod xml_decoding_reader {
             assert_eq!(text, "\u{3042}\u{3044}");
         }
 
-        /// A declaration split over several lines does not fit in the 64-byte prefix.
+        /// A declaration split over several lines does not fit in the 128-byte prefix.
         /// `set_encoding()` must still apply to everything after it.
         /// `é` is `E9` in ISO-8859-1 and invalid UTF-8.
         #[test]
         fn declaration_longer_than_prefix() {
-            let bytes = b"<?xml version=\"1.0\"\r\n      encoding=\"ISO-8859-1\"\r\n      standalone=\"yes\"?><d>\xE9</d>";
+            let mut bytes = b"<?xml version=\"1.0\"\r\n      encoding=\"ISO-8859-1\"\r\n".to_vec();
+            bytes.extend_from_slice(&[b' '; 128]);
+            bytes.extend_from_slice(b"standalone=\"yes\"?><d>\xE9</d>");
 
             let mut r = Reader::from_reader(DecodingReader::new(bytes.as_ref()));
             let mut buf = Vec::new();
@@ -255,11 +257,11 @@ mod xml_decoding_reader {
         /// A file re-saved as UTF-16 can keep its `encoding="UTF-8"` declaration.
         /// The declaration was readable only because the document is UTF-16, so the
         /// detected encoding must be kept. A complete declaration is longer than the
-        /// 64-byte prefix, which made `set_encoding()` panic.
+        /// 128-byte prefix, which made `set_encoding()` panic.
         #[test]
         fn utf16_declared_as_utf8() {
             let mut bytes = vec![0xFF, 0xFE];
-            for unit in "<?xml version=\"1.0\" encoding=\"UTF-8\"?><d>x</d>".encode_utf16() {
+            for unit in "<?xml version=\"1.0\"                                        encoding=\"UTF-8\"?><d>x</d>".encode_utf16() {
                 bytes.extend_from_slice(&unit.to_le_bytes());
             }
 
