@@ -182,6 +182,88 @@ enum Untagged {
     },
 }
 
+mod empty_name {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use quick_xml::se::{to_string, to_string_with_root};
+
+    #[derive(Serialize)]
+    #[serde(rename = "")]
+    struct EmptyStructName {
+        a: u8,
+    }
+
+    #[derive(Serialize)]
+    struct EmptyFieldRename {
+        #[serde(rename = "")]
+        field: &'static str,
+    }
+
+    #[derive(Serialize)]
+    struct EmptyAttrRename {
+        #[serde(rename = "@")]
+        attr: &'static str,
+    }
+
+    #[derive(Serialize)]
+    enum EmptyVariantRename {
+        #[serde(rename = "")]
+        Variant,
+    }
+
+    fn assert_empty_name_err(res: Result<String, SeError>) {
+        match res {
+            Err(SeError::Unsupported(msg)) => {
+                assert_eq!(msg, "empty XML name is not allowed");
+            }
+            other => panic!("Expected `Err(Unsupported(_))`, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn root_tag() {
+        assert_empty_name_err(to_string_with_root("", &Unit));
+    }
+
+    #[test]
+    fn map_key_element() {
+        let map = BTreeMap::from([("", "val")]);
+        assert_empty_name_err(to_string_with_root("root", &map));
+    }
+
+    #[test]
+    fn map_key_unit() {
+        let map = BTreeMap::from([("", ())]);
+        assert_empty_name_err(to_string_with_root("root", &map));
+    }
+
+    #[test]
+    fn map_key_attribute() {
+        let map = BTreeMap::from([("@", "1")]);
+        assert_empty_name_err(to_string_with_root("root", &map));
+    }
+
+    #[test]
+    fn struct_name() {
+        assert_empty_name_err(to_string(&EmptyStructName { a: 1 }));
+    }
+
+    #[test]
+    fn struct_field_rename() {
+        assert_empty_name_err(to_string(&EmptyFieldRename { field: "v" }));
+    }
+
+    #[test]
+    fn struct_attr_rename() {
+        assert_empty_name_err(to_string(&EmptyAttrRename { attr: "1" }));
+    }
+
+    #[test]
+    fn enum_variant_rename() {
+        assert_empty_name_err(to_string_with_root("root", &EmptyVariantRename::Variant));
+    }
+}
+
 mod without_root {
     use super::*;
     use pretty_assertions::assert_eq;

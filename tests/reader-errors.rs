@@ -25,32 +25,34 @@ mod syntax {
         syntax_err!(unclosed8(".< \t\r\nx") => SyntaxError::UnclosedTag);
 
         /// Closed tags can be tested only in pair with open tags, because otherwise
-        /// `IllFormedError::UnmatchedEndTag` will be raised
+        /// `IllFormedError::UnmatchedEndTag` will be raised.
+        /// Tags `<>` and `</>` are well-formed from a syntax point-of-view, but return
+        /// `IllFormedError::MissingElementName`, tested below.
         mod normal {
             use super::*;
             use pretty_assertions::assert_eq;
 
             #[test]
             fn borrowed() {
-                let mut reader = Reader::from_str("<></>");
+                let mut reader = Reader::from_str("<a></a>");
                 assert_eq!(
                     reader.read_event().unwrap(),
-                    Event::Start(BytesStart::new(""))
+                    Event::Start(BytesStart::new("a"))
                 );
-                assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("")));
+                assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("a")));
             }
 
             #[test]
             fn buffered() {
                 let mut buf = Vec::new();
-                let mut reader = Reader::from_str("<></>");
+                let mut reader = Reader::from_str("<a></a>");
                 assert_eq!(
                     reader.read_event_into(&mut buf).unwrap(),
-                    Event::Start(BytesStart::new(""))
+                    Event::Start(BytesStart::new("a"))
                 );
                 assert_eq!(
                     reader.read_event_into(&mut buf).unwrap(),
-                    Event::End(BytesEnd::new(""))
+                    Event::End(BytesEnd::new("a"))
                 );
             }
 
@@ -58,14 +60,14 @@ mod syntax {
             #[tokio::test]
             async fn async_tokio() {
                 let mut buf = Vec::new();
-                let mut reader = Reader::from_str("<></>");
+                let mut reader = Reader::from_str("<a></a>");
                 assert_eq!(
                     reader.read_event_into_async(&mut buf).await.unwrap(),
-                    Event::Start(BytesStart::new(""))
+                    Event::Start(BytesStart::new("a"))
                 );
                 assert_eq!(
                     reader.read_event_into_async(&mut buf).await.unwrap(),
-                    Event::End(BytesEnd::new(""))
+                    Event::End(BytesEnd::new("a"))
                 );
             }
         }
@@ -623,6 +625,66 @@ mod ill_formed {
     err!(missing_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissingDoctypeName);
     //                                          ^= 13
     event_ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => 15: Event::DocType(BytesText::new("x")));
+
+    err!(missing_element_name1("<>") => 1: IllFormedError::MissingElementName);
+    //                          ^= 1
+    err!(missing_element_name2("< \t\r\n>") => 1: IllFormedError::MissingElementName);
+    //                          ^= 1
+    err!(missing_element_name3("< />") => 1: IllFormedError::MissingElementName);
+    //                          ^= 1
+    err!(missing_element_name4(r#"< ="1"/>"#) => 1: IllFormedError::MissingElementName);
+    //                          ^= 1
+    err!(missing_element_name5(r#"< attr="1">"#) => 1: IllFormedError::MissingElementName);
+    //                          ^= 1
+    err2!(missing_element_name_nested("<root><>") => 7: IllFormedError::MissingElementName);
+    //                                       ^= 7
+
+    #[test]
+    fn missing_element_name_in_end_tag_when_checks_disabled() {
+        use pretty_assertions::assert_eq;
+
+        let mut reader = Reader::from_str("<start></><x/>");
+        reader.config_mut().check_end_names = false;
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("start"))
+        );
+        match reader.read_event() {
+            Err(Error::IllFormed(IllFormedError::MissingElementName)) => {}
+            other => panic!("Expected MissingElementName, got {:?}", other),
+        }
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("x"))
+        );
+
+        let mut reader = Reader::from_str("</ ></><x/>");
+        reader.config_mut().allow_unmatched_ends = true;
+        match reader.read_event() {
+            Err(Error::IllFormed(IllFormedError::MissingElementName)) => {}
+            other => panic!("Expected MissingElementName, got {:?}", other),
+        }
+        match reader.read_event() {
+            Err(Error::IllFormed(IllFormedError::MissingElementName)) => {}
+            other => panic!("Expected MissingElementName, got {:?}", other),
+        }
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Empty(BytesStart::new("x"))
+        );
+
+        let mut reader = Reader::from_str("< /><x/>");
+        reader.config_mut().expand_empty_elements = true;
+        match reader.read_event() {
+            Err(Error::IllFormed(IllFormedError::MissingElementName)) => {}
+            other => panic!("Expected MissingElementName, got {:?}", other),
+        }
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("x"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::End(BytesEnd::new("x")));
+    }
 
     err2!(unmatched_end_tag1(".</>") => 1: IllFormedError::UnmatchedEndTag("".to_string()));
     err2!(unmatched_end_tag2(".</end>") => 1: IllFormedError::UnmatchedEndTag("end".to_string()));

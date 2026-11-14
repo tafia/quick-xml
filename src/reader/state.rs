@@ -218,7 +218,7 @@ impl ReaderState {
             {
                 &content[..pos_end_name + 1]
             } else {
-                content
+                ""
             }
         } else {
             content
@@ -254,6 +254,12 @@ impl ReaderState {
                     )));
                 }
             }
+        }
+
+        if name_len(name.as_bytes()) == 0 {
+            // Report error at the place where the element name was expected (just after `</`)
+            self.last_error_offset = self.offset - buf.len() as u64 + 2;
+            return Err(Error::IllFormed(IllFormedError::MissingElementName));
         }
 
         Ok(Event::End(BytesEnd::wrap(Cow::Borrowed(name))))
@@ -329,32 +335,32 @@ impl ReaderState {
         // strip `<`
         let content = &buf[1..];
         let content_bytes = &buf_bytes[1..];
-        if let Some(content_bytes) = content_bytes.strip_suffix(b"/>") {
+        let (content, is_empty) = match content_bytes.strip_suffix(b"/>") {
             // This is self-closed tag `<something/>`
-            let content = &content[..content_bytes.len()];
-            let event = BytesStart::wrap(content, name_len(content_bytes));
-
-            if self.config.expand_empty_elements {
-                self.state = ParseState::InsideEmpty;
-                self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.push_str(event.name().as_ref());
-                Ok(Event::Start(event))
-            } else {
-                Ok(Event::Empty(event))
-            }
-        } else {
-            // strip `>`
-            let content_bytes = &content_bytes[..content_bytes.len() - 1];
-            let content = &content[..content_bytes.len()];
-            let event = BytesStart::wrap(content, name_len(content_bytes));
-
-            // #514: Always store names event when .check_end_names == false,
-            // because checks can be temporary disabled and when they would be
-            // enabled, we should have that information
-            self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.push_str(event.name().as_ref());
-            Ok(Event::Start(event))
+            Some(content_bytes) => (&content[..content_bytes.len()], true),
+            // Strip `>`
+            None => (&content[..content_bytes.len() - 1], false),
+        };
+        let name_len = name_len(content.as_bytes());
+        if name_len == 0 {
+            // Report error at the place where the element name was expected (just after `<`)
+            self.last_error_offset = self.offset - buf.len() as u64 + 1;
+            return Err(Error::IllFormed(IllFormedError::MissingElementName));
         }
+
+        let event = BytesStart::wrap(content, name_len);
+        if is_empty && !self.config.expand_empty_elements {
+            return Ok(Event::Empty(event));
+        }
+        if is_empty {
+            self.state = ParseState::InsideEmpty;
+        }
+        // #514: Always store names event when .check_end_names == false,
+        // because checks can be temporary disabled and when they would be
+        // enabled, we should have that information
+        self.opened_starts.push(self.opened_buffer.len());
+        self.opened_buffer.push_str(event.name().as_ref());
+        Ok(Event::Start(event))
     }
 
     #[inline]

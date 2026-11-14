@@ -136,11 +136,11 @@ mod character_reference {
         #[test]
         fn end() {
             for i in 0..=0x10FFFF {
-                let input = format!("<></&{i};>");
+                let input = format!("<x></&{i};>");
                 let mut reader = Reader::from_str(&input);
                 reader.config_mut().check_end_names = false;
 
-                // Skip <>
+                // Skip <x>
                 reader.read_event().unwrap();
                 assert_eq!(
                     reader.read_event().unwrap(),
@@ -286,11 +286,11 @@ mod character_reference {
         #[test]
         fn end() {
             for i in 0..=0x10FFFF {
-                let input = format!("<></&#{i:x};>");
+                let input = format!("<x></&#{i:x};>");
                 let mut reader = Reader::from_str(&input);
                 reader.config_mut().check_end_names = false;
 
-                // Skip <>
+                // Skip <x>
                 reader.read_event().unwrap();
                 assert_eq!(
                     reader.read_event().unwrap(),
@@ -397,10 +397,10 @@ mod general_entity_reference {
 
     #[test]
     fn end() {
-        let mut reader = Reader::from_str("<></&entity;>");
+        let mut reader = Reader::from_str("<x></&entity;>");
         reader.config_mut().check_end_names = false;
 
-        // Skip <>
+        // Skip <x>
         reader.read_event().unwrap();
         assert_eq!(reader.read_event().unwrap(), End(BytesEnd::new("&entity;")));
     }
@@ -515,10 +515,10 @@ mod parameter_entity_reference {
 
     #[test]
     fn end() {
-        let mut reader = Reader::from_str("<></%param;>");
+        let mut reader = Reader::from_str("<x></%param;>");
         reader.config_mut().check_end_names = false;
 
-        // Skip <>
+        // Skip <x>
         reader.read_event().unwrap();
         assert_eq!(reader.read_event().unwrap(), End(BytesEnd::new("%param;")));
     }

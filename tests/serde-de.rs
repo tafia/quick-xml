@@ -2132,3 +2132,40 @@ mod xml_version {
         }
     }
 }
+
+#[test]
+fn empty_element_name() {
+    use quick_xml::errors::{Error, IllFormedError};
+    use std::collections::BTreeMap;
+
+    for xml in ["<></>", "< />", "<root><></></root>"] {
+        match from_str::<BTreeMap<String, String>>(xml) {
+            Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                assert_eq!(cause, IllFormedError::MissingElementName);
+            }
+            other => panic!(
+                "Expected `Err(InvalidXml(IllFormed(MissingElementName)))` for {xml:?}, got {:?}",
+                other
+            ),
+        }
+    }
+}
+
+#[test]
+fn empty_attribute_name() {
+    use quick_xml::errors::Error;
+    use quick_xml::events::attributes::AttrError;
+    use std::collections::BTreeMap;
+
+    for xml in [r#"<root ="1"/>"#, r#"<root =="1"/>"#, r#"<root =a="1"/>"#] {
+        match from_str::<BTreeMap<String, String>>(xml) {
+            Err(DeError::InvalidXml(Error::InvalidAttr(cause))) => {
+                assert_eq!(cause, AttrError::ExpectedName(5));
+            }
+            other => panic!(
+                "Expected `Err(InvalidXml(InvalidAttr(ExpectedName(5))))` for {xml:?}, got {:?}",
+                other
+            ),
+        }
+    }
+}
