@@ -78,6 +78,7 @@
 ### Misc Changes
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
+- [#1045]: Speed up the duplicate attribute check in `Attributes` for tags with less than 32 attributes.
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
@@ -96,6 +97,7 @@
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
+[#1045]: https://github.com/tafia/quick-xml/pull/1045
 
 
 ## 0.42.0 -- 2026-08-22

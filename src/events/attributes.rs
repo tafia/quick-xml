@@ -1042,11 +1042,13 @@ impl IterState {
             if self.keys.len() >= SMALL_ATTRIBUTE_COUNT {
                 return self.check_for_duplicates_hashed(slice, key);
             }
-            if let Some(prev) = self
-                .keys
-                .iter()
-                .find(|r| slice[(*r).clone()] == slice[key.clone()])
-            {
+            let name = &slice[key.clone()];
+            // Comparing the last bytes first rejects most different names of
+            // the same length without a call to `memcmp`.
+            if let Some(prev) = self.keys.iter().find(|r| {
+                let prev = &slice[(*r).clone()];
+                prev.len() == name.len() && prev.last() == name.last() && prev == name
+            }) {
                 return Err(AttrError::Duplicated(key.start, prev.start));
             }
             self.keys.push(key.clone());
