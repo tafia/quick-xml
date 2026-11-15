@@ -82,6 +82,12 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- [#0000]: `NamespaceResolver::push` (and therefore `NsReader` and the serde `Deserializer`) now
+  binds the normalized value of a namespace declaration, with character references and predefined
+  entities expanded. Previously the raw value was used, so `xmlns:p="urn&#58;x"` bound `p` to
+  `urn&#58;x` instead of `urn:x`, and the checks for the reserved `xml` and `xmlns` namespaces
+  could be bypassed by escaping. New `NamespaceError::InvalidNamespaceName` variant is returned
+  when the value references an entity that is not predefined.
 
 ### Misc Changes
 
@@ -106,6 +112,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#0000]: https://github.com/tafia/quick-xml/pull/0000
 
 
 ## 0.42.0 -- 2026-08-22

@@ -3,6 +3,7 @@
 //!
 //! [spec]: https://www.w3.org/TR/xml-names11
 
+use crate::escape::{EscapeError, normalize_xml10_attribute_value, resolve_xml_entity};
 use crate::events::attributes::{AttrError, Attribute, Attributes};
 use crate::events::{BytesStart, Event};
 use std::fmt::{self, Debug, Display, Formatter};
@@ -63,6 +64,14 @@ pub enum NamespaceError {
     /// The same default namespace is declared more than once on a single element,
     /// for example `<e xmlns="a" xmlns="b"/>`.
     DuplicateXmlnsBinding,
+    /// The value of a namespace declaration cannot be normalized, for example because
+    /// it references an entity that is not predefined in XML: `<e xmlns:p="&custom;"/>`.
+    /// The [namespace name] is the normalized value, so it cannot be determined.
+    ///
+    /// Contains the error of normalization.
+    ///
+    /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
+    InvalidNamespaceName(EscapeError),
     /// The total number of `xmlns` / `xmlns:*` namespace bindings in scope exceeded
     /// the configured [`NamespaceResolver::max_namespace_bindings`] limit. Contains
     /// the configured limit.
@@ -130,6 +139,9 @@ impl fmt::Display for NamespaceError {
             Self::DuplicateXmlnsBinding => {
                 f.write_str("duplicated declaration of a default namespace")
             }
+            Self::InvalidNamespaceName(_) => {
+                f.write_str("cannot normalize the value of a namespace declaration")
+            }
             Self::TooManyBindings(limit) => {
                 write!(
                     f,
@@ -149,7 +161,14 @@ impl fmt::Display for NamespaceError {
     }
 }
 
-impl std::error::Error for NamespaceError {}
+impl std::error::Error for NamespaceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidNamespaceName(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -433,33 +452,25 @@ pub struct Namespace<'a>(pub &'a str);
 impl<'a> Namespace<'a> {
     /// Converts this namespace to an internal slice representation.
     ///
-    /// This is [non-normalized] attribute value, i.e. any entity references is not
-    /// expanded and space characters are not removed. This means, that different
-    /// string slices, returned from this method, can represent the same namespace
-    /// and would be treated by parser as identical.
-    ///
-    /// For example, if the entity **eacute** has been defined to be **é**,
-    /// the empty tags below all contain namespace declarations binding the
-    /// prefix `p` to the same [IRI reference], `http://example.org/rosé`.
+    /// Namespaces returned by [`NamespaceResolver`] contain the [normalized] value
+    /// of the namespace declaration, i.e. character references and predefined entities
+    /// are expanded. For example, the empty tags below all contain namespace declarations
+    /// binding the prefix `p` to the same [IRI reference], `http://example.org/rosé`,
+    /// which is returned by this method:
     ///
     /// ```xml
     /// <p:foo xmlns:p="http://example.org/rosé" />
     /// <p:foo xmlns:p="http://example.org/ros&#xe9;" />
     /// <p:foo xmlns:p="http://example.org/ros&#xE9;" />
     /// <p:foo xmlns:p="http://example.org/ros&#233;" />
-    /// <p:foo xmlns:p="http://example.org/ros&eacute;" />
     /// ```
     ///
-    /// This is because XML entity references are expanded during attribute value
-    /// normalization.
-    ///
-    /// [non-normalized]: https://www.w3.org/TR/xml11/#AVNormalize
+    /// [normalized]: https://www.w3.org/TR/xml11/#AVNormalize
     /// [IRI reference]: https://datatracker.ietf.org/doc/html/rfc3987
     #[inline(always)]
     pub const fn into_inner(self) -> &'a str {
         self.0
     }
-    //TODO: implement value normalization and use it when comparing namespaces
 }
 
 impl<'a> Debug for Namespace<'a> {
@@ -828,7 +839,13 @@ impl NamespaceResolver {
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
+    /// Values of the declarations are [normalized] according to the XML 1.0 rules
+    /// before they are bound. Only character references and predefined XML entities
+    /// can be expanded, other entity references make this method return
+    /// [`NamespaceError::InvalidNamespaceName`].
+    ///
     /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [normalized]: https://www.w3.org/TR/xml/#AVNormalize
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level = self
             .nesting_level
@@ -841,7 +858,11 @@ impl NamespaceResolver {
             match a {
                 Ok(Attribute { key: k, value: v }) => {
                     if let Some(prefix) = k.as_namespace_binding() {
-                        self.add(prefix, Namespace(&v))?;
+                        // The namespace name is the normalized attribute value, so
+                        // `xmlns:p="urn:x"` and `xmlns:p="urn&#58;x"` declare the same namespace
+                        let namespace = normalize_xml10_attribute_value(&v, 1, resolve_xml_entity)
+                            .map_err(NamespaceError::InvalidNamespaceName)?;
+                        self.add(prefix, Namespace(&namespace))?;
                     }
                 }
                 Err(AttrError::Duplicated(_, prev)) => {
@@ -2036,6 +2057,64 @@ mod namespaces {
         assert_eq!(
             resolver.resolve(QName("p:name"), true),
             (Bound(Namespace("second")), LocalName("name"))
+        );
+    }
+
+    /// The namespace name is the normalized value of a namespace declaration
+    #[test]
+    fn normalized_value() {
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content(
+                "t xmlns:a='urn:x' xmlns:b='urn&#58;x' xmlns='a&amp;b&#x9;c\td'",
+                1,
+            ))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("a:name"), true),
+            (Bound(Namespace("urn:x")), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("b:name"), true),
+            (Bound(Namespace("urn:x")), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("name"), true),
+            (Bound(Namespace("a&b\tc d")), LocalName("name"))
+        );
+
+        // Reserved namespaces are checked after normalization
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t xmlns:p='http&#58;//www.w3.org/XML/1998/namespace'",
+                1
+            )),
+            Err(NamespaceError::InvalidPrefixForXml("p".to_string())),
+        );
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t xmlns='http&#58;//www.w3.org/2000/xmlns/'",
+                1
+            )),
+            Err(NamespaceError::DefaultBoundToXmlns),
+        );
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content(
+                "t xmlns:xml='http&#58;//www.w3.org/XML/1998/namespace'",
+                1,
+            ))
+            .unwrap();
+
+        // Only predefined entities can be expanded
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content("t xmlns:p='&custom;'", 1)),
+            Err(NamespaceError::InvalidNamespaceName(
+                EscapeError::UnrecognizedEntity(1..7, "custom".to_string())
+            )),
         );
     }
 
