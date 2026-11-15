@@ -151,6 +151,14 @@ mod xml_decoding_reader {
         check_decoding_reader!(utf16be_bom, UTF_16BE, "utf16be-bom");
         check_decoding_reader!(utf16le_bom, UTF_16LE, "utf16le-bom");
 
+        // A UTF-16 document declares just `encoding="UTF-16"` for both byte orders
+        // and the byte order is given by the BOM or by the first bytes. That label
+        // resolves to UTF-16LE, which must not replace the detected UTF-16BE: the
+        // document files above do not have an encoding declaration, so they never
+        // exercise this.
+        check_decoding_reader!(utf16be_with_label, UTF_16BE, "utf16be-with-label");
+        check_decoding_reader!(utf16be_with_label_bom, UTF_16BE, "utf16be-with-label-bom");
+
         // legacy multi-byte encodings
         check_decoding_reader!(big5, BIG5, "Big5");
         check_decoding_reader!(euc_jp, EUC_JP, "EUC-JP");
