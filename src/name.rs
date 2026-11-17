@@ -858,7 +858,9 @@ impl NamespaceResolver {
                         Some(PrefixDeclaration::Named(p)) => {
                             return Err(NamespaceError::DuplicateBinding(p.to_string()));
                         }
-                        None => break,
+                        // Duplicates of other attributes are left to the caller, but namespace
+                        // declarations after them still have to be processed
+                        None => {}
                     }
                 }
                 // Syntax errors are left to the caller, which iterates attributes itself
@@ -2019,6 +2021,36 @@ mod namespaces {
         assert_eq!(
             resolver.resolve(QName("name"), true),
             (Bound(Namespace("first")), LocalName("name"))
+        );
+
+        // Declarations after a duplicated attribute are not lost
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t xmlns:p='outer'", 1))
+            .unwrap();
+        resolver
+            .push(&BytesStart::from_content(
+                "t a='1' a='2' xmlns:p='inner' xmlns='default'",
+                1,
+            ))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Bound(Namespace("inner")), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("name"), true),
+            (Bound(Namespace("default")), LocalName("name"))
+        );
+
+        // ...and are still checked for duplicates
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t a='1' a='2' xmlns:p='first' xmlns:p='second'",
+                1
+            )),
+            Err(NamespaceError::DuplicateBinding("p".to_string())),
         );
 
         // Redeclaration in a nested element is allowed
