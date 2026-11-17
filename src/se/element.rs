@@ -1267,6 +1267,10 @@ mod tests {
                 => r#"<root key1="1" key2="2"/>"#);
             serialize_as!(map_mixed: BTreeMap::from([("@key1", 1), ("key2", 2)])
                 => r#"<root key1="1"><key2>2</key2></root>"#);
+            err!(map_empty_attr_name: BTreeMap::from([("@", 1)])
+                => Unsupported("an XML name cannot be empty"));
+            err!(map_empty_element_name: BTreeMap::from([("", 1)])
+                => Unsupported("an XML name cannot be empty"));
 
             serialize_as!(struct_: Attributes { key: "answer", val: (42, 42) }
                 => r#"<root key="answer" val="42 42"/>"#);

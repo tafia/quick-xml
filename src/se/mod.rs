@@ -553,6 +553,7 @@ impl<'n> XmlName<'n> {
     pub fn try_from(name: &'n str) -> Result<XmlName<'n>, SeError> {
         //TODO: Customization point: allow user to decide if he want to reject or encode the name
         match name.chars().next() {
+            None => Err(SeError::Unsupported("an XML name cannot be empty".into())),
             Some(ch) if !is_xml11_name_start_char(ch) => Err(SeError::Unsupported(
                 format!("character `{ch}` is not allowed at the start of an XML name `{name}`")
                     .into(),
