@@ -82,6 +82,9 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- The serde serializer now returns `SeError::Unsupported` for an empty element or attribute name,
+  such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
+  or `<root ="value">`, which is not well-formed XML.
 
 ### Misc Changes
 
