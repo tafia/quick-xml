@@ -85,6 +85,10 @@
 - [#1047]: The serde serializer now returns `SeError::Unsupported` for an empty element or attribute
   name, such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
   or `<root ="value">`, which is not well-formed XML.
+- [#1049]: A comment inside the DTD internal subset now ends only on `-->` when the document is read
+  from a `BufRead` in several chunks. Previously, when one chunk ended with `-` and the next one
+  ended with `x-`, a `>` at the start of the following chunk closed the comment, so the reader
+  could end the DOCTYPE early and report its remaining content as document events.
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
@@ -112,6 +116,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
 

@@ -1,5 +1,7 @@
+use std::io::BufReader;
+
 use quick_xml::errors::{Error, SyntaxError};
-use quick_xml::events::{BytesText, Event};
+use quick_xml::events::{BytesStart, BytesText, Event};
 use quick_xml::reader::{NsReader, Reader};
 
 // For event_ok and syntax_err macros
@@ -103,6 +105,26 @@ ok!(unknown_dtd_markup: 34
     "<!DOCTYPE e [ <!unknown e ANY> ] >"
               "e [ <!unknown e ANY> ] "
 );
+
+/// A comment in the internal subset ends only on `-->`, even when the reader
+/// gets `-` and `x->` in different chunks. Here `BufReader` splits the comment
+/// into `<!` ... ` -`, `x-`, `> `, ...
+#[test]
+fn comment_split_between_chunks() {
+    let xml = "<!DOCTYPE root [<!-- -x-> ]><evil/> -->]><root/>";
+    let mut reader = Reader::from_reader(BufReader::with_capacity(2, xml.as_bytes()));
+    let mut buf = Vec::new();
+
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::DocType(BytesText::from_escaped("root [<!-- -x-> ]><evil/> -->]"))
+    );
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::Empty(BytesStart::new("root"))
+    );
+    assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+}
 
 mod unclosed {
     use super::*;
