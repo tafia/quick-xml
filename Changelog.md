@@ -98,6 +98,9 @@
   `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document declares an
   ASCII-compatible encoding such as `UTF-8`, instead of panicking or switching to the declared
   encoding and producing garbage.
+- [#1043]: `Attributes` (in both XML and HTML modes) now returns `AttrError::ExpectedName` when
+  `=` appears without a preceding attribute name (such as `<root ="1"/>` or `<root =="1"/>`),
+  instead of parsing `="..."` as an attribute name or skipping past it.
 - [#1044]: After reporting a duplicated attribute, the `Attributes` iterator now skips the whole
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
@@ -151,6 +154,7 @@
 [#1034]: https://github.com/tafia/quick-xml/pull/1034
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1040]: https://github.com/tafia/quick-xml/issues/1040
+[#1043]: https://github.com/tafia/quick-xml/pull/1043
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
 [#1046]: https://github.com/tafia/quick-xml/pull/1046
 [#1049]: https://github.com/tafia/quick-xml/pull/1049

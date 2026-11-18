@@ -182,6 +182,39 @@ enum Untagged {
     },
 }
 
+mod empty_attribute_name {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use quick_xml::se::{to_string, to_string_with_root};
+
+    #[derive(Serialize)]
+    struct EmptyAttrRename {
+        #[serde(rename = "@")]
+        attr: &'static str,
+    }
+
+    #[track_caller]
+    fn assert_empty_attr_err(res: Result<String, SeError>) {
+        match res {
+            Err(SeError::Unsupported(msg)) => {
+                assert_eq!(msg, "an XML name cannot be empty");
+            }
+            other => panic!("Expected `Err(Unsupported(_))`, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn map_key() {
+        let map = BTreeMap::from([("@", "1")]);
+        assert_empty_attr_err(to_string_with_root("root", &map));
+    }
+
+    #[test]
+    fn struct_field() {
+        assert_empty_attr_err(to_string(&EmptyAttrRename { attr: "1" }));
+    }
+}
+
 mod without_root {
     use super::*;
     use pretty_assertions::assert_eq;
