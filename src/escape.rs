@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::slice::Iter;
 
 /// Error of parsing character reference (`&#<dec-number>;` or `&#x<hex-number>;`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseCharRefError {
     /// Number contains sign character (`+` or `-`) which is not allowed.
     UnexpectedSign,
@@ -46,7 +46,7 @@ impl std::error::Error for ParseCharRefError {
 }
 
 /// Error for XML escape / unescape.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EscapeError {
     /// Referenced entity in unknown to the parser.
     UnrecognizedEntity(Range<usize>, String),
