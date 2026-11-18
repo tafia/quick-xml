@@ -82,6 +82,10 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- [#0000]: A comment inside the DTD internal subset now ends only on `-->` when the document is read
+  from a `BufRead` in several chunks. Previously, when one chunk ended with `-` and the next one
+  ended with `x-`, a `>` at the start of the following chunk closed the comment, so the reader
+  could end the DOCTYPE early and report its remaining content as document events.
 
 ### Misc Changes
 
@@ -106,6 +110,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#0000]: https://github.com/tafia/quick-xml/pull/0000
 
 
 ## 0.42.0 -- 2026-08-22
