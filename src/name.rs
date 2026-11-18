@@ -864,8 +864,9 @@ impl NamespaceResolver {
                     }
                 }
                 // Syntax errors are left to the caller, which iterates attributes itself
-                // and may be lenient about them (for example, when parsing HTML)
-                Err(_) => break,
+                // and may be lenient about them (for example, when parsing HTML), but
+                // namespace declarations after them still have to be processed
+                Err(_) => {}
             }
         }
         Ok(())
@@ -2041,6 +2042,16 @@ mod namespaces {
         assert_eq!(
             resolver.resolve(QName("name"), true),
             (Bound(Namespace("default")), LocalName("name"))
+        );
+
+        // Declarations after a malformed attribute are not lost either
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t a=1 b xmlns:p='inner'", 1))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Bound(Namespace("inner")), LocalName("name"))
         );
 
         // ...and are still checked for duplicates

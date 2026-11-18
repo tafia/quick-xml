@@ -82,6 +82,10 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- [#1046]: `NamespaceResolver::push` (and therefore `NsReader` and the serde `Deserializer`) now
+  catches all namespace bindings from the element, even when element contains duplicated attributes
+  or unquoted attributes, or value-less attributes. Previously the first such error stops processing
+  the attributes.
 
 ### Misc Changes
 
@@ -106,6 +110,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1046]: https://github.com/tafia/quick-xml/pull/1046
 
 
 ## 0.42.0 -- 2026-08-22
