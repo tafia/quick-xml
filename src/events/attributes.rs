@@ -617,6 +617,17 @@ impl<'a> FusedIterator for Attributes<'a> {}
 /// next attribute will be attempted.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AttrError {
+    /// Attribute name was not found before `=`, position relative to the start of
+    /// the owning tag is provided.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag ="1" another="attribute"/>
+    /// <!-- ^    ^~~ recovery position (9) -->
+    /// <!-- '~~ error position (4) -->
+    /// ```
+    ExpectedName(usize),
     /// Attribute key was not followed by `=`, position relative to the start of
     /// the owning tag is provided.
     ///
@@ -703,6 +714,9 @@ pub enum AttrError {
 impl Display for AttrError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            Self::ExpectedName(pos) => {
+                write!(f, r#"position {}: missing attribute name before `=`"#, pos)
+            }
             Self::ExpectedEq(pos) => write!(
                 f,
                 r#"position {}: attribute key must be directly followed by `=` or space"#,
@@ -861,8 +875,9 @@ enum State {
     /// The last attribute returns [`AttrError::UnquotedValue`], offset pointed
     /// to the beginning of the value. Recover should skip a value
     SkipValue(usize),
-    /// The last attribute returns [`AttrError::Duplicated`], offset pointed to
-    /// the character after the equal (`=`) sign. Recover should skip a value
+    /// The last attribute returns [`AttrError::Duplicated`] or
+    /// [`AttrError::ExpectedName`], offset pointed to the character after the
+    /// equal (`=`) sign. Recover should skip a value
     SkipEqValue(usize),
 }
 
@@ -1128,6 +1143,12 @@ impl IterState {
 
         // Index where next key started
         let start_key = match iter.find(|&(_, &b)| !is_whitespace(b)) {
+            // Input: `    ="value"`
+            //             ^
+            Some((s, b'=')) => {
+                self.state = State::SkipEqValue(s + 1);
+                return Some(Err(AttrError::ExpectedName(s)));
+            }
             // Input: `    key`
             //             ^
             Some((s, _)) => s,
@@ -1768,30 +1789,63 @@ mod xml {
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::new(r#"tag key= regular ='attribute'"#, 3);
-            //                                0        ^ = 9               ^ = 29
+            //                                0        ^ = 9    ^ = 17
 
             // In that case "regular" considered as unquoted value
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
-            // In that case "='attribute'" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(29))));
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
             assert_eq!(iter.next(), None);
             assert_eq!(iter.next(), None);
 
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::new(r#"tag key= regular = 'attribute'"#, 3);
-            //                                0        ^ = 9     ^ = 19     ^ = 30
+            //                                0        ^ = 9    ^ = 17
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
-            // In that case second "=" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(19))));
-            // In that case "'attribute'" considered as a key, because we do not check
-            // validity of key names
-            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(30))));
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
             assert_eq!(iter.next(), None);
             assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute name is missing before `=`.
+        #[test]
+        fn missing_name() {
+            #[track_caller]
+            fn check(input: &str, has_next: bool) {
+                let mut iter = Attributes::new(input, 3);
+                assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(4))));
+                if has_next {
+                    assert_eq!(
+                        iter.next(),
+                        Some(Ok(Attribute {
+                            key: QName("regular"),
+                            value: Cow::Borrowed("attribute"),
+                        }))
+                    );
+                }
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            check(r#"tag ="1" regular='attribute'"#, true);
+            check(r#"tag ='1' regular='attribute'"#, true);
+            check(r#"tag = "1" regular='attribute'"#, true);
+            check(r#"tag =="1" regular='attribute'"#, true);
+            check(r#"tag =foo="1" regular='attribute'"#, true);
+            check(r#"tag ="#, false);
+
+            let mut iter = Attributes::new(r#"tag =="1""#, 3);
+            iter.with_checks(false);
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(4))));
+            assert_eq!(iter.next(), None);
+
+            assert_eq!(
+                AttrError::ExpectedName(4).to_string(),
+                "position 4: missing attribute name before `=`"
+            );
         }
     }
 
@@ -2232,6 +2286,29 @@ mod xml {
         assert_eq!(iter.next(), None);
         assert_eq!(iter.next(), None);
     }
+
+    #[test]
+    fn try_get_attribute_missing_name() {
+        use crate::events::BytesStart;
+
+        let start = BytesStart::from_content(r#"root ="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
+
+        let start = BytesStart::from_content(r#"root =="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
+
+        let start = BytesStart::from_content(r#"root =a="1" a="2""#, 4);
+        assert_eq!(
+            start.try_get_attribute("a"),
+            Err(AttrError::ExpectedName(5))
+        );
+    }
 }
 
 /// Checks, how parsing of HTML-style attributes works. Each attribute can be
@@ -2553,6 +2630,7 @@ mod html {
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::html(r#"tag key= regular ='attribute'"#, 3);
+            //                                 0                ^ = 17
 
             // Because we do not check validity of keys and values during parsing,
             // "regular" is considered as unquoted attribute value
@@ -2563,22 +2641,15 @@ mod html {
                     value: Cow::Borrowed("regular"),
                 }))
             );
-            // Because we do not check validity of keys and values during parsing,
-            // "='attribute'" is considered as key-only attribute
-            assert_eq!(
-                iter.next(),
-                Some(Ok(Attribute {
-                    key: QName("='attribute'"),
-                    value: Cow::Borrowed(""),
-                }))
-            );
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
             assert_eq!(iter.next(), None);
             assert_eq!(iter.next(), None);
 
             ////////////////////////////////////////////////////////////////////
 
             let mut iter = Attributes::html(r#"tag key= regular = 'attribute'"#, 3);
-            //                                 0        ^ = 9     ^ = 19     ^ = 30
+            //                                 0                ^ = 17
 
             // Because we do not check validity of keys and values during parsing,
             // "regular" is considered as unquoted attribute value
@@ -2589,25 +2660,83 @@ mod html {
                     value: Cow::Borrowed("regular"),
                 }))
             );
-            // Because we do not check validity of keys and values during parsing,
-            // "=" is considered as key-only attribute
+            // Missing attribute name before '='
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(17))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute name is missing before `=`.
+        #[test]
+        fn missing_name() {
+            #[track_caller]
+            fn check(input: &str, next: Option<(&str, &str)>) {
+                let mut iter = Attributes::html(input, 3);
+                assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(4))));
+                if let Some((key, value)) = next {
+                    assert_eq!(
+                        iter.next(),
+                        Some(Ok(Attribute {
+                            key: QName(key),
+                            value: Cow::Borrowed(value),
+                        }))
+                    );
+                }
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            check(
+                r#"tag ="1" regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag ='1' regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag =1 regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag = "1" regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag =="1" regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag ==value regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(
+                r#"tag =foo="1" regular='attribute'"#,
+                Some(("regular", "attribute")),
+            );
+            check(r#"tag ="1" disabled"#, Some(("disabled", "")));
+            check(r#"tag ="#, None);
+
+            let mut iter = Attributes::html(r#"tag disabled checked ="1""#, 3);
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName("="),
+                    key: QName("disabled"),
                     value: Cow::Borrowed(""),
                 }))
             );
-            // Because we do not check validity of keys and values during parsing,
-            // "'attribute'" is considered as key-only attribute
             assert_eq!(
                 iter.next(),
                 Some(Ok(Attribute {
-                    key: QName("'attribute'"),
-                    value: Cow::Borrowed(""),
+                    key: QName("checked"),
+                    value: Cow::Borrowed("1"),
                 }))
             );
             assert_eq!(iter.next(), None);
+
+            let mut iter = Attributes::html(r#"tag =="1""#, 3);
+            iter.with_checks(false);
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedName(4))));
             assert_eq!(iter.next(), None);
         }
     }

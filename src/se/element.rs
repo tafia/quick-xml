@@ -388,6 +388,11 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     {
         //TODO: Customization point: allow user to determine if field is attribute or not
         if let Some(key) = key.strip_prefix('@') {
+            if key.is_empty() {
+                return Err(SeError::Unsupported(
+                    "empty attribute name is not allowed".into(),
+                ));
+            }
             let key = XmlName::try_from(key)?;
             self.write_attribute(key, value)
         } else {
