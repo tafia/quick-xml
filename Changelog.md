@@ -36,6 +36,9 @@
 
 ### Bug Fixes
 
+- [#969]: The duplicate check of the `Attributes` iterator for start tags with many attributes
+  now hashes attribute names with a randomly keyed hasher. Previously the keys were fixed, so
+  attribute names that collide in the hash set could be precomputed, making the check O(N²) again.
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
 - [#1017]: Fix panic and wrong output when the indent character is not ASCII.
@@ -89,6 +92,7 @@
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
+[#969]: https://github.com/tafia/quick-xml/issues/969
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
