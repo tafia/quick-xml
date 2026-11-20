@@ -78,6 +78,10 @@
   double-struck letters. All entities now resolve as listed in the HTML specification's
   `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
   `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
+- [#1043]: Empty attribute names are now rejected in attribute parsing and serde serialization.
+  `Attributes` (in both XML and HTML modes) now returns `AttrError::ExpectedName` when `=` appears
+  without a preceding attribute name (such as `<root ="1"/>` or `<root =="1"/>`), and serde
+  serialization rejects `"@"` attribute keys with `SeError::Unsupported`.
 - [#1044]: After reporting a duplicated attribute, the `Attributes` iterator now skips the whole
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
@@ -108,6 +112,7 @@
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
+[#1043]: https://github.com/tafia/quick-xml/pull/1043
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
 
 
