@@ -21,6 +21,9 @@
   implement new trait for it or use forwarding wrapper. To write to `std::io::Write`
   a `quick_xml::se::Utf8Writer` is provided, as well as existing `quick_xml::se::to_utf8_io_writer()`.
 - [#1017]: `Writer::new_with_indent` now accepts indent char as a `char` instead of `u8`.
+- [#1029]: `escape::normalize_attribute_value()` takes new `max_expansion` parameter that limits
+  the length that the attribute value can reach while entities are expanded. Use
+  `escape::DEFAULT_MAX_ENTITY_EXPANSION` for the limit that is used everywhere else.
 - [#1031]: Async writing methods on `Writer` now returns `tokio::io::Result` instead of `quick_xml::Result`.
   That corresponds to how non-async writing methods returns `io::Result`.
   `quick_xml::Error` used only for reader errors in the rest of library.
@@ -61,6 +64,11 @@
   rejects elements that declare the same namespace prefix, or the default namespace, more than once.
   Previously the last declaration silently won. New `NamespaceError::DuplicateBinding` variant
   is returned in that case.
+- [#1029]: `Attribute::normalized_value_with()` and `escape::normalize_attribute_value()` now
+  stop with new `EscapeError::TooLargeEntityExpansion` error when expanding entities would make
+  the attribute value longer than 10 000 000 bytes. Previously only nesting depth was limited,
+  so entities that reference each other many times ("billion laughs") could expand a small
+  document into gigabytes.
 - [#1030]: `escape::minimal_escape`, `BytesCData::minimal_escape` and the serializer with
   `QuoteLevel::Minimal` now escape `>` as `&gt;` when it closes a `]]>` sequence in text content.
   Previously they produced text containing `]]>`, which is not allowed in XML documents.
@@ -103,6 +111,7 @@
 [#1025]: https://github.com/tafia/quick-xml/pull/1025
 [#1026]: https://github.com/tafia/quick-xml/pull/1026
 [#1027]: https://github.com/tafia/quick-xml/pull/1027
+[#1029]: https://github.com/tafia/quick-xml/pull/1029
 [#1030]: https://github.com/tafia/quick-xml/pull/1030
 [#1031]: https://github.com/tafia/quick-xml/pull/1031
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
