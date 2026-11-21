@@ -225,10 +225,11 @@ impl DetectedEncoding {
     }
 }
 
-// Bytes read upfront so `set_encoding()` can be called before the main
-// decode loop. Kept small (enough for a standard XML declaration, even in UTF-16) to limit
-// bytes decoded with a potentially wrong initial encoding. A longer
-// declaration is read in several chunks of this size.
+// Size of the buffer that holds the start of the input undecoded. The
+// encoding is detected from its first bytes, and it is then decoded only up
+// to the end of the XML declaration, so that `set_encoding()` can be called
+// before anything after the declaration is decoded. This is not a limit on
+// the declaration: a longer one is read in several chunks of this size.
 #[cfg(feature = "encoding")]
 const PREFIX_CAP: usize = 128;
 
@@ -250,6 +251,18 @@ struct Prefix {
 ///
 /// For UTF-8 input, this acts as a validating passthrough. For UTF-16 or other
 /// encodings, the bytes are transcoded into UTF-8 in an internal buffer.
+///
+/// # Encoding detection
+///
+/// UTF-16 is recognized by a BOM or by the bytes of `<?` at the very start of
+/// the input. Any other input is assumed to be in an ASCII-compatible encoding
+/// and is decoded as UTF-8 up to the first `>`, which ends the XML declaration
+/// if there is one. At that point [`set_encoding()`] can switch to the declared
+/// encoding. This relies on the declaration being pure ASCII, as the XML
+/// grammar requires: bytes before the first `>` that are not valid UTF-8 are
+/// an error.
+///
+/// [`set_encoding()`]: Self::set_encoding
 ///
 /// # Examples
 ///
@@ -394,9 +407,10 @@ impl<R> DecodingReader<R> {
     ///
     /// # Panics
     ///
-    /// Panics if the prefix buffer has already been drained. Must be called
-    /// before the prefix is exhausted — in practice, right after parsing
-    /// the XML declaration.
+    /// Panics if the encoding changes after the reader has started decoding
+    /// the input that follows the XML declaration. Call this right after the
+    /// declaration is parsed, before reading the next event. The declaration
+    /// itself may be of any length.
     pub fn set_encoding(&mut self, encoding: &'static encoding_rs::Encoding) {
         // No-op when the encoding matches - replacing the decoder would discard
         // its internal state (e.g. a partial multi-byte sequence), corrupting output.
@@ -492,6 +506,12 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
                 // at the first `>`: that yields the complete `<?xml ... ?>`
                 // declaration and nothing past it, letting set_encoding() take
                 // effect before the remainder of the prefix is decoded.
+                //
+                // If there is no `>` yet, the declaration continues past the
+                // prefix. Everything read so far is assumed to be part of it and
+                // therefore ASCII, which UTF-8 decodes exactly as the declared
+                // encoding would. Those bytes are emitted now and never decoded
+                // again; the next call refills the prefix.
                 let end = if self.decoder.encoding() == encoding_rs::UTF_8 {
                     match memchr::memchr(b'>', &prefix.buf[..prefix.len]) {
                         Some(i) => {
