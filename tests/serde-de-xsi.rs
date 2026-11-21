@@ -72,6 +72,23 @@ mod top_level_option {
                 let xml = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="false"/>"#;
                 assert_error_matches!(from_str::<Option<Foo>>(xml), DeError::Custom(_));
             }
+
+            /// References in the value of `xsi:nil` are expanded before comparison
+            #[test]
+            fn true_char_ref() {
+                let xml = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="&#116;rue"/>"#;
+                assert_eq!(from_str::<Option<Foo>>(xml).unwrap(), None);
+
+                let xml = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="&#x31;"/>"#;
+                assert_eq!(from_str::<Option<Foo>>(xml).unwrap(), None);
+            }
+
+            /// `xs:boolean` collapses whitespaces
+            #[test]
+            fn true_spaces() {
+                let xml = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil=" true "/>"#;
+                assert_eq!(from_str::<Option<Foo>>(xml).unwrap(), None);
+            }
         }
 
         /// Check other prefix to be sure that we not process only canonical prefixes

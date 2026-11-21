@@ -105,6 +105,10 @@
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
+- `Attributes::has_nil` (and therefore the serde `Deserializer` for `Option` values) now reads
+  the `xsi:nil` value after expanding character and entity references and ignores surrounding
+  whitespace, as `xs:boolean` requires. Previously `xsi:nil="&#116;rue"` or `xsi:nil=" true "`
+  was treated as `false`, so the element content was deserialized as `Some`.
 
 ### Misc Changes
 

@@ -5,9 +5,9 @@
 use crate::XmlVersion;
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
-use crate::escape::{escape_attribute, resolve_predefined_entity};
+use crate::escape::{escape_attribute, resolve_predefined_entity, unescape};
 use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
-use crate::utils::is_whitespace;
+use crate::utils::{is_whitespace, trim_xml_spaces};
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -578,7 +578,14 @@ impl<'a> Attributes<'a> {
                     (
                         Bound(Namespace("http://www.w3.org/2001/XMLSchema-instance")),
                         LocalName("nil"),
-                    ) => attr.as_bool().unwrap_or_default(),
+                    ) => {
+                        // `xsi:nil` is `xs:boolean`, which value is compared after
+                        // expanding references and collapsing whitespaces
+                        match unescape(&attr.value) {
+                            Ok(value) => matches!(trim_xml_spaces(&value), "1" | "true"),
+                            Err(_) => false,
+                        }
+                    }
                     _ => false,
                 }
             } else {
