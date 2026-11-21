@@ -85,6 +85,9 @@
 - The serde serializer now returns `SeError::Unsupported` for an empty element or attribute name,
   such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
   or `<root ="value">`, which is not well-formed XML.
+- [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
+  `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
+  empty elements as `<tag/>`.
 
 ### Misc Changes
 
@@ -109,6 +112,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1052]: https://github.com/tafia/quick-xml/issues/1052
 
 
 ## 0.42.0 -- 2026-08-22

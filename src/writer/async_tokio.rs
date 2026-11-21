@@ -23,7 +23,18 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 }
                 self.write_wrapped_async("</", &e, ">").await
             }
-            Event::Empty(e) => self.write_wrapped_async("<", &e, "/>").await,
+            Event::Empty(e) => {
+                self.write_wrapped_async(
+                    "<",
+                    &e,
+                    if self.config.add_space_before_slash_in_empty_elements {
+                        " />"
+                    } else {
+                        "/>"
+                    },
+                )
+                .await
+            }
             Event::Text(e) => {
                 next_should_line_break = false;
                 self.writer.write_all(e.as_bytes()).await
@@ -387,6 +398,28 @@ mod tests {
         assert_eq!(
             std::str::from_utf8(&buffer).unwrap(),
             r#"<tag>inner text</tag>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_tag_with_space_before_slash() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new(&mut buffer);
+        writer.config_mut().add_space_before_slash_in_empty_elements = true;
+
+        writer
+            .write_event_async(Event::Empty(BytesStart::new("tag")))
+            .await
+            .expect("write tag failed");
+        writer
+            .create_element("element")
+            .write_empty_async()
+            .await
+            .expect("write element failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<tag /><element />"#
         );
     }
 }
