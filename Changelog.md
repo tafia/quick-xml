@@ -86,10 +86,9 @@
   double-struck letters. All entities now resolve as listed in the HTML specification's
   `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
   `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
-- [#1040]: `DecodingReader` now applies `set_encoding()` to everything after the XML declaration
-  even when the declaration does not fit in the first 128 bytes, for example when it is split over
-  several lines. Previously `set_encoding()` panicked, or reading failed with a UTF-8 error on
-  non-ASCII content. `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document
+- [#1040]: `DecodingReader` now applies `set_encoding()` to everything after the XML declaration.
+  Previously, when the declaration was longer than 64 bytes, `set_encoding()` panicked, or reading
+  failed with a UTF-8 error on non-ASCII content. `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document
   declares an ASCII-compatible encoding such as `UTF-8`, instead of panicking or switching to
   the declared encoding and producing garbage.
 - [#1044]: After reporting a duplicated attribute, the `Attributes` iterator now skips the whole
