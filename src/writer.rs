@@ -294,7 +294,13 @@ impl<W: Write> Writer<W> {
             Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
             Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
             Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
-            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
+            Event::GeneralRef(e) => {
+                // A reference is part of the text, so no line break around it
+                next_should_line_break = false;
+                self.writer.write_all(b"&")?;
+                self.writer.write_all(e.as_bytes())?;
+                self.writer.write_all(b";")
+            }
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {

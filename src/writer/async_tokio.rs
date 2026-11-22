@@ -49,7 +49,12 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             Event::Decl(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::PI(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::DocType(e) => self.write_wrapped_async("<!DOCTYPE ", &e, ">").await,
-            Event::GeneralRef(e) => self.write_wrapped_async("&", &e, ";").await,
+            Event::GeneralRef(e) => {
+                next_should_line_break = false;
+                self.writer.write_all(b"&").await?;
+                self.writer.write_all(e.as_bytes()).await?;
+                self.writer.write_all(b";").await
+            }
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
@@ -429,6 +434,37 @@ mod indentation_async {
     use super::*;
     use crate::events::*;
     use pretty_assertions::assert_eq;
+
+    /// Entity references are part of the text, so no line breaks are inserted around them
+    #[tokio::test]
+    async fn general_ref() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+        let start = BytesStart::new("paired");
+        let end = start.to_end();
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start tag failed");
+        writer
+            .write_event_async(Event::GeneralRef(BytesRef::new("lt")))
+            .await
+            .expect("write reference failed");
+        writer
+            .write_event_async(Event::GeneralRef(BytesRef::new("gt")))
+            .await
+            .expect("write reference failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired>&lt;&gt;</paired>"#
+        );
+    }
 
     #[tokio::test]
     async fn self_closed() {
