@@ -388,7 +388,13 @@ impl<W: Write> Writer<W> {
     ) -> Result<(), SeError> {
         use crate::se::{Indent, Serializer, Utf8Writer};
 
-        self.write_indent()?;
+        // Break the line the same way as before a start tag
+        if let Some(ref i) = self.indent {
+            if i.should_line_break {
+                self.writer.write_all(b"\n")?;
+                self.writer.write_all(i.current().as_bytes())?;
+            }
+        }
         let mut writer = Utf8Writer(&mut self.writer);
         let mut serializer = Serializer::with_root(&mut writer, Some(tag_name))?;
 
@@ -397,6 +403,11 @@ impl<W: Write> Writer<W> {
         }
 
         content.serialize(serializer)?;
+
+        // The serialized value always ends with a closing or self-closed tag
+        if let Some(i) = self.indent.as_mut() {
+            i.should_line_break = true;
+        }
 
         Ok(())
     }

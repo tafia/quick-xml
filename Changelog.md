@@ -100,6 +100,10 @@
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
+- [#1054]: `Writer::write_serializable` now follows the same line-break rules as `write_event`
+  when indenting. Previously it always wrote a newline before the value, so a document written
+  with it started with an empty line, and it did not put a following end tag on a new line
+  when the value was written after text.
 
 ### Misc Changes
 
@@ -128,6 +132,7 @@
 [#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
+[#1054]: https://github.com/tafia/quick-xml/issues/1054
 
 
 ## 0.42.0 -- 2026-08-22

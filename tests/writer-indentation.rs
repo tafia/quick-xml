@@ -228,6 +228,67 @@ fn serializable() {
     );
 }
 
+#[cfg(feature = "serialize")]
+#[test]
+fn serializable_as_root() {
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct Foo {
+        bar: usize,
+    }
+
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    writer
+        .write_serializable("foo", &Foo { bar: 42 })
+        .expect("write serializable failed");
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        r#"<foo>
+    <bar>42</bar>
+</foo>"#
+    );
+}
+
+#[cfg(feature = "serialize")]
+#[test]
+fn serializable_followed_by_end() {
+    use quick_xml::events::BytesEnd;
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct Foo {
+        bar: usize,
+    }
+
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    writer
+        .write_event(Event::Start(BytesStart::new("root")))
+        .expect("write start tag failed");
+    writer
+        .write_event(Event::Text(BytesText::new("text")))
+        .expect("write text failed");
+    writer
+        .write_serializable("foo", &Foo { bar: 42 })
+        .expect("write serializable failed");
+    writer
+        .write_event(Event::End(BytesEnd::new("root")))
+        .expect("write end tag failed");
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        r#"<root>text<foo>
+        <bar>42</bar>
+    </foo>
+</root>"#
+    );
+}
+
 #[test]
 fn element_writer_empty() {
     let mut buffer = Vec::new();
