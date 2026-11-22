@@ -72,34 +72,22 @@ impl Parser for CommentParser {
         if let Some(r) = result {
             return Some(r);
         }
-        if bytes.ends_with(b"--") {
-            *self = Self::Seen2;
-        } else {
-            self.next_state(bytes.last().copied());
-        }
+        *self = match (*self, bytes) {
+            (_, [.., b'-', b'-']) => Self::Seen2,
+            // A single `-` continues the dashes seen at the end of the previous slice
+            (Self::Seen0, [b'-']) => Self::Seen1,
+            (_, [b'-']) => Self::Seen2,
+            // Only the last byte is a dash, the dashes of the previous slice do not matter
+            (_, [.., b'-']) => Self::Seen1,
+            (state, []) => state,
+            _ => Self::Seen0,
+        };
         None
     }
 
     #[inline]
     fn eof_error(self, _content: &[u8]) -> SyntaxError {
         SyntaxError::UnclosedComment
-    }
-}
-
-impl CommentParser {
-    #[inline]
-    fn next_state(&mut self, last: Option<u8>) {
-        match (*self, last) {
-            (Self::Seen0, Some(b'-')) => *self = Self::Seen1,
-
-            (Self::Seen1, Some(b'-')) => *self = Self::Seen2,
-            (Self::Seen1, Some(_)) => *self = Self::Seen0,
-
-            (Self::Seen2, Some(b'-')) => {}
-            (Self::Seen2, Some(_)) => *self = Self::Seen0,
-
-            _ => {}
-        }
     }
 }
 
@@ -187,4 +175,19 @@ fn parse() {
     assert_eq!(parse_comment(b"->-->", Seen0), Ok(5)); // xx|->-->
     assert_eq!(parse_comment(b"->-->", Seen1), Ok(2)); // x-|->-->
     assert_eq!(parse_comment(b"->-->", Seen2), Ok(2)); // --|->-->
+
+    assert_eq!(parse_comment(b"x", Seen0), Err(Seen0)); // xx|x
+    assert_eq!(parse_comment(b"x", Seen1), Err(Seen0)); // x-|x
+    assert_eq!(parse_comment(b"x", Seen2), Err(Seen0)); // --|x
+
+    assert_eq!(parse_comment(b"x-", Seen0), Err(Seen1)); // xx|x-
+    assert_eq!(parse_comment(b"x-", Seen1), Err(Seen1)); // x-|x-
+    assert_eq!(parse_comment(b"x-", Seen2), Err(Seen1)); // --|x-
+
+    // `-` at the end of the first slice and `x-` in the second one is not `--`
+    let mut parser = Seen0;
+    assert_eq!(parser.feed(b"-"), None); // xx|-
+    assert_eq!(parser.feed(b"x-"), None); // x-|x-
+    assert_eq!(parser.feed(b">"), None); // x-|>
+    assert_eq!(parser.feed(b"-->"), Some(3));
 }
