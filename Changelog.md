@@ -82,8 +82,8 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
-- The serde serializer now returns `SeError::Unsupported` for an empty element or attribute name,
-  such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
+- [#1047]: The serde serializer now returns `SeError::Unsupported` for an empty element or attribute
+  name, such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
   or `<root ="value">`, which is not well-formed XML.
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
@@ -112,6 +112,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
 
 
