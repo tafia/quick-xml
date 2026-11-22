@@ -104,6 +104,8 @@
 ### Misc Changes
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
+- [#1056]: `NsReader` no longer parses the attributes of tags that have no `xmlns` in them
+  when looking for namespace declarations, which makes namespace-aware parsing faster.
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
@@ -128,6 +130,7 @@
 [#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
+[#1056]: https://github.com/tafia/quick-xml/pull/1056
 
 
 ## 0.42.0 -- 2026-08-22
