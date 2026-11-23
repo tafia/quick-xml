@@ -36,6 +36,8 @@
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
 - [#1015]: Implement `From<LocalName>` on `QName`.
+- [#1059]: Add `Attribute::as_bool_with` which reads a boolean attribute value using a custom
+  entity resolver.
 
 ### Bug Fixes
 
@@ -105,6 +107,11 @@
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
+- [#1059]: `Attribute::as_bool` (and therefore `Attributes::has_nil` and the serde `Deserializer`
+  for `Option` values) now compares the normalized attribute value: character and entity references
+  are expanded and surrounding whitespace is ignored, as `xs:boolean` requires. Previously
+  `xsi:nil="&#116;rue"` or `xsi:nil=" true "` was treated as `false`, so the element content was
+  deserialized as `Some`.
 
 ### Misc Changes
 
@@ -134,6 +141,7 @@
 [#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
+[#1059]: https://github.com/tafia/quick-xml/pull/1059
 
 
 ## 0.42.0 -- 2026-08-22

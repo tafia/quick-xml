@@ -5,9 +5,9 @@
 use crate::XmlVersion;
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
-use crate::escape::{escape_attribute, resolve_predefined_entity};
+use crate::escape::{escape_attribute, resolve_predefined_entity, resolve_xml_entity};
 use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
-use crate::utils::is_whitespace;
+use crate::utils::{is_whitespace, trim_xml_spaces};
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -328,13 +328,21 @@ impl<'a> Attribute<'a> {
 
     /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
     ///
-    /// The valid boolean representations are only `"true"`, `"false"`, `"1"`, and `"0"`.
+    /// The value is compared after [normalization] using XML 1.0 rules and expansion
+    /// of the predefined XML entities (`&lt;`, `&gt;`, `&amp;`, `&apos;`, `&quot;`)
+    /// and character references, with the surrounding whitespace removed, as
+    /// `xs:boolean` requires. The valid boolean representations are only `"true"`,
+    /// `"false"`, `"1"`, and `"0"`. If the value cannot be normalized, for example,
+    /// because it contains a reference to an unknown entity, `None` is returned.
+    ///
+    /// See also [`as_bool_with()`](Self::as_bool_with).
     ///
     /// # Examples
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::attributes::Attribute;
+    /// use quick_xml::name::QName;
     ///
     /// let attr = Attribute::from(("attr", "false"));
     /// assert_eq!(attr.as_bool(), Some(false));
@@ -348,14 +356,88 @@ impl<'a> Attribute<'a> {
     /// let attr = Attribute::from(("attr", "1"));
     /// assert_eq!(attr.as_bool(), Some(true));
     ///
+    /// // References are expanded and whitespace is trimmed before comparison
+    /// let attr = Attribute { key: QName("attr"), value: "&#116;rue".into() };
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute { key: QName("attr"), value: " &#x30;\n".into() };
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
     /// let attr = Attribute::from(("attr", "not bool"));
+    /// assert_eq!(attr.as_bool(), None);
+    ///
+    /// // Unknown entities cannot be expanded
+    /// let attr = Attribute { key: QName("attr"), value: "&t;rue".into() };
     /// assert_eq!(attr.as_bool(), None);
     /// ```
     ///
     /// [represents]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    /// [normalization]: https://www.w3.org/TR/xml/#AVNormalize
     #[inline]
     pub fn as_bool(&self) -> Option<bool> {
-        match self.value.as_ref() {
+        // resolve_xml_entity returns only non-recursive replacements, so depth=1 is enough
+        self.as_bool_with(1, resolve_xml_entity)
+    }
+
+    /// If attribute value [represents] valid boolean values, returns `Some`, otherwise
+    /// returns `None`, using a custom entity resolver.
+    ///
+    /// The value is compared after [normalization] using XML 1.0 rules, with the
+    /// surrounding whitespace removed, as `xs:boolean` requires. The valid boolean
+    /// representations are only `"true"`, `"false"`, `"1"`, and `"0"`. If the value
+    /// cannot be normalized, for example, because it contains a reference to an entity
+    /// unknown to `resolve_entity`, `None` is returned.
+    ///
+    /// This method does not resolve any predefined entities, but you can use
+    /// [`resolve_predefined_entity`] in your function.
+    ///
+    /// See also [`as_bool()`](Self::as_bool).
+    ///
+    /// # Parameters
+    ///
+    /// - `depth`: maximum number of nested entities that can be expanded. If expansion
+    ///   chain will be more that this value, `None` is returned
+    /// - `resolve_entity`: a function to resolve entity. This function could be called
+    ///   multiple times on the same input and can return different values in each case
+    ///   for the same input, although it is not recommended
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::escape::resolve_predefined_entity;
+    /// use quick_xml::events::attributes::Attribute;
+    /// use quick_xml::name::QName;
+    ///
+    /// let resolve = |entity: &str| match entity {
+    ///     "yes" => Some("true"),
+    ///     "no" => Some("0"),
+    ///     _ => resolve_predefined_entity(entity),
+    /// };
+    ///
+    /// let attr = Attribute { key: QName("attr"), value: "&yes;".into() };
+    /// assert_eq!(attr.as_bool_with(1, resolve), Some(true));
+    ///
+    /// let attr = Attribute { key: QName("attr"), value: " &no; ".into() };
+    /// assert_eq!(attr.as_bool_with(1, resolve), Some(false));
+    ///
+    /// let attr = Attribute { key: QName("attr"), value: "&maybe;".into() };
+    /// assert_eq!(attr.as_bool_with(1, resolve), None);
+    /// ```
+    ///
+    /// [represents]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    /// [normalization]: https://www.w3.org/TR/xml/#AVNormalize
+    pub fn as_bool_with<'entity>(
+        &self,
+        depth: usize,
+        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
+    ) -> Option<bool> {
+        // Boolean values does not depend on the line ends handling, so XML 1.0 rules
+        // can be used independently of the actual document version
+        let value = self
+            .normalized_value_with(XmlVersion::Implicit1_0, depth, resolve_entity)
+            .ok()?;
+        match trim_xml_spaces(&value) {
             "1" | "true" => Some(true),
             "0" | "false" => Some(false),
             _ => None,
