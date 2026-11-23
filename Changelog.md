@@ -105,6 +105,9 @@
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
+- [#1057]: An indenting `Writer` no longer inserts line breaks around `Event::GeneralRef`,
+  which changed the text content. Previously
+  `<a>&amp;x</a>` read and written back with indentation became `<a>\n  &amp;x</a>`.
 
 ### Misc Changes
 
@@ -137,6 +140,7 @@
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
 [#1056]: https://github.com/tafia/quick-xml/pull/1056
+[#1057]: https://github.com/tafia/quick-xml/pull/1057
 
 
 ## 0.42.0 -- 2026-08-22

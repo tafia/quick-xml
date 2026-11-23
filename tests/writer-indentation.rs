@@ -1,4 +1,4 @@
-use quick_xml::events::{BytesStart, BytesText, Event};
+use quick_xml::events::{BytesRef, BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
 
 use pretty_assertions::assert_eq;
@@ -124,6 +124,40 @@ fn mixed_content() {
         std::str::from_utf8(&buffer).unwrap(),
         r#"<paired attr1="value1" attr2="value2">text<inner/>
 </paired>"#
+    );
+}
+
+/// Entity references are part of the text, so no line breaks are inserted around them
+#[test]
+fn general_ref() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+    let start = BytesStart::new("paired");
+    let end = start.to_end();
+
+    writer
+        .write_event(Event::Start(start.clone()))
+        .expect("write start tag failed");
+    writer
+        .write_event(Event::GeneralRef(BytesRef::new("amp")))
+        .expect("write reference failed");
+    writer
+        .write_event(Event::Text(BytesText::new("text")))
+        .expect("write text failed");
+    writer
+        .write_event(Event::GeneralRef(BytesRef::new("lt")))
+        .expect("write reference failed");
+    writer
+        .write_event(Event::GeneralRef(BytesRef::new("gt")))
+        .expect("write reference failed");
+    writer
+        .write_event(Event::End(end))
+        .expect("write end tag failed");
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        r#"<paired>&amp;text&lt;&gt;</paired>"#
     );
 }
 
