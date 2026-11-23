@@ -95,6 +95,10 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- [#1046]: `NamespaceResolver::push` (and therefore `NsReader` and the serde `Deserializer`) now
+  catches all namespace bindings from the element, even when element contains duplicated attributes
+  or unquoted attributes, or value-less attributes. Previously the first such error stops processing
+  the attributes.
 - [#1047]: The serde serializer now returns `SeError::Unsupported` for an empty element or attribute
   name, such as an empty map key, a `@` key or an empty root tag. Previously it wrote `<>value</>`
   or `<root ="value">`, which is not well-formed XML.
@@ -131,6 +135,7 @@
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1040]: https://github.com/tafia/quick-xml/issues/1040
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1046]: https://github.com/tafia/quick-xml/pull/1046
 [#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
