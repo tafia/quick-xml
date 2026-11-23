@@ -45,7 +45,7 @@
   `Indentation` used a character count as a byte index into its indent buffer, and
   `Serializer::indent` truncated its `char` argument with `as u8`.
 - [#1023]: `DecodingReader` now decodes content that follows the XML declaration using the
-  declared encoding even when that content falls within the first 64 bytes of the input.
+  declared encoding even when that content falls within the first 128 bytes of the input.
   Previously such bytes were decoded with the default UTF-8 decoder before `set_encoding()`
   took effect, which rejected documents in single-byte encodings and silently mis-decoded
   documents in multi-byte encodings.
@@ -86,6 +86,11 @@
   double-struck letters. All entities now resolve as listed in the HTML specification's
   `entities.json`, which also changes `&ohm;`, `&angst;`, `&race;`, `&OverBar;`, `&UnderBar;`,
   `&epsi;`, `&epsiv;` and `&phiv;` (with their aliases) to their current HTML values.
+- [#1040]: `DecodingReader` now applies `set_encoding()` to everything after the XML declaration.
+  Previously `set_encoding()` panicked, or reading failed with a UTF-8 error on non-ASCII content.
+  `set_encoding()` now also keeps decoding UTF-16 when a UTF-16 document declares an
+  ASCII-compatible encoding such as `UTF-8`, instead of panicking or switching to the declared
+  encoding and producing garbage.
 - [#1044]: After reporting a duplicated attribute, the `Attributes` iterator now skips the whole
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
@@ -107,6 +112,8 @@
 ### Misc Changes
 
 - [#1009]: Split of `BytesComment` from `BytesText`.
+- [#1056]: `NsReader` no longer parses the attributes of tags that have no `xmlns` in them
+  when looking for namespace declarations, which makes namespace-aware parsing faster.
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
@@ -127,10 +134,12 @@
 [#1032]: https://github.com/tafia/quick-xml/pull/1032
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
+[#1040]: https://github.com/tafia/quick-xml/issues/1040
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
 [#1049]: https://github.com/tafia/quick-xml/pull/1049
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
+[#1056]: https://github.com/tafia/quick-xml/pull/1056
 [#1057]: https://github.com/tafia/quick-xml/pull/1057
 
 

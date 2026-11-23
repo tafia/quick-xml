@@ -225,17 +225,22 @@ impl DetectedEncoding {
     }
 }
 
-// Bytes read upfront so `set_encoding()` can be called before the main
-// decode loop. Kept small (just enough for an XML declaration) to limit
-// bytes decoded with a potentially wrong initial encoding.
+// Size of the buffer that holds the start of the input undecoded. The
+// encoding is detected from its first bytes, and it is then decoded only up
+// to the end of the XML declaration, so that `set_encoding()` can be called
+// before anything after the declaration is decoded. This is not a limit on
+// the declaration: a longer one is read in several chunks of this size.
 #[cfg(feature = "encoding")]
-const PREFIX_CAP: usize = 64;
+const PREFIX_CAP: usize = 128;
 
 #[cfg(feature = "encoding")]
 struct Prefix {
     buf: [u8; PREFIX_CAP],
     len: usize,
     detected: bool,
+    /// Whether the XML declaration may continue past the bytes read so far,
+    /// that is, the UTF-8 decoder has not decoded a `>` yet
+    decl_open: bool,
 }
 
 /// A reader wrapper that decodes a byte stream from any encoding into UTF-8.
@@ -246,6 +251,18 @@ struct Prefix {
 ///
 /// For UTF-8 input, this acts as a validating passthrough. For UTF-16 or other
 /// encodings, the bytes are transcoded into UTF-8 in an internal buffer.
+///
+/// # Encoding detection
+///
+/// UTF-16 is recognized by a BOM or by the bytes of `<?` at the very start of
+/// the input. Any other input is assumed to be in an ASCII-compatible encoding
+/// and is decoded as UTF-8 up to the first `>`, which ends the XML declaration
+/// if there is one. At that point [`set_encoding()`] can switch to the declared
+/// encoding. This relies on the declaration being pure ASCII, as the XML
+/// grammar requires: bytes before the first `>` that are not valid UTF-8 are
+/// an error.
+///
+/// [`set_encoding()`]: Self::set_encoding
 ///
 /// # Examples
 ///
@@ -348,6 +365,7 @@ impl<R> DecodingReader<R> {
                 buf: [0; PREFIX_CAP],
                 len: 0,
                 detected: false,
+                decl_open: true,
             })),
             inner_eof: false,
         }
@@ -379,19 +397,25 @@ impl<R> DecodingReader<R> {
     /// Replaces the decoder with one for the given encoding. The encoding
     /// must be ASCII-compatible (the parser cannot read the declaration otherwise).
     ///
+    /// If UTF-16 was detected from the BOM or the first bytes, a request for an
+    /// ASCII-compatible encoding is ignored: the declaration was read as UTF-16,
+    /// so the document cannot be in the encoding it names.
+    ///
     /// If the stream was detected as UTF-16, requesting UTF-16 of either byte
     /// order keeps the detected byte order, because the `UTF-16` encoding name
     /// does not specify it (the BOM or the first bytes of the document do).
     ///
     /// # Panics
     ///
-    /// Panics if the prefix buffer has already been drained. Must be called
-    /// before the prefix is exhausted — in practice, right after parsing
-    /// the XML declaration.
+    /// Panics if the encoding changes after the reader has started decoding
+    /// the input that follows the XML declaration. Call this right after the
+    /// declaration is parsed, before reading the next event. The declaration
+    /// itself may be of any length.
     pub fn set_encoding(&mut self, encoding: &'static encoding_rs::Encoding) {
         // No-op when the encoding matches - replacing the decoder would discard
         // its internal state (e.g. a partial multi-byte sequence), corrupting output.
-        // This check is safe regardless of prefix state since nothing changes.
+        // Also a no-op when a UTF-16 stream names an ASCII-compatible encoding.
+        // These checks are safe regardless of prefix state since nothing changes.
         //
         // The same applies when both encodings are UTF-16: the byte order was
         // detected from the BOM or from the first bytes of the document, and the
@@ -399,7 +423,10 @@ impl<R> DecodingReader<R> {
         // cannot override it. Replacing the decoder would byte-swap the rest of
         // a big-endian document.
         let current = self.decoder.encoding();
-        if current == encoding || (is_utf16(current) && is_utf16(encoding)) {
+        if current == encoding
+            || (!current.is_ascii_compatible() && encoding.is_ascii_compatible())
+            || (is_utf16(current) && is_utf16(encoding))
+        {
             return;
         }
         assert!(
@@ -425,24 +452,22 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
         self.out_len = 0;
 
         if let Some(prefix) = &mut self.prefix {
-            // On first access, fill the prefix buffer and detect encoding.
-            // The prefix is large enough to hold an entire XML declaration,
-            // ensuring set_encoding() can be called before the greedy main
-            // decode path consumes from inner.
+            // Fill the prefix buffer on first access, and again while the XML
+            // declaration is longer than what was read so far, ensuring
+            // set_encoding() can be called before the greedy main decode path
+            // consumes from inner.
+            while prefix.decl_open && !self.inner_eof && prefix.len < PREFIX_CAP {
+                match self.inner.read(&mut prefix.buf[prefix.len..]) {
+                    Ok(0) => self.inner_eof = true,
+                    Ok(n) => prefix.len += n,
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+
+            // On first access, detect encoding.
             if !prefix.detected {
                 prefix.detected = true;
-
-                while prefix.len < PREFIX_CAP {
-                    match self.inner.read(&mut prefix.buf[prefix.len..]) {
-                        Ok(0) => {
-                            self.inner_eof = true;
-                            break;
-                        }
-                        Ok(n) => prefix.len += n,
-                        Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => return Err(e),
-                    }
-                }
 
                 let detection_bytes = &prefix.buf[..prefix.len];
                 if let Some(detected) = detect_encoding(detection_bytes) {
@@ -481,9 +506,22 @@ impl<R: BufRead> BufRead for DecodingReader<R> {
                 // at the first `>`: that yields the complete `<?xml ... ?>`
                 // declaration and nothing past it, letting set_encoding() take
                 // effect before the remainder of the prefix is decoded.
+                //
+                // If there is no `>` yet, the declaration continues past the
+                // prefix. Everything read so far is assumed to be part of it and
+                // therefore ASCII, which UTF-8 decodes exactly as the declared
+                // encoding would. Those bytes are emitted now and never decoded
+                // again; the next call refills the prefix.
                 let end = if self.decoder.encoding() == encoding_rs::UTF_8 {
-                    memchr::memchr(b'>', &prefix.buf[..prefix.len]).map_or(prefix.len, |i| i + 1)
+                    match memchr::memchr(b'>', &prefix.buf[..prefix.len]) {
+                        Some(i) => {
+                            prefix.decl_open = false;
+                            i + 1
+                        }
+                        None => prefix.len,
+                    }
                 } else {
+                    prefix.decl_open = false;
                     prefix.len
                 };
                 let src = &prefix.buf[..end];
@@ -659,6 +697,22 @@ mod decoding_reader {
         }
     }
 
+    /// Helper reader that fails with the given error kinds, one per `read`
+    /// call, before delegating to the wrapped data
+    struct FailingReader<'a> {
+        failures: Vec<io::ErrorKind>,
+        data: &'a [u8],
+    }
+
+    impl<'a> Read for FailingReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if let Some(kind) = self.failures.pop() {
+                return Err(kind.into());
+            }
+            self.data.read(buf)
+        }
+    }
+
     /// Encode a string as UTF-16 LE bytes with BOM
     fn utf16le_with_bom(s: &str) -> Vec<u8> {
         let mut out = vec![0xFF, 0xFE]; // UTF-16 LE BOM
@@ -803,6 +857,49 @@ mod decoding_reader {
             let buf = reader.fill_buf().unwrap();
             assert!(!buf.is_empty());
             assert_eq!(buf[0], b',');
+        }
+
+        /// The prefix is not refilled after the XML declaration: everything past
+        /// the first `PREFIX_CAP` bytes is decoded by the main path in one chunk.
+        #[test]
+        fn prefix_ends_after_declaration() {
+            let mut data = b"<?xml version='1.0'?>".to_vec();
+            data.extend_from_slice(&[b'a'; 1000]);
+            let mut reader = DecodingReader::new(&data[..]);
+
+            let mut chunks = Vec::new();
+            loop {
+                let len = reader.fill_buf().unwrap().len();
+                if len == 0 {
+                    break;
+                }
+                chunks.push(len);
+                reader.consume(len);
+            }
+            assert_eq!(chunks, [21, PREFIX_CAP - 21, data.len() - PREFIX_CAP]);
+        }
+
+        /// An interrupted read of the prefix is retried
+        #[test]
+        fn prefix_read_retries_interrupted() {
+            let inner = FailingReader {
+                failures: vec![io::ErrorKind::Interrupted; 2],
+                data: b"<?xml version='1.0'?><a/>",
+            };
+            let mut reader = DecodingReader::new(BufReader::with_capacity(1, inner));
+            assert_eq!(read_all(&mut reader).unwrap(), "<?xml version='1.0'?><a/>");
+        }
+
+        /// An I/O error while reading the prefix is returned to the caller
+        #[test]
+        fn prefix_read_propagates_error() {
+            let inner = FailingReader {
+                failures: vec![io::ErrorKind::BrokenPipe],
+                data: b"<?xml version='1.0'?><a/>",
+            };
+            let mut reader = DecodingReader::new(BufReader::new(inner));
+            let err = reader.fill_buf().unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::BrokenPipe);
         }
 
         /// Drain the reader via fill_buf/consume, then confirm it stays at EOF.

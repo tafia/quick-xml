@@ -834,6 +834,10 @@ impl NamespaceResolver {
             .nesting_level
             .checked_add(1)
             .ok_or(NamespaceError::TooDeeplyNested(u16::MAX as usize))?;
+        // Without `xmlns` there is nothing to bind, so skip parsing the attributes
+        if !start.attributes_raw().contains("xmlns") {
+            return Ok(());
+        }
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute. Checks are left enabled so that a duplicated
         // declaration is reported instead of silently letting the last one win
