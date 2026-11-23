@@ -419,7 +419,35 @@
 //! NOTE: The behaviour is not symmetric by default. `None` will be serialized as
 //! `optional=""`. This behaviour is consistent across serde crates. You should add
 //! `#[serde(skip_serializing_if = "Option::is_none")]` attribute to the field to
-//! skip `None`s.
+//! skip `None`s:
+//!
+//! ```
+//! # use pretty_assertions::assert_eq;
+//! # use serde::Serialize;
+//! #[derive(Serialize)]
+//! struct AnyName {
+//!   #[serde(rename = "@optional")]
+//!   optional: Option<u32>,
+//! }
+//!
+//! #[derive(Serialize)]
+//! struct Skipped {
+//!   #[serde(rename = "@optional", skip_serializing_if = "Option::is_none")]
+//!   optional: Option<u32>,
+//! }
+//!
+//! assert_eq!(
+//!   quick_xml::se::to_string(&AnyName { optional: None }).unwrap(),
+//!   r#"<AnyName optional=""/>"#,
+//! );
+//! assert_eq!(
+//!   quick_xml::se::to_string(&Skipped { optional: None }).unwrap(),
+//!   "<Skipped/>",
+//! );
+//! ```
+//!
+//! If an empty attribute should be deserialized as `None`, use
+//! [`deserialize_with`] to map empty strings to `None` yourself.
 //! </div>
 //! </td>
 //! </tr>
