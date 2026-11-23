@@ -89,6 +89,9 @@ use std::io;
 pub use self::simple_type::SimpleTypeSerializer;
 pub use crate::errors::serialize::SeError;
 
+/// Default of [`Serializer::children_capacity`].
+const DEFAULT_CHILDREN_CAPACITY: usize = 128;
+
 /// A trait for writing XML into Unicode-accepting buffers or streams.
 ///
 /// This trait mirrors API of [`std::fmt::Write`], but returns [`std::io::Result`].
@@ -648,6 +651,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 text_format: TextFormat::Text,
                 allow_primitive: true,
                 empty_element_handling: EmptyElementHandling::SelfClosed,
+                children_capacity: DEFAULT_CHILDREN_CAPACITY,
             },
             root_tag: None,
         }
@@ -715,6 +719,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 text_format: TextFormat::Text,
                 allow_primitive: true,
                 empty_element_handling: EmptyElementHandling::SelfClosed,
+                children_capacity: DEFAULT_CHILDREN_CAPACITY,
             },
             root_tag: root_tag.map(XmlName::try_from).transpose()?,
         })
@@ -813,6 +818,45 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         } else {
             EmptyElementHandling::SelfClosed
         })
+    }
+
+    /// Set how many bytes a struct reserves for its child elements, which it collects
+    /// in a buffer until all its attributes are written.
+    ///
+    /// A larger value saves reallocations for structs with large child elements,
+    /// `0` allocates only as much as needed. Structs without child elements allocate nothing.
+    ///
+    /// Default: 128
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::Serializer;
+    /// #
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Page {
+    ///     #[serde(rename = "@id")]
+    ///     id: u32,
+    ///     body: String,
+    /// }
+    ///
+    /// let mut buffer = String::new();
+    /// let mut ser = Serializer::new(&mut buffer);
+    /// ser.children_capacity(1024);
+    ///
+    /// let data = Page {
+    ///     id: 1,
+    ///     body: "text".to_string(),
+    /// };
+    ///
+    /// data.serialize(ser).unwrap();
+    /// assert_eq!(buffer, r#"<Page id="1"><body>text</body></Page>"#);
+    /// ```
+    pub fn children_capacity(&mut self, capacity: usize) -> &mut Self {
+        self.ser.children_capacity = capacity;
+        self
     }
 
     /// Set the text format used for serializing text content.

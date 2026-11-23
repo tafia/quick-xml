@@ -433,6 +433,10 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
+        // Skip the regrowth from a tiny buffer that every struct with children paid
+        if self.children.capacity() == 0 {
+            self.children.reserve(self.ser.ser.children_capacity);
+        }
         let ser = ContentSerializer {
             writer: &mut self.children,
             level: self.ser.ser.level,
@@ -442,6 +446,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             text_format: self.ser.ser.text_format,
             allow_primitive: true,
             empty_element_handling: self.ser.ser.empty_element_handling,
+            children_capacity: self.ser.ser.children_capacity,
         };
 
         if key == TEXT_KEY {
@@ -599,7 +604,7 @@ impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
 mod tests {
     use super::*;
     use crate::se::content::tests::*;
-    use crate::se::{Indent, QuoteLevel, TextFormat};
+    use crate::se::{DEFAULT_CHILDREN_CAPACITY, Indent, QuoteLevel, TextFormat};
     use crate::utils::Bytes;
     use serde::Serialize;
     use std::collections::BTreeMap;
@@ -641,6 +646,7 @@ mod tests {
                             text_format: TextFormat::Text,
                             allow_primitive: true,
                             empty_element_handling: EmptyElementHandling::SelfClosed,
+                            children_capacity: DEFAULT_CHILDREN_CAPACITY,
                         },
                         key: XmlName("root"),
                     };
@@ -668,6 +674,7 @@ mod tests {
                             text_format: TextFormat::Text,
                             allow_primitive: true,
                             empty_element_handling: EmptyElementHandling::SelfClosed,
+                            children_capacity: DEFAULT_CHILDREN_CAPACITY,
                         },
                         key: XmlName("root"),
                     };
@@ -1358,6 +1365,7 @@ mod tests {
                             text_format: TextFormat::Text,
                             allow_primitive: true,
                             empty_element_handling: EmptyElementHandling::SelfClosed,
+                            children_capacity: DEFAULT_CHILDREN_CAPACITY,
                         },
                         key: XmlName("root"),
                     };
@@ -1385,6 +1393,7 @@ mod tests {
                             text_format: TextFormat::Text,
                             allow_primitive: true,
                             empty_element_handling: EmptyElementHandling::SelfClosed,
+                            children_capacity: DEFAULT_CHILDREN_CAPACITY,
                         },
                         key: XmlName("root"),
                     };
@@ -2093,6 +2102,7 @@ mod tests {
                             text_format: TextFormat::Text,
                             allow_primitive: true,
                             empty_element_handling: EmptyElementHandling::Expanded,
+                            children_capacity: DEFAULT_CHILDREN_CAPACITY,
                         },
                         key: XmlName("root"),
                     };
