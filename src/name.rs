@@ -853,21 +853,30 @@ impl NamespaceResolver {
                     // which is returned from AsRef<str> implementation of `BytesStart`. Create a new
                     // iterator that starts from the beginning of the previously found attribute.
                     let mut iter = Attributes::new(start.as_ref(), prev);
-                    // SAFETY: Previous attribute was successfully parsed, so it is here and correct
-                    let attr = iter.next().unwrap().unwrap();
-                    match attr.key.as_namespace_binding() {
-                        Some(PrefixDeclaration::Default) => {
+                    // The key of the previous attribute is here, but its value may be
+                    // malformed (for example, `xmlns:p=1 xmlns:p='2'`), because the iterator
+                    // registers a key before parsing the value. Such an attribute was not
+                    // bound, so its duplicate is left to the caller like the attribute itself
+                    match iter
+                        .next()
+                        .unwrap()
+                        .map(|attr| attr.key.as_namespace_binding())
+                    {
+                        Ok(Some(PrefixDeclaration::Default)) => {
                             return Err(NamespaceError::DuplicateXmlnsBinding);
                         }
-                        Some(PrefixDeclaration::Named(p)) => {
+                        Ok(Some(PrefixDeclaration::Named(p))) => {
                             return Err(NamespaceError::DuplicateBinding(p.to_string()));
                         }
-                        None => break,
+                        // Duplicates of other attributes are left to the caller, but namespace
+                        // declarations after them still have to be processed
+                        Ok(None) | Err(_) => {}
                     }
                 }
                 // Syntax errors are left to the caller, which iterates attributes itself
-                // and may be lenient about them (for example, when parsing HTML)
-                Err(_) => break,
+                // and may be lenient about them (for example, when parsing HTML), but
+                // namespace declarations after them still have to be processed
+                Err(_) => {}
             }
         }
         Ok(())
@@ -2023,6 +2032,64 @@ mod namespaces {
         assert_eq!(
             resolver.resolve(QName("name"), true),
             (Bound(Namespace("first")), LocalName("name"))
+        );
+
+        // Declarations after a duplicated attribute are not lost
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t xmlns:p='outer'", 1))
+            .unwrap();
+        resolver
+            .push(&BytesStart::from_content(
+                "t a='1' a='2' xmlns:p='inner' xmlns='default'",
+                1,
+            ))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Bound(Namespace("inner")), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("name"), true),
+            (Bound(Namespace("default")), LocalName("name"))
+        );
+
+        // Declarations after a malformed attribute are not lost either
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content("t a=1 b xmlns:p='inner'", 1))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Bound(Namespace("inner")), LocalName("name"))
+        );
+
+        // A duplicate of a malformed attribute is left to the caller, like the
+        // malformed attribute itself, and does not stop the processing
+        let mut resolver = NamespaceResolver::default();
+        resolver
+            .push(&BytesStart::from_content(
+                "t a=1 a='2' xmlns:p=3 xmlns:p='4' xmlns:q='inner'",
+                1,
+            ))
+            .unwrap();
+        assert_eq!(
+            resolver.resolve(QName("p:name"), true),
+            (Unknown("p".to_string()), LocalName("name"))
+        );
+        assert_eq!(
+            resolver.resolve(QName("q:name"), true),
+            (Bound(Namespace("inner")), LocalName("name"))
+        );
+
+        // ...and are still checked for duplicates
+        let mut resolver = NamespaceResolver::default();
+        assert_eq!(
+            resolver.push(&BytesStart::from_content(
+                "t a='1' a='2' xmlns:p='first' xmlns:p='second'",
+                1
+            )),
+            Err(NamespaceError::DuplicateBinding("p".to_string())),
         );
 
         // Redeclaration in a nested element is allowed
