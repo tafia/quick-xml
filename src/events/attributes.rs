@@ -11,7 +11,7 @@ use crate::utils::is_whitespace;
 
 use std::collections::HashSet;
 use std::fmt::{self, Debug, Display, Formatter};
-use std::hash::{BuildHasherDefault, DefaultHasher, Hasher};
+use std::hash::{BuildHasher, BuildHasherDefault, Hasher, RandomState};
 use std::iter::FusedIterator;
 use std::{borrow::Cow, ops::Range};
 
@@ -904,15 +904,6 @@ impl Hasher for IdentityHasher {
     }
 }
 
-/// Hashes a single attribute name. A fresh [`DefaultHasher`] per name keeps each
-/// hash independent (so it is also DoS-resistant on untrusted input).
-#[inline]
-fn hash_name(name: &[u8]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    hasher.write(name);
-    hasher.finish()
-}
-
 /// External iterator over spans of attribute key and value
 #[derive(Clone, Debug)]
 pub(crate) struct IterState {
@@ -931,10 +922,17 @@ pub(crate) struct IterState {
     /// 64-bit hashes of the byte content of `keys`, used as an O(1) pre-filter
     /// once a start tag declares more than `SMALL_ATTRIBUTE_COUNT` attributes, so
     /// the duplicate check stays O(N) over the whole tag instead of O(N²). The
-    /// values are already hashes, so the set stores them with `IdentityHasher`
-    /// instead of re-hashing. Allocated only when the threshold is crossed, so
-    /// small tags (and [`IterState::new`]) stay allocation-free and `const`.
-    key_hashes: Option<HashSet<u64, BuildHasherDefault<IdentityHasher>>>,
+    /// values are already hashed (keyed by the stored `RandomState`), so the set
+    /// stores them with `IdentityHasher` instead of re-hashing. The key must not
+    /// be predictable: `IdentityHasher` uses these hashes directly as bucket
+    /// indexes, so with a fixed key names that land in the same bucket could be
+    /// precomputed and make the duplicate check O(N²) again. Allocated only when
+    /// the threshold is crossed, so small tags (and [`IterState::new`]) stay
+    /// allocation-free and `const`.
+    key_hashes: Option<(
+        RandomState,
+        HashSet<u64, BuildHasherDefault<IdentityHasher>>,
+    )>,
 }
 
 impl IterState {
@@ -1064,22 +1062,23 @@ impl IterState {
         key: Range<usize>,
     ) -> Result<Range<usize>, AttrError> {
         let keys = &self.keys;
-        let key_hashes = self.key_hashes.get_or_insert_with(|| {
+        let (state, key_hashes) = self.key_hashes.get_or_insert_with(|| {
             // First time over the threshold: seed the set with the names already
             // collected during the linear phase so the pre-filter knows them.
+            let state = RandomState::new();
             let mut set = HashSet::with_capacity_and_hasher(
                 keys.len() * 2,
                 BuildHasherDefault::<IdentityHasher>::default(),
             );
             for r in keys {
-                set.insert(hash_name(&slice[r.clone()]));
+                set.insert(state.hash_one(&slice[r.clone()]));
             }
-            set
+            (state, set)
         });
         // A fresh hash proves the name is new. On a hit (a real duplicate, or the
         // astronomically rare 64-bit collision) fall back to the linear scan to
         // recover the exact previous position for `AttrError::Duplicated`.
-        if !key_hashes.insert(hash_name(&slice[key.clone()])) {
+        if !key_hashes.insert(state.hash_one(&slice[key.clone()])) {
             if let Some(prev) = self
                 .keys
                 .iter()

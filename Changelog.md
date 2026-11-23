@@ -82,6 +82,10 @@
   value of that attribute. Previously a quoted value containing spaces was only skipped up to
   the first space, so text inside it, such as `c='d'` in `a="1" a="b c='d'"`, was returned
   as attributes.
+- [#1050]: The duplicate check of the `Attributes` iterator for start tags with many attributes
+  (added in [#969]) now hashes attribute names with a randomly keyed hasher. Previously the keys
+  were fixed, so attribute names that collide in the hash set could be precomputed, making the
+  check O(N²) again.
 
 ### Misc Changes
 
@@ -89,6 +93,7 @@
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
+[#969]: https://github.com/tafia/quick-xml/issues/969
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
 [#1009]: https://github.com/tafia/quick-xml/pull/1009
@@ -106,6 +111,7 @@
 [#1033]: https://github.com/tafia/quick-xml/pull/1033
 [#1038]: https://github.com/tafia/quick-xml/pull/1038
 [#1044]: https://github.com/tafia/quick-xml/pull/1044
+[#1050]: https://github.com/tafia/quick-xml/pull/1050
 
 
 ## 0.42.0 -- 2026-08-22
