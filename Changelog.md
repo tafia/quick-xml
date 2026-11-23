@@ -36,6 +36,8 @@
 
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
 - [#1015]: Implement `From<LocalName>` on `QName`.
+- [#1058]: Add `Serializer::children_capacity()` to set how many bytes a struct reserves
+  for its child elements.
 
 ### Bug Fixes
 
@@ -111,6 +113,8 @@
 - [#1009]: Split of `BytesComment` from `BytesText`.
 - [#1056]: `NsReader` no longer parses the attributes of tags that have no `xmlns` in them
   when looking for namespace declarations, which makes namespace-aware parsing faster.
+- [#1058]: The serde serializer reserves space (128 bytes by default) for the child elements
+  of a struct up front, which makes serialization of structs with child elements faster.
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#963]: https://github.com/tafia/quick-xml/pull/963
@@ -137,6 +141,7 @@
 [#1047]: https://github.com/tafia/quick-xml/pull/1047
 [#1052]: https://github.com/tafia/quick-xml/issues/1052
 [#1056]: https://github.com/tafia/quick-xml/pull/1056
+[#1058]: https://github.com/tafia/quick-xml/pull/1058
 
 
 ## 0.42.0 -- 2026-08-22

@@ -83,6 +83,9 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     pub allow_primitive: bool,
     /// Specifies how empty elements are written.
     pub empty_element_handling: EmptyElementHandling,
+    /// Number of bytes a struct reserves for its child elements, which it collects
+    /// until all its attributes are written.
+    pub children_capacity: usize,
 }
 
 impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
@@ -125,6 +128,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             text_format: self.text_format,
             allow_primitive,
             empty_element_handling: self.empty_element_handling,
+            children_capacity: self.children_capacity,
         }
     }
 
@@ -480,6 +484,7 @@ impl<'w, 'i, W: Write> SerializeTupleStruct for Seq<'w, 'i, W> {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
+    use crate::se::DEFAULT_CHILDREN_CAPACITY;
     use crate::utils::Bytes;
     use WriteResult::*;
     use serde::Serialize;
@@ -615,6 +620,7 @@ pub(super) mod tests {
                         text_format: TextFormat::Text,
                         allow_primitive: true,
                         empty_element_handling: EmptyElementHandling::SelfClosed,
+                        children_capacity: DEFAULT_CHILDREN_CAPACITY,
                     };
 
                     let result = $data.serialize(ser).unwrap();
@@ -639,6 +645,7 @@ pub(super) mod tests {
                         text_format: TextFormat::Text,
                         allow_primitive: true,
                         empty_element_handling: EmptyElementHandling::SelfClosed,
+                        children_capacity: DEFAULT_CHILDREN_CAPACITY,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
@@ -1081,6 +1088,7 @@ pub(super) mod tests {
                         text_format: TextFormat::Text,
                         allow_primitive: true,
                         empty_element_handling: EmptyElementHandling::SelfClosed,
+                        children_capacity: DEFAULT_CHILDREN_CAPACITY,
                     };
 
                     let result = $data.serialize(ser).unwrap();
@@ -1105,6 +1113,7 @@ pub(super) mod tests {
                         text_format: TextFormat::Text,
                         allow_primitive: true,
                         empty_element_handling: EmptyElementHandling::SelfClosed,
+                        children_capacity: DEFAULT_CHILDREN_CAPACITY,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
