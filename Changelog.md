@@ -110,6 +110,8 @@
 
 ### Misc Changes
 
+- [#837]: Add the `line_numbers` example that shows how to report line numbers of events
+  and errors when reading from a stream.
 - [#1009]: Split of `BytesComment` from `BytesText`.
 - [#1056]: `NsReader` no longer parses the attributes of tags that have no `xmlns` in them
   when looking for namespace declarations, which makes namespace-aware parsing faster.
@@ -117,6 +119,7 @@
   of a struct up front, which makes serialization of structs with child elements faster.
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
+[#837]: https://github.com/tafia/quick-xml/issues/837
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
