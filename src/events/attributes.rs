@@ -115,13 +115,16 @@ impl<'a> Attribute<'a> {
     ///   than 10 000 000 bytes, [`EscapeError::TooLargeEntityExpansion`] is returned
     /// - `resolve_entity`: a function to resolve entity. This function could be called
     ///   multiple times on the same input and can return different values in each case
-    ///   for the same input, although it is not recommended
+    ///   for the same input, although it is not recommended. If the replacement text
+    ///   of an entity references that entity again, directly or through other entities,
+    ///   [`EscapeError::RecursiveEntity`] is returned
     ///
     /// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
     /// [for 1.0]: https://www.w3.org/TR/xml/#AVNormalize
     /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
     /// [`EscapeError::TooManyNestedEntities`]: crate::escape::EscapeError::TooManyNestedEntities
     /// [`EscapeError::TooLargeEntityExpansion`]: crate::escape::EscapeError::TooLargeEntityExpansion
+    /// [`EscapeError::RecursiveEntity`]: crate::escape::EscapeError::RecursiveEntity
     pub fn normalized_value_with<'entity>(
         &self,
         version: XmlVersion,
