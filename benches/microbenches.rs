@@ -1,9 +1,12 @@
 use criterion::{self, Criterion, criterion_group, criterion_main};
 use pretty_assertions::assert_eq;
-use quick_xml::escape::{escape, unescape};
+use quick_xml::XmlVersion;
+use quick_xml::escape::{escape, resolve_xml_entity, unescape};
 use quick_xml::events::Event;
+use quick_xml::events::attributes::Attribute;
 use quick_xml::name::QName;
 use quick_xml::reader::{NsReader, Reader};
+use std::borrow::Cow;
 use std::hint::black_box;
 
 static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
@@ -251,42 +254,84 @@ fn attributes(c: &mut Criterion) {
 /// Benchmarks normalizing attribute values
 fn attribute_value_normalization(c: &mut Criterion) {
     let mut group = c.benchmark_group("attribute_value_normalization");
+    let version = XmlVersion::Implicit1_0;
 
-    group.bench_function("noop_short", |b| {
-        b.iter(|| {
-            black_box(unescape("foobar")).unwrap();
-        })
-    });
+    for (name, value, expected) in [
+        // The fast path returns the original value after scanning it. Vary the scan length.
+        ("noop_short", "foobar", "foobar"),
+        (
+            "noop_long",
+            "just a bit of text without any entities",
+            "just a bit of text without any entities",
+        ),
+        // Literal newlines and tabs become spaces without resolving any references.
+        (
+            "replacement_chars",
+            "just a bit\n of text without\tany entities",
+            "just a bit  of text without any entities",
+        ),
+        // Character references exercise both decimal and hexadecimal decoding.
+        (
+            "char_reference",
+            "prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;",
+            "prefix \"some stuff\",\"more stuff\"",
+        ),
+        // Predefined entities exercise named lookup and the special handling of `&amp;`.
+        (
+            "entity_reference",
+            "age &gt; 72 &amp;&amp; age &lt; 21",
+            "age > 72 && age < 21",
+        ),
+    ] {
+        let attr = Attribute {
+            key: QName("value"),
+            value: Cow::Borrowed(value),
+        };
+        assert_eq!(attr.normalized_value(version).unwrap(), expected);
+        group.bench_function(name, |b| {
+            b.iter(|| black_box(&attr).normalized_value(version).unwrap())
+        });
+    }
 
-    group.bench_function("noop_long", |b| {
-        b.iter(|| {
-            black_box(unescape("just a bit of text without any entities")).unwrap();
-        })
-    });
+    fn resolve(name: &str) -> Option<&'static str> {
+        match name {
+            "leaf" => Some("text"),
+            "pair" => Some("&leaf;-&leaf;"),
+            "outer" => Some("&pair;/&pair;"),
+            _ => resolve_xml_entity(name),
+        }
+    }
 
-    group.bench_function("replacement_chars", |b| {
-        b.iter(|| {
-            black_box(unescape("just a bit\n of text without\tany entities")).unwrap();
-        })
-    });
-
-    group.bench_function("char_reference", |b| {
-        b.iter(|| {
-            let text = "prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
-            black_box(unescape(text)).unwrap();
-            let text = "&#38;&#60;";
-            black_box(unescape(text)).unwrap();
-        })
-    });
-
-    group.bench_function("entity_reference", |b| {
-        b.iter(|| {
-            let text = "age &gt; 72 &amp;&amp; age &lt; 21";
-            black_box(unescape(text)).unwrap();
-            let text = "&quot;what&apos;s that?&quot;";
-            black_box(unescape(text)).unwrap();
-        })
-    });
+    for (name, value, expected) in [
+        // Repeated top-level lookups expand the same leaf with no active ancestor.
+        (
+            "custom_repeated",
+            "&leaf; &leaf; &leaf; &leaf;",
+            "text text text text",
+        ),
+        // Expand three levels deep and reuse the same entities in sibling branches.
+        (
+            "custom_nested",
+            "&outer; &outer;",
+            "text-text/text-text text-text/text-text",
+        ),
+    ] {
+        let attr = Attribute {
+            key: QName("value"),
+            value: Cow::Borrowed(value),
+        };
+        assert_eq!(
+            attr.normalized_value_with(version, 128, resolve).unwrap(),
+            expected,
+        );
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                black_box(&attr)
+                    .normalized_value_with(version, 128, resolve)
+                    .unwrap()
+            })
+        });
+    }
 
     group.finish();
 }
@@ -351,6 +396,18 @@ fn unescaping(c: &mut Criterion) {
         b.iter(|| {
             black_box(unescape("just a bit of text")).unwrap();
         })
+    });
+
+    group.bench_function("noop_attribute_short", |b| {
+        b.iter(|| unescape(black_box("foobar")).unwrap())
+    });
+
+    group.bench_function("noop_attribute_long", |b| {
+        b.iter(|| unescape(black_box("just a bit of text without any entities")).unwrap())
+    });
+
+    group.bench_function("literal_whitespace", |b| {
+        b.iter(|| unescape(black_box("just a bit\n of text without\tany entities")).unwrap())
     });
 
     group.bench_function("char_reference", |b| {
