@@ -706,7 +706,7 @@ where
     // version of the attribute, otherwise return the value unchanged
     if let Some(i) = iter.position(&is_normalization_char) {
         let mut normalized = String::with_capacity(value.len());
-        // Names of the entities which replacement texts are being expanded now
+        // Names of the entities for which replacement texts are currently being expanded
         let mut expanding = Vec::new();
         let pos = normalize_attr_step(
             &mut normalized,
@@ -815,7 +815,7 @@ where
 ///   the value, which is checked against `max_expansion` before expanding an entity
 /// - `max_expansion`: Maximum length that the value can reach while entities are expanded
 ///   into it. Too large expansion will interrupt the algorithm
-/// - `expanding`: Names of the entities which replacement texts are being expanded now.
+/// - `expanding`: Names of the entities for which replacement texts are currently being expanded.
 ///   A reference to any of them will interrupt the algorithm
 /// - `is_normalization_char`: a function to check if byte is the start byte of character
 ///   that should be normalized (UTF-8 encoding is assumed)
@@ -3258,6 +3258,8 @@ mod normalization {
             ));
         }
 
+        /// An entity that references itself directly from its own replacement text
+        /// is reported as recursive
         #[test]
         fn recursive_entity() {
             assert_eq!(
@@ -3275,7 +3277,9 @@ mod normalization {
             );
         }
 
-        /// A loop is detected immediately, even when the nesting limit is not reached yet
+        /// An entity that references itself indirectly, through a chain of other
+        /// entities, is reported as recursive as soon as the loop is closed, long before
+        /// the nesting limit (128 here) would be reached
         #[test]
         fn indirectly_recursive_entity() {
             let resolve = |entity: &str| match entity {
