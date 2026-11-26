@@ -116,6 +116,11 @@
 - [#1052]: `Writer::write_event_async` and `ElementWriter::write_empty_async` now respect
   `Config::add_space_before_slash_in_empty_elements`. Previously the async writer always wrote
   empty elements as `<tag/>`.
+- [#1062]: The serde serializer now returns `SeError::Unsupported` for a text, attribute, CDATA
+  or `xs:list` value that contains a character the XML `Char` production does not allow:
+  `U+0000`-`U+0008`, `U+000B`, `U+000C`, `U+000E`-`U+001F`, `U+FFFE` and `U+FFFF`. Previously
+  such a character was written verbatim, which produced a document that conforming parsers
+  reject and that cannot be fixed by escaping.
 
 ### Misc Changes
 
@@ -156,6 +161,7 @@
 [#1056]: https://github.com/tafia/quick-xml/pull/1056
 [#1058]: https://github.com/tafia/quick-xml/pull/1058
 [#1061]: https://github.com/tafia/quick-xml/issues/1061
+[#1062]: https://github.com/tafia/quick-xml/pull/1062
 
 
 ## 0.42.0 -- 2026-08-22
