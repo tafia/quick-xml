@@ -88,6 +88,8 @@ pattern that can greatly simplify code re-use in the future. See [`visitor.rs`](
   data from a real-world (ECMA-376) document.
 - [`read_nodes.rs`](read_nodes.rs) — dispatching on top-level nodes by hand.
 - [`custom_entities.rs`](custom_entities.rs) — resolving custom `&entity;` definitions.
+- [`line_numbers.rs`](line_numbers.rs) — reporting line numbers of events and errors
+  while streaming, by counting newlines in a `BufRead` wrapper.
 - [`read_utf16.rs`](read_utf16.rs) — non-UTF-8 input via `DecodingReader`
   (needs `--features encoding`).
 

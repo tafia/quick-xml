@@ -828,7 +828,12 @@ impl<R> Reader<R> {
 impl<R> Reader<R> {
     /// Consumes `Reader` returning the underlying reader
     ///
-    /// Can be used to compute line and column of a parsing error position
+    /// Can be used to compute line and column of a parsing error position.
+    /// When reading from a stream, where the already parsed data is no longer
+    /// available, lines can be counted by the underlying reader instead, as shown
+    /// in the [`line_numbers`] example.
+    ///
+    /// [`line_numbers`]: https://github.com/tafia/quick-xml/blob/master/examples/line_numbers.rs
     ///
     /// # Examples
     ///
