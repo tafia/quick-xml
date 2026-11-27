@@ -48,6 +48,12 @@ struct EmptyWithAttribute {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
+struct EmptyWithStrAttribute {
+    #[serde(rename = "@attr")]
+    attr: &'static str,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Text {
     #[serde(rename = "$text")]
     float: f64,
@@ -1869,6 +1875,16 @@ mod with_root {
     serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;\"escaped &amp; string'&gt;</root>");
     // NOTE: \r is escaped to &#13; to survive XML EOL normalization (Section 2.11)
     serialize_as!(str_spaces_only: " \n\t\r"; String => "<root> \n\t&#13;</root>");
+    // Characters outside of the `Char` production (XML 1.0 section 2.2) cannot be
+    // written into a document, not even as a character reference
+    err!(str_nul: "a\u{0}b"
+        => Unsupported("character `\\0` is not allowed in an XML document"));
+    err!(str_vertical_tab: "a\u{B}b"
+        => Unsupported("character `\\u{b}` is not allowed in an XML document"));
+    err!(str_noncharacter: "a\u{FFFF}b"
+        => Unsupported("character `\\u{ffff}` is not allowed in an XML document"));
+    err!(attr_nul: EmptyWithStrAttribute { attr: "a\u{0}b" }
+        => Unsupported("character `\\0` is not allowed in an XML document"));
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 

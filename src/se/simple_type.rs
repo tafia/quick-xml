@@ -69,6 +69,38 @@ where
     Ok(())
 }
 
+/// Characters that an XML 1.0 document is allowed to contain.
+///
+/// The serializer does not write an XML declaration, so its output is an XML 1.0
+/// document. XML 1.1 additionally allows the C0 controls, but only written as
+/// character references, which is not possible inside a CDATA section.
+///
+/// <https://www.w3.org/TR/xml/#NT-Char>
+const fn is_xml10_char(ch: char) -> bool {
+    // Surrogates cannot be represented by `char`, so the ranges are contiguous
+    matches!(ch, '\t' | '\n' | '\r' | '\u{20}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}')
+}
+
+/// Checks that `value` can be written into an XML document at all.
+///
+/// A character outside of the [`Char`] production has no representation in XML:
+/// it cannot be written literally and a character reference to it is not allowed
+/// either, so the only thing left is to refuse to write the value.
+///
+/// [`Char`]: https://www.w3.org/TR/xml/#NT-Char
+fn check_xml10_chars(value: &str) -> Result<(), SeError> {
+    match value.chars().find(|ch| !is_xml10_char(*ch)) {
+        Some(ch) => Err(SeError::Unsupported(
+            format!(
+                "character `{}` is not allowed in an XML document",
+                ch.escape_debug()
+            )
+            .into(),
+        )),
+        None => Ok(()),
+    }
+}
+
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
 fn escape_item<W>(
@@ -76,13 +108,14 @@ fn escape_item<W>(
     value: &str,
     target: QuoteTarget,
     level: QuoteLevel,
-) -> io::Result<()>
+) -> Result<(), SeError>
 where
     W: Write,
 {
     use QuoteLevel::*;
     use QuoteTarget::*;
 
+    check_xml10_chars(value)?;
     match (target, level) {
         (CData, _) => {
             let mut it = CDataIterator::new(value);
@@ -158,6 +191,7 @@ where
             _ => false,
         }),
     }
+    .map_err(SeError::from)
 }
 
 /// Escapes XSD simple type value
@@ -172,13 +206,14 @@ fn escape_list<W>(
     value: &str,
     target: QuoteTarget,
     level: QuoteLevel,
-) -> io::Result<()>
+) -> Result<(), SeError>
 where
     W: Write,
 {
     use QuoteLevel::*;
     use QuoteTarget::*;
 
+    check_xml10_chars(value)?;
     match (target, level) {
         (CData, _) => {
             for part in CDataIterator::new(value) {
@@ -259,6 +294,7 @@ where
             _ => false,
         }),
     }
+    .map_err(SeError::from)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1101,6 +1137,92 @@ mod tests {
                 ),
                 "<![CDATA[text<\"'&>]]]]><![CDATA[> \t\n\rtext]]>"
             );
+        }
+    }
+
+    /// Characters outside of the `Char` production cannot be written into an XML
+    /// document in any way, so a value that contains one is rejected
+    mod xml10_chars {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Returns the error message of the first character that is not allowed
+        fn check(value: &str) -> Result<(), String> {
+            check_xml10_chars(value).map_err(|e| e.to_string())
+        }
+
+        #[test]
+        fn allowed() {
+            assert_eq!(
+                check("text \t\n\r\u{85}\u{2028}\u{FFFD}\u{1FFFE}\u{10FFFF}"),
+                Ok(())
+            );
+        }
+
+        #[test]
+        fn nul() {
+            assert_eq!(
+                check("a\u{0}b"),
+                Err("unsupported value: character `\\0` is not allowed in an XML document".into())
+            );
+        }
+
+        #[test]
+        fn c0_controls() {
+            for ch in ['\u{1}', '\u{8}', '\u{B}', '\u{C}', '\u{E}', '\u{1F}'] {
+                assert!(
+                    check(&format!("a{}b", ch)).is_err(),
+                    "U+{:04X} should not be allowed",
+                    ch as u32
+                );
+            }
+        }
+
+        #[test]
+        fn noncharacters() {
+            assert_eq!(
+                check("a\u{FFFE}b"),
+                Err(
+                    "unsupported value: character `\\u{fffe}` is not allowed in an XML document"
+                        .into()
+                )
+            );
+            assert_eq!(
+                check("a\u{FFFF}b"),
+                Err(
+                    "unsupported value: character `\\u{ffff}` is not allowed in an XML document"
+                        .into()
+                )
+            );
+        }
+
+        /// All four quote targets go through the check, so none of them can write
+        /// such a character
+        #[test]
+        fn every_target() {
+            for target in [
+                QuoteTarget::Text,
+                QuoteTarget::DoubleQAttr,
+                QuoteTarget::SingleQAttr,
+                QuoteTarget::CData,
+            ] {
+                for level in [QuoteLevel::Minimal, QuoteLevel::Partial, QuoteLevel::Full] {
+                    let mut result = String::new();
+                    assert!(
+                        super::super::escape_item(&mut result, "a\u{0}b", target, level).is_err(),
+                        "escape_item({:?}, {:?}) should fail",
+                        target,
+                        level
+                    );
+                    let mut result = String::new();
+                    assert!(
+                        super::super::escape_list(&mut result, "a\u{0}b", target, level).is_err(),
+                        "escape_list({:?}, {:?}) should fail",
+                        target,
+                        level
+                    );
+                }
+            }
         }
     }
 
