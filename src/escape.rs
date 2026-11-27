@@ -69,6 +69,16 @@ pub enum EscapeError {
     /// each other many times (a so-called "billion laughs" attack), which the nesting
     /// limit alone does not do.
     TooLargeEntityExpansion,
+    /// The replacement text of an entity references that entity again, directly or
+    /// through other entities, during attribute normalization. Such a reference
+    /// [is not allowed] by the XML specification. Contains the name of the entity
+    /// that was referenced recursively.
+    ///
+    /// This error is returned as soon as the loop is found, without expanding
+    /// entities until the nesting limit is reached.
+    ///
+    /// [is not allowed]: https://www.w3.org/TR/xml11/#norecursion
+    RecursiveEntity(String),
 }
 
 impl std::fmt::Display for EscapeError {
@@ -88,6 +98,13 @@ impl std::fmt::Display for EscapeError {
             }
             Self::TooLargeEntityExpansion => {
                 f.write_str("too large entity expansion in an attribute value")
+            }
+            Self::RecursiveEntity(name) => {
+                write!(
+                    f,
+                    "entity `{}` references itself in an attribute value",
+                    name
+                )
             }
         }
     }
@@ -644,6 +661,9 @@ pub const DEFAULT_MAX_ENTITY_EXPANSION: usize = 10_000_000;
 ///
 /// This will allocate unless the raw attribute value does not require normalization.
 ///
+/// If the replacement text of an entity references that entity again, directly or
+/// through other entities, [`EscapeError::RecursiveEntity`] is returned.
+///
 /// # Parameters
 ///
 /// - `value`: unnormalized attribute value
@@ -699,6 +719,7 @@ where
             depth,
             0,
             max_expansion,
+            None,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -712,6 +733,7 @@ where
             depth,
             0,
             max_expansion,
+            None,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -719,6 +741,18 @@ where
         return Ok(normalized.into());
     }
     Ok(Cow::Borrowed(value))
+}
+
+/// An entity for which replacement text is currently being expanded during attribute
+/// normalization. Expansions form a singly-linked list on the call stack, from the
+/// innermost entity to the outermost, which is used to detect recursive entities
+/// without allocations.
+struct EntityExpansion<'a> {
+    /// Name of the entity
+    name: &'a str,
+    /// The entity in which replacement text this entity is referenced,
+    /// or `None` if it is referenced directly from the attribute value
+    parent: Option<&'a EntityExpansion<'a>>,
 }
 
 fn normalize_attr_steps<'entity, C, E, F>(
@@ -729,6 +763,7 @@ fn normalize_attr_steps<'entity, C, E, F>(
     depth: usize,
     not_processed: usize,
     max_expansion: usize,
+    expanding: Option<&EntityExpansion<'_>>,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -749,6 +784,7 @@ where
             depth,
             not_processed,
             max_expansion,
+            expanding,
             is_normalization_char,
             normalize_eol_step,
             resolve_entity,
@@ -793,6 +829,9 @@ where
 ///   the value, which is checked against `max_expansion` before expanding an entity
 /// - `max_expansion`: Maximum length that the value can reach while entities are expanded
 ///   into it. Too large expansion will interrupt the algorithm
+/// - `expanding`: The innermost entity for which replacement text is currently being
+///   expanded, linked to the entities it is nested in, or `None` at the top level.
+///   A reference to any of them will interrupt the algorithm
 /// - `is_normalization_char`: a function to check if byte is the start byte of character
 ///   that should be normalized (UTF-8 encoding is assumed)
 /// - `normalize_eol_step`: a function that performs EOL normalization of a character
@@ -813,6 +852,7 @@ fn normalize_attr_step<'entity, C, E, F>(
     depth: usize,
     not_processed: usize,
     max_expansion: usize,
+    expanding: Option<&EntityExpansion<'_>>,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -860,6 +900,15 @@ where
             // 2. For an entity reference, recursively apply this algorithm
             //    to the replacement text of the entity.
             if let Some(value) = resolve_entity(pat) {
+                // An entity that is referenced from its own replacement text, directly
+                // or through other entities, would be expanded endlessly
+                let mut ancestor = expanding;
+                while let Some(frame) = ancestor {
+                    if frame.name == pat {
+                        return Err(EscapeError::RecursiveEntity(pat.to_string()));
+                    }
+                    ancestor = frame.parent;
+                }
                 // Everything that is still waiting to be processed after the entity
                 // reference that is replaced now: the rest of `input` and the rest
                 // of all inputs that we are nested in. `end + 1` skips `;`
@@ -875,6 +924,10 @@ where
                 if expanded > max_expansion {
                     return Err(EscapeError::TooLargeEntityExpansion);
                 }
+                let expansion = EntityExpansion {
+                    name: pat,
+                    parent: expanding,
+                };
                 normalize_attr_steps(
                     normalized,
                     &mut value.as_bytes().iter(),
@@ -883,6 +936,7 @@ where
                     depth.saturating_sub(1),
                     not_processed,
                     max_expansion,
+                    Some(&expansion),
                     is_normalization_char,
                     normalize_eol_step,
                     resolve_entity,
@@ -3225,20 +3279,65 @@ mod normalization {
             ));
         }
 
+        /// An entity that references itself directly from its own replacement text
+        /// is reported as recursive
         #[test]
         fn recursive_entity() {
             assert_eq!(
                 normalize_xml10_attribute_value("&entity; reference", 5, |_| Some(
                     "recursive &entity;"
                 )),
-                Err(EscapeError::TooManyNestedEntities),
+                Err(EscapeError::RecursiveEntity("entity".to_string())),
             );
 
             assert_eq!(
                 normalize_xml11_attribute_value("&entity; reference", 5, |_| Some(
                     "recursive &entity;"
                 )),
-                Err(EscapeError::TooManyNestedEntities),
+                Err(EscapeError::RecursiveEntity("entity".to_string())),
+            );
+        }
+
+        /// An entity that references itself indirectly, through a chain of other
+        /// entities, is reported as recursive as soon as the loop is closed, long before
+        /// the nesting limit (128 here) would be reached
+        #[test]
+        fn indirectly_recursive_entity() {
+            let resolve = |entity: &str| match entity {
+                "start" => Some("&a;"),
+                "a" => Some("a &b;"),
+                "b" => Some("b &c;"),
+                "c" => Some("c &a;"),
+                _ => None,
+            };
+
+            assert_eq!(
+                normalize_xml10_attribute_value("&start;", 128, resolve),
+                Err(EscapeError::RecursiveEntity("a".to_string())),
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("&start;", 128, resolve),
+                Err(EscapeError::RecursiveEntity("a".to_string())),
+            );
+        }
+
+        /// An entity can be referenced several times, as long as it is not
+        /// referenced from its own replacement text
+        #[test]
+        fn repeated_entity() {
+            let resolve = |entity: &str| match entity {
+                "outer" => Some("&inner;-&inner;"),
+                "inner" => Some("text"),
+                _ => None,
+            };
+
+            assert_eq!(
+                normalize_xml10_attribute_value("&outer; &inner; &outer;", 5, resolve),
+                Ok("text-text text text-text".into()),
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("&outer; &inner; &outer;", 5, resolve),
+                Ok("text-text text text-text".into()),
             );
         }
 

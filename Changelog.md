@@ -34,6 +34,10 @@
 
 ### New Features
 
+- [#945]: `Attribute::normalized_value_with()` and `escape::normalize_attribute_value()` now
+  return new `EscapeError::RecursiveEntity` error as soon as an entity references itself,
+  directly or through other entities. Previously such entities were expanded until the
+  nesting limit was reached and `EscapeError::TooManyNestedEntities` was returned.
 - [#1010]: Implement `fmt::Display` on `QName`, `LocalName`, `Prefix` and `Namespace`.
 - [#1015]: Implement `From<LocalName>` on `QName`.
 - [#1058]: Add `Serializer::children_capacity()` to set how many bytes a struct reserves
@@ -131,6 +135,7 @@
 
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#837]: https://github.com/tafia/quick-xml/issues/837
+[#945]: https://github.com/tafia/quick-xml/issues/945
 [#963]: https://github.com/tafia/quick-xml/pull/963
 [#1005]: https://github.com/tafia/quick-xml/pull/1005
 [#1007]: https://github.com/tafia/quick-xml/pull/1007
