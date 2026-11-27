@@ -2132,3 +2132,27 @@ mod xml_version {
         }
     }
 }
+
+#[test]
+fn empty_attribute_name() {
+    use quick_xml::errors::Error;
+    use quick_xml::events::attributes::AttrError;
+    use std::collections::BTreeMap;
+
+    #[track_caller]
+    fn check(xml: &str) {
+        match from_str::<BTreeMap<String, String>>(xml) {
+            Err(DeError::InvalidXml(Error::InvalidAttr(cause))) => {
+                assert_eq!(cause, AttrError::ExpectedName(5));
+            }
+            other => panic!(
+                "Expected `Err(InvalidXml(InvalidAttr(ExpectedName(5))))` for {xml:?}, got {:?}",
+                other
+            ),
+        }
+    }
+
+    check(r#"<root ="1"/>"#);
+    check(r#"<root =="1"/>"#);
+    check(r#"<root =a="1"/>"#);
+}
