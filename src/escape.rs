@@ -100,7 +100,11 @@ impl std::fmt::Display for EscapeError {
                 f.write_str("too large entity expansion in an attribute value")
             }
             Self::RecursiveEntity(name) => {
-                write!(f, "entity `{}` references itself in an attribute value", name)
+                write!(
+                    f,
+                    "entity `{}` references itself in an attribute value",
+                    name
+                )
             }
         }
     }
@@ -706,8 +710,6 @@ where
     // version of the attribute, otherwise return the value unchanged
     if let Some(i) = iter.position(&is_normalization_char) {
         let mut normalized = String::with_capacity(value.len());
-        // Names of the entities for which replacement texts are currently being expanded
-        let mut expanding = Vec::new();
         let pos = normalize_attr_step(
             &mut normalized,
             &mut iter,
@@ -717,7 +719,7 @@ where
             depth,
             0,
             max_expansion,
-            &mut expanding,
+            None,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -731,7 +733,7 @@ where
             depth,
             0,
             max_expansion,
-            &mut expanding,
+            None,
             &is_normalization_char,
             &normalize_eol_step,
             &mut resolve_entity,
@@ -739,6 +741,18 @@ where
         return Ok(normalized.into());
     }
     Ok(Cow::Borrowed(value))
+}
+
+/// An entity for which replacement text is currently being expanded during attribute
+/// normalization. Expansions form a singly-linked list on the call stack, from the
+/// innermost entity to the outermost, which is used to detect recursive entities
+/// without allocations.
+struct EntityExpansion<'a> {
+    /// Name of the entity
+    name: &'a str,
+    /// The entity in which replacement text this entity is referenced,
+    /// or `None` if it is referenced directly from the attribute value
+    parent: Option<&'a EntityExpansion<'a>>,
 }
 
 fn normalize_attr_steps<'entity, C, E, F>(
@@ -749,7 +763,7 @@ fn normalize_attr_steps<'entity, C, E, F>(
     depth: usize,
     not_processed: usize,
     max_expansion: usize,
-    expanding: &mut Vec<String>,
+    expanding: Option<&EntityExpansion<'_>>,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -815,7 +829,8 @@ where
 ///   the value, which is checked against `max_expansion` before expanding an entity
 /// - `max_expansion`: Maximum length that the value can reach while entities are expanded
 ///   into it. Too large expansion will interrupt the algorithm
-/// - `expanding`: Names of the entities for which replacement texts are currently being expanded.
+/// - `expanding`: The innermost entity for which replacement text is currently being
+///   expanded, linked to the entities it is nested in, or `None` at the top level.
 ///   A reference to any of them will interrupt the algorithm
 /// - `is_normalization_char`: a function to check if byte is the start byte of character
 ///   that should be normalized (UTF-8 encoding is assumed)
@@ -837,7 +852,7 @@ fn normalize_attr_step<'entity, C, E, F>(
     depth: usize,
     not_processed: usize,
     max_expansion: usize,
-    expanding: &mut Vec<String>,
+    expanding: Option<&EntityExpansion<'_>>,
     is_normalization_char: &C,
     normalize_eol_step: &E,
     resolve_entity: &mut F,
@@ -887,8 +902,12 @@ where
             if let Some(value) = resolve_entity(pat) {
                 // An entity that is referenced from its own replacement text, directly
                 // or through other entities, would be expanded endlessly
-                if expanding.iter().any(|name| name == pat) {
-                    return Err(EscapeError::RecursiveEntity(pat.to_string()));
+                let mut ancestor = expanding;
+                while let Some(frame) = ancestor {
+                    if frame.name == pat {
+                        return Err(EscapeError::RecursiveEntity(pat.to_string()));
+                    }
+                    ancestor = frame.parent;
                 }
                 // Everything that is still waiting to be processed after the entity
                 // reference that is replaced now: the rest of `input` and the rest
@@ -905,7 +924,10 @@ where
                 if expanded > max_expansion {
                     return Err(EscapeError::TooLargeEntityExpansion);
                 }
-                expanding.push(pat.to_string());
+                let expansion = EntityExpansion {
+                    name: pat,
+                    parent: expanding,
+                };
                 normalize_attr_steps(
                     normalized,
                     &mut value.as_bytes().iter(),
@@ -914,12 +936,11 @@ where
                     depth.saturating_sub(1),
                     not_processed,
                     max_expansion,
-                    expanding,
+                    Some(&expansion),
                     is_normalization_char,
                     normalize_eol_step,
                     resolve_entity,
                 )?;
-                expanding.pop();
             } else {
                 return Err(EscapeError::UnrecognizedEntity(start..end, pat.to_string()));
             }
