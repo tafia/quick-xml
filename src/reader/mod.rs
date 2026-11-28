@@ -1008,6 +1008,7 @@ impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
+    #[inline]
     fn read_event_impl<'i, B>(&mut self, mut buf: B) -> Result<Event<'i>, Error>
     where
         R: XmlSource<'i, B>,
@@ -1017,6 +1018,7 @@ impl<R> Reader<R> {
 
     /// Private function to read until `>` is found. This function expects that
     /// it was called just after encounter a `<` symbol.
+    #[inline]
     fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>, Error>
     where
         R: XmlSource<'i, B>,
