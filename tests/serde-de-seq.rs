@@ -831,14 +831,7 @@ mod fixed_name {
             }
 
             from_str::<List>(
-                r#"
-                <root>
-                    <item/>
-                    <item/>
-                    text
-                    <![CDATA[cdata]]>
-                </root>
-                "#,
+                r#"<root><item/><item/>text<![CDATA[cdata]]></root>"#,
             )
             .unwrap();
         }
@@ -1730,14 +1723,7 @@ mod fixed_name {
             }
 
             let data: List = from_str(
-                r#"
-                <root>
-                    <item/>
-                    <item/>
-                    text
-                    <![CDATA[cdata]]>
-                </root>
-                "#,
+                r#"<root><item/><item/>text<![CDATA[cdata]]></root>"#,
             )
             .unwrap();
 
@@ -2988,14 +2974,7 @@ mod variable_name {
             }
 
             from_str::<List>(
-                r#"
-                <root>
-                    <item/>
-                    <item/>
-                    text
-                    <![CDATA[cdata]]>
-                </root>
-                "#,
+                r#"<root><item/><item/>text<![CDATA[cdata]]></root>"#,
             )
             .unwrap();
         }
@@ -4057,14 +4036,7 @@ mod variable_name {
             }
 
             let data: List = from_str(
-                r#"
-                <root>
-                    <item/>
-                    <item/>
-                    text
-                    <![CDATA[cdata]]>
-                </root>
-                "#,
+                r#"<root><item/><item/>text<![CDATA[cdata]]></root>"#,
             )
             .unwrap();
 
