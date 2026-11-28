@@ -80,7 +80,7 @@ pub use crate::encoding::Decoder;
 pub use crate::errors::serialize::{DeError, SeError};
 pub use crate::errors::{Error, Result};
 pub use crate::reader::{NsReader, Reader};
-pub use crate::writer::{ElementWriter, Writer};
+pub use crate::writer::{ElementWriter, PrettyWriter, Writer};
 
 /// Version of XML standard
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -7,20 +7,31 @@ use crate::{ElementWriter, Writer};
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
     /// Writes the given event to the underlying writer. Async version of [`Writer::write_event`].
+    ///
+    /// See [`Writer::write_event`] for a description of the pretty-printing
+    /// model and the meaning of the `break_after` / `is_block` locals.
     pub async fn write_event_async<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
-        let mut next_should_line_break = true;
+        let mut break_after = true;
+        let mut is_block = true;
         let result = match event.into() {
             Event::Start(e) => {
                 let result = self.write_wrapped_async("<", &e, ">").await;
                 if let Some(i) = self.indent.as_mut() {
+                    // Record the start tag at the parent level, before descending.
+                    i.record_block();
                     i.grow();
                 }
+                is_block = false;
                 result
             }
             Event::End(e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
+                    if i.end_needs_line_break() {
+                        i.should_line_break = true;
+                    }
                 }
+                is_block = false;
                 self.write_wrapped_async("</", &e, ">").await
             }
             Event::Empty(e) => {
@@ -36,12 +47,14 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 .await
             }
             Event::Text(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(e.as_bytes()).await
             }
             Event::Comment(e) => self.write_wrapped_async("<!--", &e, "-->").await,
             Event::CData(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(b"<![CDATA[").await?;
                 self.writer.write_all(e.as_bytes()).await?;
                 self.writer.write_all(b"]]>").await
@@ -49,11 +62,24 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             Event::Decl(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::PI(e) => self.write_wrapped_async("<?", &e, "?>").await,
             Event::DocType(e) => self.write_wrapped_async("<!DOCTYPE ", &e, ">").await,
-            Event::GeneralRef(e) => self.write_wrapped_async("&", &e, ";").await,
-            Event::Eof => Ok(()),
+            // A general entity reference is inline character data, like `Text`.
+            Event::GeneralRef(e) => {
+                break_after = false;
+                is_block = false;
+                self.writer.write_all(b"&").await?;
+                self.writer.write_all(e.as_bytes()).await?;
+                self.writer.write_all(b";").await
+            }
+            Event::Eof => {
+                is_block = false;
+                Ok(())
+            }
         };
         if let Some(i) = self.indent.as_mut() {
-            i.should_line_break = next_should_line_break;
+            if is_block {
+                i.record_block();
+            }
+            i.should_line_break = break_after;
         }
         result
     }
@@ -606,5 +632,65 @@ mod indentation_async {
     </paired>
 </paired>"#
         );
+    }
+
+    // Async mirror of the sync issue #276 regression test.
+    #[tokio::test]
+    async fn issue_276_comment_then_text() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+        for event in [
+            Event::Start(BytesStart::new("tag2")),
+            Event::Comment(BytesComment::new("Test comment").unwrap()),
+            Event::Text(BytesText::new("Test")),
+            Event::End(BytesEnd::new("tag2")),
+        ] {
+            writer.write_event_async(event).await.unwrap();
+        }
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            "<tag2>\n    <!--Test comment-->Test\n</tag2>",
+        );
+    }
+
+    // A general entity reference is inline character data, so it must not force
+    // a line break before the closing tag.
+    #[tokio::test]
+    async fn general_ref_is_inline() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+
+        for event in [
+            Event::Start(BytesStart::new("p")),
+            Event::Text(BytesText::from_escaped("Hello ")),
+            Event::GeneralRef(BytesRef::new("amp")),
+            Event::Text(BytesText::from_escaped(" world")),
+            Event::End(BytesEnd::new("p")),
+        ] {
+            writer.write_event_async(event).await.unwrap();
+        }
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            "<p>Hello &amp; world</p>",
+        );
+    }
+
+    // The async writer must honour `add_space_before_slash_in_empty_elements`
+    // just like the sync writer does.
+    #[tokio::test]
+    async fn empty_respects_space_before_slash() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
+        writer.config_mut().add_space_before_slash_in_empty_elements = true;
+
+        writer
+            .write_event_async(Event::Empty(BytesStart::new("x")))
+            .await
+            .unwrap();
+
+        assert_eq!(std::str::from_utf8(&buffer).unwrap(), "<x />");
     }
 }

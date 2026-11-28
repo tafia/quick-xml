@@ -9,6 +9,9 @@ use crate::events::{BytesCData, BytesPI, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
+mod pretty;
+
+pub use pretty::{PrettyElementWriter, PrettyWriter};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
 #[cfg(feature = "serialize")]
@@ -255,20 +258,52 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
+    ///
+    /// Pretty-printing model (only active when the writer was built with
+    /// [`new_with_indent`](Self::new_with_indent)):
+    ///
+    /// * Block-level markup — start/end tags, empty elements, comments, PIs,
+    ///   the declaration and doctype — is written on its own indented line.
+    ///   [`write_wrapped`](Self::write_wrapped) emits the leading newline plus
+    ///   indent whenever `should_line_break` is set.
+    /// * Character data — `Text`, `CData` and general entity references
+    ///   (`&name;`) — is written verbatim, inline with the surrounding markup,
+    ///   and suppresses the break before whatever follows (e.g. `<a>text</a>`).
+    ///
+    /// Each arm reports two things about the event it just wrote, which the
+    /// indenter then uses to lay out the next event:
+    ///
+    /// * `break_after` — should the *next* event start on a fresh line? True
+    ///   for block markup, false for inline character data.
+    /// * `is_block` — was this block-level content? If so it is recorded via
+    ///   [`record_block`](Indentation::record_block) so a later closing tag can
+    ///   tell whether its element held children and must return to its own
+    ///   line, even when the last child was character data (issue #276).
     pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
-        let mut next_should_line_break = true;
+        let mut break_after = true;
+        let mut is_block = true;
         let result = match event.into() {
             Event::Start(e) => {
                 let result = self.write_wrapped("<", &e, ">");
                 if let Some(i) = self.indent.as_mut() {
+                    // Record the start tag as block content of its parent, i.e.
+                    // at the current level *before* descending a level. This is
+                    // why `Start` records here rather than via `is_block` below.
+                    i.record_block();
                     i.grow();
                 }
+                is_block = false;
                 result
             }
             Event::End(e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
+                    if i.end_needs_line_break() {
+                        i.should_line_break = true;
+                    }
                 }
+                // A closing tag is not itself tracked as block content.
+                is_block = false;
                 self.write_wrapped("</", &e, ">")
             }
             Event::Empty(e) => self.write_wrapped(
@@ -281,12 +316,14 @@ impl<W: Write> Writer<W> {
                 },
             ),
             Event::Text(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(e.as_bytes())
             }
             Event::Comment(e) => self.write_wrapped("<!--", &e, "-->"),
             Event::CData(e) => {
-                next_should_line_break = false;
+                break_after = false;
+                is_block = false;
                 self.writer.write_all(b"<![CDATA[")?;
                 self.writer.write_all(e.as_bytes())?;
                 self.writer.write_all(b"]]>")
@@ -294,11 +331,25 @@ impl<W: Write> Writer<W> {
             Event::Decl(e) => self.write_wrapped("<?", &e, "?>"),
             Event::PI(e) => self.write_wrapped("<?", &e, "?>"),
             Event::DocType(e) => self.write_wrapped("<!DOCTYPE ", &e, ">"),
-            Event::GeneralRef(e) => self.write_wrapped("&", &e, ";"),
-            Event::Eof => Ok(()),
+            // A general entity reference is character data that appears inline
+            // within text, so it is written like `Text`, not as block markup.
+            Event::GeneralRef(e) => {
+                break_after = false;
+                is_block = false;
+                self.writer.write_all(b"&")?;
+                self.writer.write_all(e.as_bytes())?;
+                self.writer.write_all(b";")
+            }
+            Event::Eof => {
+                is_block = false;
+                Ok(())
+            }
         };
         if let Some(i) = self.indent.as_mut() {
-            i.should_line_break = next_should_line_break;
+            if is_block {
+                i.record_block();
+            }
+            i.should_line_break = break_after;
         }
         result
     }
@@ -386,19 +437,56 @@ impl<W: Write> Writer<W> {
         tag_name: &str,
         content: &T,
     ) -> Result<(), SeError> {
-        use crate::se::{Indent, Serializer, Utf8Writer};
+        use crate::se::{Indent, Serializer, Utf8Writer, WriteResult};
 
-        self.write_indent()?;
-        let mut writer = Utf8Writer(&mut self.writer);
+        let mut writer = Utf8Writer(TrackingWriter {
+            writer: &mut self.writer,
+            wrote: false,
+        });
         let mut serializer = Serializer::with_root(&mut writer, Some(tag_name))?;
 
         if let Some(indent) = &mut self.indent {
-            serializer.set_indent(Indent::Borrow(indent));
+            let write_indent = indent.should_line_break;
+            serializer.set_indent(Indent::Borrow(indent), write_indent);
         }
 
-        content.serialize(serializer)?;
+        let result = content.serialize(serializer)?;
+
+        if writer.0.wrote {
+            if let Some(indent) = &mut self.indent {
+                match result {
+                    WriteResult::Element => {
+                        indent.record_block();
+                        indent.should_line_break = true;
+                    }
+                    WriteResult::Text | WriteResult::SensitiveText => {
+                        indent.should_line_break = false;
+                    }
+                    WriteResult::Nothing | WriteResult::SensitiveNothing => {}
+                }
+            }
+        }
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "serialize")]
+struct TrackingWriter<'a, W> {
+    writer: &'a mut W,
+    wrote: bool,
+}
+
+#[cfg(feature = "serialize")]
+impl<W: Write> Write for TrackingWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let written = self.writer.write(buf)?;
+        self.wrote |= written != 0;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
     }
 }
 
@@ -434,6 +522,85 @@ enum AttributeIndent {
     WriteConfigured(usize),
     /// Keep indent that should be used if `new_line()` would be called
     Configured(usize),
+}
+
+impl AttributeIndent {
+    fn new_line(&mut self, start_tag: &mut BytesStart<'_>, indent: &Indentation) {
+        match *self {
+            // .new_line() called just after .create_element().
+            // Use element indent to additionally indent attributes
+            AttributeIndent::NoneAttributesWritten => {
+                *self = AttributeIndent::WriteConfigured(indent.indent_size)
+            }
+
+            AttributeIndent::WriteSpaces(_) => {}
+            // .new_line() called when .with_attribute() was called at least once.
+            // The spaces should be used to indent
+            // Plan saved indent
+            AttributeIndent::Spaces(indent) => *self = AttributeIndent::WriteSpaces(indent),
+
+            AttributeIndent::WriteConfigured(_) => {}
+            // .new_line() called when .with_attribute() was called at least once.
+            // The configured indent characters should be used to indent
+            // Plan saved indent
+            AttributeIndent::Configured(indent) => *self = AttributeIndent::WriteConfigured(indent),
+        }
+        start_tag.push_newline();
+    }
+
+    fn write_attr(
+        &mut self,
+        start_tag: &mut BytesStart<'_>,
+        spaces: &mut String,
+        indent: Option<&mut Indentation>,
+        attr: Attribute<'_>,
+    ) {
+        if let Some(i) = indent {
+            // Save the indent that we should use next time when .new_line() be called
+            *self = match *self {
+                // Neither .new_line() or .with_attribute() yet called
+                // If newline inside attributes will be requested, we should indent them
+                // by the length of tag name and +1 for `<` and +1 for one space
+                AttributeIndent::NoneAttributesWritten => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(start_tag.name().as_ref().len() + 2)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteSpaces(indent) => {
+                    if spaces.len() < indent {
+                        *spaces = " ".repeat(indent);
+                    }
+                    start_tag.push_indent(&spaces[..indent]);
+                    start_tag.push_attr(attr);
+                    AttributeIndent::Spaces(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Spaces(indent) => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(indent)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteConfigured(indent) => {
+                    start_tag.push_indent(i.additional(indent));
+                    start_tag.push_attr(attr);
+                    AttributeIndent::Configured(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Configured(indent) => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Configured(indent)
+                }
+            };
+        } else {
+            start_tag.push_attribute(attr);
+        }
+    }
 }
 
 /// A struct to write an element. Contains methods to add attributes and inner
@@ -514,82 +681,20 @@ impl<'a, W> ElementWriter<'a, W> {
     /// />
     /// ```
     pub fn new_line(mut self) -> Self {
-        if let Some(i) = self.writer.indent.as_mut() {
-            match self.state {
-                // .new_line() called just after .create_element().
-                // Use element indent to additionally indent attributes
-                AttributeIndent::NoneAttributesWritten => {
-                    self.state = AttributeIndent::WriteConfigured(i.indent_size)
-                }
-
-                AttributeIndent::WriteSpaces(_) => {}
-                // .new_line() called when .with_attribute() was called at least once.
-                // The spaces should be used to indent
-                // Plan saved indent
-                AttributeIndent::Spaces(indent) => {
-                    self.state = AttributeIndent::WriteSpaces(indent)
-                }
-
-                AttributeIndent::WriteConfigured(_) => {}
-                // .new_line() called when .with_attribute() was called at least once.
-                // The configured indent characters should be used to indent
-                // Plan saved indent
-                AttributeIndent::Configured(indent) => {
-                    self.state = AttributeIndent::WriteConfigured(indent)
-                }
-            }
-            self.start_tag.push_newline();
-        };
+        if let Some(indent) = self.writer.indent.as_mut() {
+            self.state.new_line(&mut self.start_tag, indent);
+        }
         self
     }
 
     /// Writes attribute and maintain indentation state
     fn write_attr<'b>(&mut self, attr: Attribute<'b>) {
-        if let Some(i) = self.writer.indent.as_mut() {
-            // Save the indent that we should use next time when .new_line() be called
-            self.state = match self.state {
-                // Neither .new_line() or .with_attribute() yet called
-                // If newline inside attributes will be requested, we should indent them
-                // by the length of tag name and +1 for `<` and +1 for one space
-                AttributeIndent::NoneAttributesWritten => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Spaces(self.start_tag.name().as_ref().len() + 2)
-                }
-
-                // Indent was requested by previous call to .new_line(), write it
-                // New line was already written
-                AttributeIndent::WriteSpaces(indent) => {
-                    if self.spaces.len() < indent {
-                        self.spaces = " ".repeat(indent);
-                    }
-                    self.start_tag.push_indent(&self.spaces[..indent]);
-                    self.start_tag.push_attr(attr);
-                    AttributeIndent::Spaces(indent)
-                }
-                // .new_line() was not called, but .with_attribute() was.
-                // use the previously calculated indent
-                AttributeIndent::Spaces(indent) => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Spaces(indent)
-                }
-
-                // Indent was requested by previous call to .new_line(), write it
-                // New line was already written
-                AttributeIndent::WriteConfigured(indent) => {
-                    self.start_tag.push_indent(i.additional(indent));
-                    self.start_tag.push_attr(attr);
-                    AttributeIndent::Configured(indent)
-                }
-                // .new_line() was not called, but .with_attribute() was.
-                // use the previously calculated indent
-                AttributeIndent::Configured(indent) => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Configured(indent)
-                }
-            };
-        } else {
-            self.start_tag.push_attribute(attr);
-        }
+        self.state.write_attr(
+            &mut self.start_tag,
+            &mut self.spaces,
+            self.writer.indent.as_mut(),
+            attr,
+        );
     }
 }
 
@@ -657,6 +762,18 @@ pub(crate) struct Indentation {
     indents: String,
     /// The current amount of indentation, in bytes of `indents`
     current_indent_len: usize,
+    /// Current element nesting depth, independent of the indentation width.
+    depth: usize,
+    /// Indentation level at which the most recent block-level (i.e. non
+    /// character-data) item was written — a start/empty tag, comment, PI, etc.
+    ///
+    /// A closing tag consults this to decide whether the element it closes
+    /// actually contained block children and must therefore return to its own
+    /// line, even when the element's final child was character data (a `Text`
+    /// node, or a comment immediately followed by text). See
+    /// [`Indentation::end_needs_line_break`] and
+    /// <https://github.com/tafia/quick-xml/issues/276>.
+    last_block_level: usize,
 }
 
 impl Indentation {
@@ -667,6 +784,8 @@ impl Indentation {
             indent_size,
             indents: std::iter::repeat(indent_char).take(128).collect(),
             current_indent_len: 0,
+            depth: 0,
+            last_block_level: 0,
         }
     }
 
@@ -678,12 +797,14 @@ impl Indentation {
 
     /// Increase indentation by one level
     pub fn grow(&mut self) {
+        self.depth += 1;
         self.current_indent_len += self.level_len();
         self.ensure(self.current_indent_len);
     }
 
     /// Decrease indentation by one level. Do nothing, if level already zero
     pub fn shrink(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
         self.current_indent_len = self.current_indent_len.saturating_sub(self.level_len());
     }
 
@@ -705,5 +826,21 @@ impl Indentation {
         while self.indents.len() < new_len {
             self.indents.push(self.indent_char);
         }
+    }
+
+    /// Record that block-level content was just written at the current level.
+    fn record_block(&mut self) {
+        self.last_block_level = self.depth;
+    }
+
+    /// Whether a closing tag that has just [`shrink`](Self::shrink)ed back to
+    /// its own level must start on a fresh line.
+    ///
+    /// This is the case when block content was recorded *deeper* than the
+    /// current level, i.e. inside the element now being closed — even if that
+    /// element's last child was character data. Without it,
+    /// `<a><!--c-->text</a>` would glue `</a>` onto `text`.
+    fn end_needs_line_break(&self) -> bool {
+        self.last_block_level > self.depth
     }
 }

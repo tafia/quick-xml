@@ -73,6 +73,11 @@ name = "issue971"
 harness = false
 path = "benches/issue971.rs"
 
+[[bench]]
+name = "writer"
+harness = false
+path = "benches/writer.rs"
+
 [features]
 default = []
 

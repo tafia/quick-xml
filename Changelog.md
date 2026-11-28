@@ -34,6 +34,11 @@
 
 ### New Features
 
+- [#276]: Added `PrettyWriter`, a buffered XML writer that produces content-preserving
+  pretty-printed output approximately matching libxml2. Unlike the streaming `Writer`,
+  it buffers events to decide element layout based on complete content, avoiding some
+  issues and edge cases with the naive `Writer::new_with_indent` implementation.
+  Performance is slightly worse, however.
 - [#945]: `Attribute::normalized_value_with()` and `escape::normalize_attribute_value()` now
   return new `EscapeError::RecursiveEntity` error as soon as an entity references itself,
   directly or through other entities. Previously such entities were expanded until the
@@ -45,6 +50,17 @@
 
 ### Bug Fixes
 
+- [#1054]: `Writer::write_serializable` follows the writer's indentation state and preserves it when no output is written.
+- [#276]: Fixed `Writer::new_with_indent` producing misaligned closing tags
+  when an element contained a non-text child (e.g. a comment) followed by a
+  text node. The `</tag>` was appended directly after the text instead of
+  starting on a new line at the correct indentation level.
+- [#276]: The indented `Writer` no longer treats a general entity reference
+  (`&name;`) as block content; it is now written inline like text, so it no
+  longer forces a spurious line break before the enclosing closing tag.
+- The async `Writer::write_event_async` now honours
+  `add_space_before_slash_in_empty_elements` for empty elements, matching the
+  synchronous writer.
 - [#1007]: Remove error-prone implementations of `Hash`, `PartialOrd`, and `Ord` from all
   events except `BytesText` and `BytesCData`, which was introduced in [#1005].
 - [#1017]: Fix panic and wrong output when the indent character is not ASCII.
@@ -136,6 +152,8 @@
 - [#1061]: Document that `BytesDecl::encoder()` resolves `ISO-8859-1`, `latin1` and `US-ASCII`
   to `windows-1252`, as the WHATWG Encoding Standard does.
 
+[#276]: https://github.com/tafia/quick-xml/issues/276
+[#1054]: https://github.com/tafia/quick-xml/issues/1054
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#837]: https://github.com/tafia/quick-xml/issues/837
 [#945]: https://github.com/tafia/quick-xml/issues/945
