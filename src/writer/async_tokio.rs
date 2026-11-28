@@ -638,11 +638,11 @@ mod indentation_async {
     #[tokio::test]
     async fn issue_276_comment_then_text() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         for event in [
             Event::Start(BytesStart::new("tag2")),
-            Event::Comment(BytesText::new("Test comment")),
+            Event::Comment(BytesComment::new("Test comment").unwrap()),
             Event::Text(BytesText::new("Test")),
             Event::End(BytesEnd::new("tag2")),
         ] {
@@ -660,7 +660,7 @@ mod indentation_async {
     #[tokio::test]
     async fn general_ref_is_inline() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
 
         for event in [
             Event::Start(BytesStart::new("p")),
@@ -683,7 +683,7 @@ mod indentation_async {
     #[tokio::test]
     async fn empty_respects_space_before_slash() {
         let mut buffer = Vec::new();
-        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);
         writer.config_mut().add_space_before_slash_in_empty_elements = true;
 
         writer

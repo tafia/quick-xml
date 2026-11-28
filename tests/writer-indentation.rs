@@ -229,6 +229,27 @@ fn serializable() {
 }
 
 #[test]
+fn zero_width_indentation_tracks_block_depth() {
+    let mut writer = Writer::new_with_indent(Vec::new(), ' ', 0);
+    writer
+        .write_event(Event::Start(BytesStart::new("root")))
+        .unwrap();
+    writer
+        .write_event(Event::Comment(BytesComment::new("c").unwrap()))
+        .unwrap();
+    writer
+        .write_event(Event::Text(BytesText::new("text")))
+        .unwrap();
+    writer
+        .write_event(Event::End(BytesEnd::new("root")))
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(writer.into_inner()).unwrap(),
+        "<root>\n<!--c-->text\n</root>"
+    );
+}
+
+#[test]
 fn element_writer_empty() {
     let mut buffer = Vec::new();
     let mut writer = Writer::new_with_indent(&mut buffer, ' ', 4);

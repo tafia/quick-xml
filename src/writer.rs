@@ -725,6 +725,8 @@ pub(crate) struct Indentation {
     indents: String,
     /// The current amount of indentation, in bytes of `indents`
     current_indent_len: usize,
+    /// Current element nesting depth, independent of the indentation width.
+    depth: usize,
     /// Indentation level at which the most recent block-level (i.e. non
     /// character-data) item was written — a start/empty tag, comment, PI, etc.
     ///
@@ -745,6 +747,7 @@ impl Indentation {
             indent_size,
             indents: std::iter::repeat(indent_char).take(128).collect(),
             current_indent_len: 0,
+            depth: 0,
             last_block_level: 0,
         }
     }
@@ -757,12 +760,14 @@ impl Indentation {
 
     /// Increase indentation by one level
     pub fn grow(&mut self) {
+        self.depth += 1;
         self.current_indent_len += self.level_len();
         self.ensure(self.current_indent_len);
     }
 
     /// Decrease indentation by one level. Do nothing, if level already zero
     pub fn shrink(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
         self.current_indent_len = self.current_indent_len.saturating_sub(self.level_len());
     }
 
@@ -788,7 +793,7 @@ impl Indentation {
 
     /// Record that block-level content was just written at the current level.
     fn record_block(&mut self) {
-        self.last_block_level = self.current_indent_len;
+        self.last_block_level = self.depth;
     }
 
     /// Whether a closing tag that has just [`shrink`](Self::shrink)ed back to
@@ -799,6 +804,6 @@ impl Indentation {
     /// element's last child was character data. Without it,
     /// `<a><!--c-->text</a>` would glue `</a>` onto `text`.
     fn end_needs_line_break(&self) -> bool {
-        self.last_block_level > self.current_indent_len
+        self.last_block_level > self.depth
     }
 }
