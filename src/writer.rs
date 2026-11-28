@@ -11,7 +11,7 @@ use crate::events::{BytesCData, BytesPI, BytesStart, BytesText, Event};
 mod async_tokio;
 mod pretty;
 
-pub use pretty::PrettyWriter;
+pub use pretty::{PrettyElementWriter, PrettyWriter};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
 #[cfg(feature = "serialize")]
@@ -487,6 +487,85 @@ enum AttributeIndent {
     Configured(usize),
 }
 
+impl AttributeIndent {
+    fn new_line(&mut self, start_tag: &mut BytesStart<'_>, indent: &Indentation) {
+        match *self {
+            // .new_line() called just after .create_element().
+            // Use element indent to additionally indent attributes
+            AttributeIndent::NoneAttributesWritten => {
+                *self = AttributeIndent::WriteConfigured(indent.indent_size)
+            }
+
+            AttributeIndent::WriteSpaces(_) => {}
+            // .new_line() called when .with_attribute() was called at least once.
+            // The spaces should be used to indent
+            // Plan saved indent
+            AttributeIndent::Spaces(indent) => *self = AttributeIndent::WriteSpaces(indent),
+
+            AttributeIndent::WriteConfigured(_) => {}
+            // .new_line() called when .with_attribute() was called at least once.
+            // The configured indent characters should be used to indent
+            // Plan saved indent
+            AttributeIndent::Configured(indent) => *self = AttributeIndent::WriteConfigured(indent),
+        }
+        start_tag.push_newline();
+    }
+
+    fn write_attr(
+        &mut self,
+        start_tag: &mut BytesStart<'_>,
+        spaces: &mut String,
+        indent: Option<&mut Indentation>,
+        attr: Attribute<'_>,
+    ) {
+        if let Some(i) = indent {
+            // Save the indent that we should use next time when .new_line() be called
+            *self = match *self {
+                // Neither .new_line() or .with_attribute() yet called
+                // If newline inside attributes will be requested, we should indent them
+                // by the length of tag name and +1 for `<` and +1 for one space
+                AttributeIndent::NoneAttributesWritten => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(start_tag.name().as_ref().len() + 2)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteSpaces(indent) => {
+                    if spaces.len() < indent {
+                        *spaces = " ".repeat(indent);
+                    }
+                    start_tag.push_indent(&spaces[..indent]);
+                    start_tag.push_attr(attr);
+                    AttributeIndent::Spaces(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Spaces(indent) => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(indent)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteConfigured(indent) => {
+                    start_tag.push_indent(i.additional(indent));
+                    start_tag.push_attr(attr);
+                    AttributeIndent::Configured(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Configured(indent) => {
+                    start_tag.push_attribute(attr);
+                    AttributeIndent::Configured(indent)
+                }
+            };
+        } else {
+            start_tag.push_attribute(attr);
+        }
+    }
+}
+
 /// A struct to write an element. Contains methods to add attributes and inner
 /// elements to the element
 pub struct ElementWriter<'a, W> {
@@ -565,82 +644,20 @@ impl<'a, W> ElementWriter<'a, W> {
     /// />
     /// ```
     pub fn new_line(mut self) -> Self {
-        if let Some(i) = self.writer.indent.as_mut() {
-            match self.state {
-                // .new_line() called just after .create_element().
-                // Use element indent to additionally indent attributes
-                AttributeIndent::NoneAttributesWritten => {
-                    self.state = AttributeIndent::WriteConfigured(i.indent_size)
-                }
-
-                AttributeIndent::WriteSpaces(_) => {}
-                // .new_line() called when .with_attribute() was called at least once.
-                // The spaces should be used to indent
-                // Plan saved indent
-                AttributeIndent::Spaces(indent) => {
-                    self.state = AttributeIndent::WriteSpaces(indent)
-                }
-
-                AttributeIndent::WriteConfigured(_) => {}
-                // .new_line() called when .with_attribute() was called at least once.
-                // The configured indent characters should be used to indent
-                // Plan saved indent
-                AttributeIndent::Configured(indent) => {
-                    self.state = AttributeIndent::WriteConfigured(indent)
-                }
-            }
-            self.start_tag.push_newline();
-        };
+        if let Some(indent) = self.writer.indent.as_mut() {
+            self.state.new_line(&mut self.start_tag, indent);
+        }
         self
     }
 
     /// Writes attribute and maintain indentation state
     fn write_attr<'b>(&mut self, attr: Attribute<'b>) {
-        if let Some(i) = self.writer.indent.as_mut() {
-            // Save the indent that we should use next time when .new_line() be called
-            self.state = match self.state {
-                // Neither .new_line() or .with_attribute() yet called
-                // If newline inside attributes will be requested, we should indent them
-                // by the length of tag name and +1 for `<` and +1 for one space
-                AttributeIndent::NoneAttributesWritten => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Spaces(self.start_tag.name().as_ref().len() + 2)
-                }
-
-                // Indent was requested by previous call to .new_line(), write it
-                // New line was already written
-                AttributeIndent::WriteSpaces(indent) => {
-                    if self.spaces.len() < indent {
-                        self.spaces = " ".repeat(indent);
-                    }
-                    self.start_tag.push_indent(&self.spaces[..indent]);
-                    self.start_tag.push_attr(attr);
-                    AttributeIndent::Spaces(indent)
-                }
-                // .new_line() was not called, but .with_attribute() was.
-                // use the previously calculated indent
-                AttributeIndent::Spaces(indent) => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Spaces(indent)
-                }
-
-                // Indent was requested by previous call to .new_line(), write it
-                // New line was already written
-                AttributeIndent::WriteConfigured(indent) => {
-                    self.start_tag.push_indent(i.additional(indent));
-                    self.start_tag.push_attr(attr);
-                    AttributeIndent::Configured(indent)
-                }
-                // .new_line() was not called, but .with_attribute() was.
-                // use the previously calculated indent
-                AttributeIndent::Configured(indent) => {
-                    self.start_tag.push_attribute(attr);
-                    AttributeIndent::Configured(indent)
-                }
-            };
-        } else {
-            self.start_tag.push_attribute(attr);
-        }
+        self.state.write_attr(
+            &mut self.start_tag,
+            &mut self.spaces,
+            self.writer.indent.as_mut(),
+            attr,
+        );
     }
 }
 

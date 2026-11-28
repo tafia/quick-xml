@@ -4,16 +4,23 @@
 //! decisions based on complete element content. Elements are indented only if
 //! they contain no text nodes.
 
+use std::borrow::Cow;
 use std::io::{self, Write};
 
+use crate::encoding::UTF8_BOM;
+use crate::events::attributes::Attribute;
 use crate::events::{
     BytesCData, BytesComment, BytesDecl, BytesPI, BytesRef, BytesStart, BytesText, Event,
 };
-use crate::writer::{Config, Indentation};
+use crate::writer::{AttributeIndent, Config, Indentation};
 
 /// A node in the buffered document tree for pretty-printing.
 #[derive(Debug, Clone)]
 enum Node {
+    /// Byte-order mark
+    Bom,
+    /// XML declaration
+    Decl(BytesDecl<'static>),
     /// Start tag with name, attributes, and children
     Element {
         start: BytesStart<'static>,
@@ -38,18 +45,13 @@ enum Node {
 /// Document root that can contain multiple top-level nodes.
 #[derive(Debug)]
 struct Document {
-    /// Optional XML declaration
-    decl: Option<BytesDecl<'static>>,
     /// Top-level nodes (elements, comments, PIs, etc.)
     nodes: Vec<Node>,
 }
 
 impl Default for Document {
     fn default() -> Self {
-        Self {
-            decl: None,
-            nodes: Vec::new(),
-        }
+        Self { nodes: Vec::new() }
     }
 }
 
@@ -171,6 +173,25 @@ pub struct PrettyWriter<W> {
 }
 
 impl<W> PrettyWriter<W> {
+    /// Creates an element builder for this writer.
+    #[must_use]
+    pub fn create_element<'a, N>(&'a mut self, name: N) -> PrettyElementWriter<'a, W>
+    where
+        N: Into<Cow<'a, str>>,
+    {
+        let mut indent = Indentation::new(self.indent_char, self.indent_size);
+        for _ in 0..self.element_stack.len() {
+            indent.grow();
+        }
+        PrettyElementWriter {
+            writer: self,
+            start_tag: BytesStart::new(name),
+            state: AttributeIndent::NoneAttributesWritten,
+            spaces: String::new(),
+            indent,
+        }
+    }
+
     /// Creates a new `PrettyWriter` with 2-space indentation.
     ///
     /// # Example
@@ -237,6 +258,75 @@ impl<W> PrettyWriter<W> {
 }
 
 impl<W: Write> PrettyWriter<W> {
+    /// Buffers a byte-order mark at the current position.
+    pub fn write_bom(&mut self) -> io::Result<()> {
+        self.add_node(Node::Bom)
+    }
+
+    /// Buffers a newline and indentation at the current element depth.
+    ///
+    /// The inserted whitespace is treated as text when choosing the layout.
+    pub fn write_indent(&mut self) -> io::Result<()> {
+        let mut whitespace = String::from("\n");
+        let count = self.indent_size * self.element_stack.len();
+        whitespace.extend(std::iter::repeat(self.indent_char).take(count));
+        self.add_node(Node::Text(BytesText::from_escaped(whitespace)))
+    }
+
+    /// Buffers a serializable value using the same formatting rules as other events.
+    ///
+    /// The value is serialized without indentation and parsed into events so that its
+    /// content participates in the surrounding element's layout. This temporarily
+    /// buffers the serialized XML in addition to the events held by this writer.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
+    /// use quick_xml::writer::PrettyWriter;
+    ///
+    /// let mut writer = PrettyWriter::new(Vec::new());
+    /// writer.write_event(Event::Start(BytesStart::new("root"))).unwrap();
+    /// writer.write_event(Event::Text(BytesText::new("answer: "))).unwrap();
+    /// writer.write_serializable("value", &42).unwrap();
+    /// writer.write_event(Event::End(BytesEnd::new("root"))).unwrap();
+    /// assert_eq!(writer.into_inner().unwrap(), b"<root>answer: <value>42</value></root>");
+    /// ```
+    #[cfg(feature = "serialize")]
+    pub fn write_serializable<T: serde::Serialize>(
+        &mut self,
+        tag_name: &str,
+        content: &T,
+    ) -> Result<(), crate::se::SeError> {
+        use crate::reader::Reader;
+        use crate::se::Serializer;
+
+        let mut xml = String::new();
+        content.serialize(Serializer::with_root(&mut xml, Some(tag_name))?)?;
+
+        let mut reader = Reader::from_str(&xml);
+        let mut buffered = PrettyWriter::new(Vec::new());
+        loop {
+            let event = reader
+                .read_event()
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+            if matches!(event, Event::Eof) {
+                break;
+            }
+            buffered.write_event(event)?;
+        }
+
+        if !buffered.element_stack.is_empty() {
+            return Err(
+                io::Error::new(io::ErrorKind::InvalidData, "Unclosed serialized element").into(),
+            );
+        }
+        for node in buffered.document.nodes {
+            self.add_node(node)?;
+        }
+        Ok(())
+    }
+
     /// Buffers an event for later formatting.
     ///
     /// Events are collected into a tree structure. Call [`flush()`](Self::flush)
@@ -263,8 +353,7 @@ impl<W: Write> PrettyWriter<W> {
 
         match event {
             Event::Decl(d) => {
-                // Store declaration at document level
-                self.document.decl = Some(d);
+                self.add_node(Node::Decl(d))?;
             }
             Event::Start(e) => {
                 // Push onto stack to collect children
@@ -361,13 +450,6 @@ impl<W: Write> PrettyWriter<W> {
             ));
         }
 
-        // Write declaration if present
-        if let Some(ref decl) = self.document.decl {
-            self.writer.write_all(b"<?")?;
-            self.writer.write_all(decl.as_bytes())?;
-            self.writer.write_all(b"?>")?;
-        }
-
         // Reset indentation state
         self.indent = Indentation::new(self.indent_char, self.indent_size);
 
@@ -380,7 +462,6 @@ impl<W: Write> PrettyWriter<W> {
 
         // Clear the document after flushing so multiple flush() calls work
         self.document.nodes.clear();
-        self.document.decl = None;
 
         Ok(())
     }
@@ -395,10 +476,22 @@ impl<W: Write> PrettyWriter<W> {
     /// Writes a node with pretty-printing, deciding layout based on content.
     fn write_node(&mut self, node: &Node, needs_indent: bool) -> io::Result<()> {
         match node {
+            Node::Bom => self.writer.write_all(UTF8_BOM)?,
+            Node::Decl(decl) => {
+                if needs_indent {
+                    self.write_newline_indent()?;
+                }
+                self.writer.write_all(b"<?")?;
+                self.writer.write_all(decl.as_bytes())?;
+                self.writer.write_all(b"?>")?;
+            }
             Node::Element { start, children } => {
                 // Decide layout: inline if any direct child is Text/CData/GeneralRef
                 let has_text_child = children.iter().any(|child| {
-                    matches!(child, Node::Text(_) | Node::CData(_) | Node::GeneralRef(_))
+                    matches!(
+                        child,
+                        Node::Bom | Node::Text(_) | Node::CData(_) | Node::GeneralRef(_)
+                    )
                 });
 
                 // Add newline + indent if parent requested it
@@ -525,6 +618,104 @@ impl<W: Write> PrettyWriter<W> {
     /// ```
     pub fn into_inner(mut self) -> io::Result<W> {
         self.flush()?;
+        Ok(self.writer)
+    }
+}
+
+/// Builds an element in a [`PrettyWriter`].
+pub struct PrettyElementWriter<'a, W> {
+    writer: &'a mut PrettyWriter<W>,
+    start_tag: BytesStart<'a>,
+    state: AttributeIndent,
+    spaces: String,
+    indent: Indentation,
+}
+
+impl<'a, W> PrettyElementWriter<'a, W> {
+    /// Adds an attribute to this element.
+    pub fn with_attribute<'b, I: Into<Attribute<'b>>>(mut self, attr: I) -> Self {
+        self.state.write_attr(
+            &mut self.start_tag,
+            &mut self.spaces,
+            Some(&mut self.indent),
+            attr.into(),
+        );
+        self
+    }
+
+    /// Adds attributes from an iterator.
+    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        let mut iter = attributes.into_iter();
+        if let Some(attr) = iter.next() {
+            self.state.write_attr(
+                &mut self.start_tag,
+                &mut self.spaces,
+                Some(&mut self.indent),
+                attr.into(),
+            );
+            self.start_tag.extend_attributes(iter);
+        }
+        self
+    }
+
+    /// Starts a new line between attributes.
+    pub fn new_line(mut self) -> Self {
+        self.state.new_line(&mut self.start_tag, &self.indent);
+        self
+    }
+}
+
+impl<'a, W: Write> PrettyElementWriter<'a, W> {
+    /// Writes an element containing text.
+    pub fn write_text_content(self, text: BytesText) -> io::Result<&'a mut PrettyWriter<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.borrow()))?;
+        self.writer.write_event(Event::Text(text))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Writes an element containing a CDATA section.
+    pub fn write_cdata_content(self, text: BytesCData) -> io::Result<&'a mut PrettyWriter<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.borrow()))?;
+        self.writer.write_event(Event::CData(text))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Writes an element containing a processing instruction.
+    pub fn write_pi_content(self, pi: BytesPI) -> io::Result<&'a mut PrettyWriter<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.borrow()))?;
+        self.writer.write_event(Event::PI(pi))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Writes an empty element.
+    pub fn write_empty(self) -> io::Result<&'a mut PrettyWriter<W>> {
+        self.writer.write_event(Event::Empty(self.start_tag))?;
+        Ok(self.writer)
+    }
+
+    /// Writes content within this element using the supplied closure.
+    pub fn write_inner_content<F>(self, closure: F) -> io::Result<&'a mut PrettyWriter<W>>
+    where
+        F: FnOnce(&mut PrettyWriter<W>) -> io::Result<()>,
+    {
+        self.writer
+            .write_event(Event::Start(self.start_tag.borrow()))?;
+        closure(self.writer)?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)
     }
 }
