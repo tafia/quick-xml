@@ -228,6 +228,170 @@ fn serializable() {
     );
 }
 
+#[cfg(feature = "serialize")]
+mod serializable_indentation {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct Foo {
+        bar: usize,
+    }
+
+    #[derive(Serialize)]
+    enum Content<'a> {
+        #[serde(rename = "$text")]
+        Text(&'a str),
+    }
+
+    #[test]
+    fn root_and_siblings() {
+        let mut writer = Writer::new_with_indent(Vec::new(), ' ', 4);
+        writer.write_serializable("foo", &Foo { bar: 42 }).unwrap();
+        assert_eq!(
+            String::from_utf8(writer.into_inner()).unwrap(),
+            "<foo>\n    <bar>42</bar>\n</foo>"
+        );
+
+        let mut writer = Writer::new_with_indent(Vec::new(), ' ', 2);
+        writer
+            .write_event(Event::Start(BytesStart::new("root")))
+            .unwrap();
+        writer.write_serializable("item", &vec![1, 2]).unwrap();
+        writer
+            .write_event(Event::Empty(BytesStart::new("next")))
+            .unwrap();
+        writer
+            .write_event(Event::End(BytesEnd::new("root")))
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(writer.into_inner()).unwrap(),
+            "<root>\n  <item>1</item>\n  <item>2</item>\n  <next/>\n</root>"
+        );
+    }
+
+    #[test]
+    fn element_after_text_and_before_text() {
+        for (before, after, expected) in [
+            ("before", "", "<root>before<foo>42</foo>\n</root>"),
+            ("", "after", "<root>\n  <foo>42</foo>after\n</root>"),
+        ] {
+            let mut writer = Writer::new_with_indent(Vec::new(), ' ', 2);
+            writer
+                .write_event(Event::Start(BytesStart::new("root")))
+                .unwrap();
+            if !before.is_empty() {
+                writer
+                    .write_event(Event::Text(BytesText::new(before)))
+                    .unwrap();
+            }
+            writer.write_serializable("foo", &42).unwrap();
+            if !after.is_empty() {
+                writer
+                    .write_event(Event::Text(BytesText::new(after)))
+                    .unwrap();
+            }
+            writer
+                .write_event(Event::End(BytesEnd::new("root")))
+                .unwrap();
+            assert_eq!(String::from_utf8(writer.into_inner()).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn serialized_child_with_zero_width_indentation() {
+        let mut writer = Writer::new_with_indent(Vec::new(), ' ', 0);
+        writer
+            .write_event(Event::Start(BytesStart::new("root")))
+            .unwrap();
+        writer.write_serializable("foo", &42).unwrap();
+        writer
+            .write_event(Event::Text(BytesText::new("after")))
+            .unwrap();
+        writer
+            .write_event(Event::End(BytesEnd::new("root")))
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(writer.into_inner()).unwrap(),
+            "<root>\n<foo>42</foo>after\n</root>"
+        );
+    }
+
+    #[test]
+    fn no_output_preserves_indentation_state() {
+        for with_text in [false, true] {
+            for empty_sequence in [false, true] {
+                let mut writer = Writer::new_with_indent(Vec::new(), ' ', 2);
+                writer
+                    .write_event(Event::Start(BytesStart::new("root")))
+                    .unwrap();
+                if with_text {
+                    writer
+                        .write_event(Event::Text(BytesText::new("text")))
+                        .unwrap();
+                }
+                if empty_sequence {
+                    writer
+                        .write_serializable("item", &Vec::<u32>::new())
+                        .unwrap();
+                } else {
+                    writer.write_serializable("item", &None::<u32>).unwrap();
+                }
+                writer
+                    .write_event(Event::End(BytesEnd::new("root")))
+                    .unwrap();
+                let expected = if with_text {
+                    "<root>text</root>"
+                } else {
+                    "<root>\n</root>"
+                };
+                assert_eq!(String::from_utf8(writer.into_inner()).unwrap(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn text_is_inline_and_updates_state() {
+        let mut writer = Writer::new_with_indent(Vec::new(), ' ', 2);
+        writer
+            .write_event(Event::Start(BytesStart::new("root")))
+            .unwrap();
+        writer
+            .write_serializable("ignored", &Content::Text("hello & world"))
+            .unwrap();
+        writer
+            .write_event(Event::End(BytesEnd::new("root")))
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(writer.into_inner()).unwrap(),
+            "<root>hello &amp; world</root>"
+        );
+    }
+
+    #[test]
+    fn without_indentation() {
+        let mut writer = Writer::new(Vec::new());
+        writer
+            .write_event(Event::Start(BytesStart::new("root")))
+            .unwrap();
+        writer.write_serializable("foo", &Foo { bar: 42 }).unwrap();
+        writer
+            .write_serializable("item", &Vec::<u32>::new())
+            .unwrap();
+        writer
+            .write_serializable("ignored", &Content::Text("tail"))
+            .unwrap();
+        writer
+            .write_event(Event::End(BytesEnd::new("root")))
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(writer.into_inner()).unwrap(),
+            "<root><foo><bar>42</bar></foo>tail</root>"
+        );
+    }
+}
+
 #[test]
 fn zero_width_indentation_tracks_block_depth() {
     let mut writer = Writer::new_with_indent(Vec::new(), ' ', 0);

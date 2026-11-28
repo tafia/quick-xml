@@ -50,6 +50,7 @@
 
 ### Bug Fixes
 
+- [#1054]: `Writer::write_serializable` follows the writer's indentation state and preserves it when no output is written.
 - [#276]: Fixed `Writer::new_with_indent` producing misaligned closing tags
   when an element contained a non-text child (e.g. a comment) followed by a
   text node. The `</tag>` was appended directly after the text instead of
@@ -152,6 +153,7 @@
   to `windows-1252`, as the WHATWG Encoding Standard does.
 
 [#276]: https://github.com/tafia/quick-xml/issues/276
+[#1054]: https://github.com/tafia/quick-xml/issues/1054
 [#499]: https://github.com/tafia/quick-xml/issues/499
 [#837]: https://github.com/tafia/quick-xml/issues/837
 [#945]: https://github.com/tafia/quick-xml/issues/945

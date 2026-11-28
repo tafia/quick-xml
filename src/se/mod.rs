@@ -934,8 +934,9 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     }
 
     /// Set the indent object for a serializer
-    pub(crate) fn set_indent(&mut self, indent: Indent<'r>) -> &mut Self {
+    pub(crate) fn set_indent(&mut self, indent: Indent<'r>, write_indent: bool) -> &mut Self {
         self.ser.indent = indent;
+        self.ser.write_indent = write_indent;
         self
     }
 

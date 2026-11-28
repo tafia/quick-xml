@@ -437,19 +437,56 @@ impl<W: Write> Writer<W> {
         tag_name: &str,
         content: &T,
     ) -> Result<(), SeError> {
-        use crate::se::{Indent, Serializer, Utf8Writer};
+        use crate::se::{Indent, Serializer, Utf8Writer, WriteResult};
 
-        self.write_indent()?;
-        let mut writer = Utf8Writer(&mut self.writer);
+        let mut writer = Utf8Writer(TrackingWriter {
+            writer: &mut self.writer,
+            wrote: false,
+        });
         let mut serializer = Serializer::with_root(&mut writer, Some(tag_name))?;
 
         if let Some(indent) = &mut self.indent {
-            serializer.set_indent(Indent::Borrow(indent));
+            let write_indent = indent.should_line_break;
+            serializer.set_indent(Indent::Borrow(indent), write_indent);
         }
 
-        content.serialize(serializer)?;
+        let result = content.serialize(serializer)?;
+
+        if writer.0.wrote {
+            if let Some(indent) = &mut self.indent {
+                match result {
+                    WriteResult::Element => {
+                        indent.record_block();
+                        indent.should_line_break = true;
+                    }
+                    WriteResult::Text | WriteResult::SensitiveText => {
+                        indent.should_line_break = false;
+                    }
+                    WriteResult::Nothing | WriteResult::SensitiveNothing => {}
+                }
+            }
+        }
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "serialize")]
+struct TrackingWriter<'a, W> {
+    writer: &'a mut W,
+    wrote: bool,
+}
+
+#[cfg(feature = "serialize")]
+impl<W: Write> Write for TrackingWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let written = self.writer.write(buf)?;
+        self.wrote |= written != 0;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
     }
 }
 
